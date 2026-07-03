@@ -1,0 +1,26 @@
+<Solution>
+  <Folder Name="/Aspire/">
+    <Project Path="Aspire/FourDotnet.BoogaBooster.Aspire.AppHost/FourDotnet.BoogaBooster.Aspire.AppHost.csproj" />
+    <Project Path="Aspire/FourDotnet.BoogaBooster.Aspire.ServiceDefaults/FourDotnet.BoogaBooster.Aspire.ServiceDefaults.csproj" />
+  </Folder>
+  <Folder Name="/Controller/">
+    <Project Path="Controller/FourDotnet.BoogaBooster.Controller/FourDotnet.BoogaBooster.Controller.csproj" />
+    <Project Path="Controller/FourDotnet.BoogaBooster.Controller.Abstractions/FourDotnet.BoogaBooster.Controller.Abstractions.csproj" />
+  </Folder>
+  <Folder Name="/DigitalTwin/">
+    <Project Path="DigitalTwin/FourDotnet.BoogaBooster.DigitalTwin/FourDotnet.BoogaBooster.DigitalTwin.csproj" />
+    <Project Path="DigitalTwin/FourDotnet.BoogaBooster.DigitalTwin.Abstractions/FourDotnet.BoogaBooster.DigitalTwin.Abstractions.csproj" />
+  </Folder>
+  <Folder Name="/Queue/">
+    <Project Path="Queue/FourDotnet.BoogaBooster.Queue/FourDotnet.BoogaBooster.Queue.csproj" />
+    <Project Path="Queue/FourDotnet.BoogaBooster.Queue.Abstractions/FourDotnet.BoogaBooster.Queue.Abstractions.csproj" />
+  </Folder>
+  <Folder Name="/Weather/">
+    <Project Path="Weather/FourDotnet.BoogaBooster.Weather/FourDotnet.BoogaBooster.Weather.csproj" />
+    <Project Path="Weather/FourDotnet.BoogaBooster.Weather.Abstractions/FourDotnet.BoogaBooster.Weather.Abstractions.csproj" />
+  </Folder>
+  <Folder Name="/Shared/">
+    <Project Path="Shared/FourDotnet.BoogaBooster.Core/FourDotnet.BoogaBooster.Core.csproj" />
+  </Folder>
+  <Project Path="FourDotnet.BoogaBooster.Api/FourDotnet.BoogaBooster.Api.csproj" />
+</Solution>
