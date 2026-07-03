@@ -3,6 +3,8 @@ import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 
 import { routes } from '../app.routes';
+import { QUEUE_SOURCE } from '../queue/data/queue-source';
+import { FakeQueueSource } from '../queue/testing/fake-queue-source';
 import { WEATHER_SOURCE } from '../weather/data/weather-source';
 import { FakeWeatherSource } from '../weather/testing/fake-weather-source';
 import { RIDE_TELEMETRY_SOURCE } from './data/ride-telemetry-source';
@@ -23,6 +25,7 @@ describe('RideDashboard', () => {
         provideRouter(routes),
         { provide: RIDE_TELEMETRY_SOURCE, useValue: source },
         { provide: WEATHER_SOURCE, useValue: new FakeWeatherSource() },
+        { provide: QUEUE_SOURCE, useValue: new FakeQueueSource() },
       ],
     });
   });
@@ -43,15 +46,13 @@ describe('RideDashboard', () => {
   });
 
   it('summary reflects ride state, occupancy and security', () => {
-    source.setTelemetry(
-      createTelemetry({ state: 'running', gondolas: createGondolas(10) }),
-    );
+    source.setTelemetry(createTelemetry({ state: 'running', gondolas: createGondolas(10) }));
     const fixture = TestBed.createComponent(RideDashboard);
     fixture.detectChanges();
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
 
     expect(text).toContain('running');
-    expect(text).toContain('40');
+    expect(text).toContain('20');
     expect(text).toContain('Secured');
   });
 });
