@@ -4,11 +4,14 @@ import { RIDE_TELEMETRY_SOURCE } from '../data/ride-telemetry-source';
 import {
   Gondola,
   Hub,
+  LoadBalanceState,
   Mill,
   MotorDirection,
   RideState,
   SecurityState,
   clampPower,
+  loadBalanceState,
+  totalLoadKg,
 } from '../models/ride.models';
 
 /**
@@ -39,8 +42,7 @@ export class RideStateService {
   /** Total number of occupied seats across all gondolas. */
   readonly occupiedSeats: Signal<number> = computed(() =>
     this.gondolas().reduce(
-      (total, gondola) =>
-        total + gondola.seats.filter((seat) => seat.state !== 'empty').length,
+      (total, gondola) => total + gondola.seats.filter((seat) => seat.state !== 'empty').length,
       0,
     ),
   );
@@ -52,6 +54,14 @@ export class RideStateService {
     );
     return anyUnsecured ? 'unsecured' : 'secured';
   });
+
+  /** Total ride load, in kg, across every seat. */
+  readonly totalLoadKg: Signal<number> = computed(() => totalLoadKg(this.gondolas()));
+
+  /** Safe only when the load's rotational eccentricity is within tolerance. */
+  readonly loadBalanceState: Signal<LoadBalanceState> = computed(() =>
+    loadBalanceState(this.gondolas()),
+  );
 
   /** Commanded power of the hub motor group. */
   readonly hubPower: Signal<number> = computed(() => this.hubs()[0]?.power ?? 0);
