@@ -29,6 +29,12 @@ const MAX_HUB_RPM = 20;
 /** Fraction of the gap toward the target speed closed each tick. */
 const SPEED_EASING = 0.25;
 
+/** Lightest plausible occupied-seat load, in kg. */
+const MIN_SEAT_KG = 30;
+
+/** Heaviest plausible occupied-seat load, in kg. */
+const MAX_SEAT_KG = 150;
+
 interface CommandState {
   millPower: number;
   millDirection: MotorDirection;
@@ -60,6 +66,11 @@ export class SimulatedRideTelemetrySource implements RideTelemetrySource {
   private millSpeed = 0;
   private readonly hubSpeeds = new Array<number>(HUB_COUNT).fill(0);
   private seatStates = this.createInitialSeatStates();
+  // Set once per occupied seat at startup and held constant while occupied; the
+  // seat-jostle logic only ever flips secured/unsecured, never the load itself.
+  private readonly seatWeightsKg = this.seatStates.map((state) =>
+    state === 'empty' ? 0 : randomSeatKg(),
+  );
 
   private readonly telemetrySignal = signal<RideTelemetry>(this.buildTelemetry());
 
@@ -155,7 +166,11 @@ export class SimulatedRideTelemetrySource implements RideTelemetrySource {
       const seats: Seat[] = [];
       for (let s = 0; s < SEATS_PER_GONDOLA; s++) {
         const seatIndex = g * SEATS_PER_GONDOLA + s;
-        seats.push({ id: s + 1, state: this.seatStates[seatIndex] });
+        seats.push({
+          id: s + 1,
+          state: this.seatStates[seatIndex],
+          occupiedKg: this.seatWeightsKg[seatIndex],
+        });
       }
       // Signs alternate per gondola and follow the motor directions so the
       // panels show both push-back/push-forward and left/right forces. Each
@@ -178,7 +193,7 @@ export class SimulatedRideTelemetrySource implements RideTelemetrySource {
     return this.commands.millPower > 0 || this.commands.hubPower > 0 ? 'running' : 'stopped';
   }
 
-  /** Ten gondolas start fully occupied and secured (40 riders); rest empty. */
+  /** Ten gondolas start fully occupied and secured (20 riders); rest empty. */
   private createInitialSeatStates(): Seat['state'][] {
     const states: Seat['state'][] = [];
     for (let g = 0; g < GONDOLA_COUNT; g++) {
@@ -193,4 +208,9 @@ export class SimulatedRideTelemetrySource implements RideTelemetrySource {
 function round(value: number, decimals: number): number {
   const factor = 10 ** decimals;
   return Math.round(value * factor) / factor;
+}
+
+/** A plausible, whole-kilogram passenger weight in [MIN_SEAT_KG, MAX_SEAT_KG]. */
+function randomSeatKg(): number {
+  return Math.round(MIN_SEAT_KG + Math.random() * (MAX_SEAT_KG - MIN_SEAT_KG));
 }
