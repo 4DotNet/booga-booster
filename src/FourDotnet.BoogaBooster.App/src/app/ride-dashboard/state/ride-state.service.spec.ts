@@ -1,7 +1,12 @@
 import { TestBed } from '@angular/core/testing';
 
 import { RIDE_TELEMETRY_SOURCE } from '../data/ride-telemetry-source';
-import { createTelemetry, createGondolas, FakeRideTelemetrySource } from '../testing/fake-ride-telemetry-source';
+import { GONDOLA_COUNT } from '../models/ride.models';
+import {
+  createTelemetry,
+  createGondolas,
+  FakeRideTelemetrySource,
+} from '../testing/fake-ride-telemetry-source';
 import { RideStateService } from './ride-state.service';
 
 describe('RideStateService', () => {
@@ -64,7 +69,7 @@ describe('RideStateService', () => {
   it('computes occupied seats and secured security state', () => {
     source.setTelemetry(createTelemetry({ gondolas: createGondolas(10) }));
 
-    expect(service.occupiedSeats()).toBe(40);
+    expect(service.occupiedSeats()).toBe(20);
     expect(service.securityState()).toBe('secured');
   });
 
@@ -72,5 +77,31 @@ describe('RideStateService', () => {
     source.setTelemetry(createTelemetry({ gondolas: createGondolas(10, true) }));
 
     expect(service.securityState()).toBe('unsecured');
+  });
+
+  it('computes total load in kg across every seat', () => {
+    source.setTelemetry(createTelemetry({ gondolas: createGondolas(10) }));
+
+    // 10 occupied gondolas x 2 seats x 70kg = 1400kg.
+    expect(service.totalLoadKg()).toBe(1400);
+  });
+
+  it('reports a safe load balance for an empty ride', () => {
+    expect(service.loadBalanceState()).toBe('safe');
+  });
+
+  it('reports a safe load balance for a fully, evenly loaded ride', () => {
+    source.setTelemetry(createTelemetry({ gondolas: createGondolas(GONDOLA_COUNT) }));
+
+    expect(service.loadBalanceState()).toBe('safe');
+  });
+
+  it('reports an unsafe load balance for a lopsided load', () => {
+    // Only the first gondola carries any weight, so the load is entirely on
+    // one side of the mill.
+    const gondolas = createGondolas(1);
+    source.setTelemetry(createTelemetry({ gondolas }));
+
+    expect(service.loadBalanceState()).toBe('unsafe');
   });
 });
