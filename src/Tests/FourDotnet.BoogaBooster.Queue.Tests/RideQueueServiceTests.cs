@@ -21,6 +21,7 @@ public class RideQueueServiceTests
 
         var service = new RideQueueService(
             store,
+            QueueTestData.Generator(),
             publisher.Object,
             TimeProvider.System,
             NullLogger<RideQueueService>.Instance);
@@ -62,6 +63,25 @@ public class RideQueueServiceTests
         Assert.Equal(2, status.GroupCount);
         Assert.Equal(6, status.PeopleWaiting);
         Assert.Equal([2, 4], status.Groups.Select(g => g.Size));
+    }
+
+    [Fact]
+    public async Task EnqueueGroupAsync_PopulatesGroupWithRealPeople()
+    {
+        var (service, _, _) = CreateService();
+
+        var result = await service.EnqueueGroupAsync(Guid.NewGuid(), groupSize: 4, CancellationToken.None);
+
+        Assert.Equal(4, result.People.Count);
+        Assert.Equal(4, result.People.Select(p => p.Number).Distinct().Count());
+        Assert.All(result.People, p => Assert.False(string.IsNullOrWhiteSpace(p.Name)));
+        Assert.All(
+            result.People,
+            p => Assert.InRange(
+                p.WeightInKilograms,
+                Domain.Person.MinWeightInKilograms,
+                Domain.Person.MaxWeightInKilograms));
+        Assert.Equal(result.People.Sum(p => p.WeightInKilograms), result.TotalWeightInKilograms);
     }
 
     [Fact]
