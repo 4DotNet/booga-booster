@@ -2,6 +2,7 @@ using FourDotnet.BoogaBooster.IntegrationMessages;
 using FourDotnet.BoogaBooster.IntegrationMessages.Events.Queue;
 using FourDotnet.BoogaBooster.Queue.Abstractions;
 using FourDotnet.BoogaBooster.Queue.Domain;
+using FourDotnet.BoogaBooster.Queue.Filling;
 using FourDotnet.BoogaBooster.Queue.Infrastructure;
 using Microsoft.Extensions.Logging;
 
@@ -15,17 +16,20 @@ namespace FourDotnet.BoogaBooster.Queue;
 internal sealed class RideQueueService : IRideQueueService
 {
     private readonly IRideQueueStore _store;
+    private readonly IPersonGenerator _personGenerator;
     private readonly IIntegrationEventPublisher _publisher;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<RideQueueService> _logger;
 
     public RideQueueService(
         IRideQueueStore store,
+        IPersonGenerator personGenerator,
         IIntegrationEventPublisher publisher,
         TimeProvider timeProvider,
         ILogger<RideQueueService> logger)
     {
         _store = store;
+        _personGenerator = personGenerator;
         _publisher = publisher;
         _timeProvider = timeProvider;
         _logger = logger;
@@ -39,12 +43,13 @@ internal sealed class RideQueueService : IRideQueueService
         ArgumentOutOfRangeException.ThrowIfLessThan(groupSize, 1);
 
         var queue = _store.GetOrCreate(rideId);
-        var group = queue.Enqueue(GroupArrival.OfSize(groupSize));
+        var group = queue.Enqueue(_personGenerator.CreateGroup(groupSize));
 
         _logger.LogInformation(
-            "Group {GroupId} of {Size} joined ride {RideId}; {PeopleWaiting} now waiting.",
+            "Group {GroupId} of {Size} ({Weight} kg) joined ride {RideId}; {PeopleWaiting} now waiting.",
             group.GroupId,
             group.Size,
+            group.TotalWeightInKilograms,
             rideId,
             queue.PeopleWaiting);
 
@@ -56,7 +61,7 @@ internal sealed class RideQueueService : IRideQueueService
 
         await _publisher.PublishAsync(integrationEvent, cancellationToken);
 
-        return new QueuedGroupDto(group.GroupId, group.Size);
+        return ToDto(group);
     }
 
     public QueueStatusDto GetStatus(Guid rideId)
@@ -68,7 +73,7 @@ internal sealed class RideQueueService : IRideQueueService
         }
 
         var groups = queue.SnapshotGroups()
-            .Select(g => new QueuedGroupDto(g.GroupId, g.Size))
+            .Select(ToDto)
             .ToArray();
 
         return new QueueStatusDto(
@@ -76,5 +81,14 @@ internal sealed class RideQueueService : IRideQueueService
             GroupCount: groups.Length,
             PeopleWaiting: groups.Sum(g => g.Size),
             Groups: groups);
+    }
+
+    private static QueuedGroupDto ToDto(QueuedGroup group)
+    {
+        var people = group.Members
+            .Select(p => new PersonDto(p.Number, p.Name, p.WeightInKilograms))
+            .ToArray();
+
+        return new QueuedGroupDto(group.GroupId, people);
     }
 }
