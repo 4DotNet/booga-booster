@@ -1,3 +1,5 @@
+using FourDotnet.BoogaBooster.DigitalTwin;
+using FourDotnet.BoogaBooster.DigitalTwin.Endpoints;
 using FourDotnet.BoogaBooster.IntegrationMessages;
 using FourDotnet.BoogaBooster.Queue;
 using FourDotnet.BoogaBooster.Queue.Endpoints;
@@ -18,6 +20,7 @@ builder.AddBoogaBoosterIntegrationMessages();
 // Compose modules (ADR-0007).
 builder.AddWeatherModule();
 builder.AddQueueModule();
+builder.AddDigitalTwinModule();
 
 var app = builder.Build();
 
@@ -39,5 +42,6 @@ app.UseHttpsRedirection();
 // Map module endpoints (ADR-0007).
 app.MapWeatherEndpoints();
 app.MapQueueEndpoints();
+app.MapDigitalTwinEndpoints();
 
 app.Run();
