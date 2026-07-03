@@ -11,6 +11,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Bogus" Version="35.6.1" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\FourDotnet.BoogaBooster.Queue.Abstractions\FourDotnet.BoogaBooster.Queue.Abstractions.csproj" />
     <ProjectReference Include="..\..\Shared\FourDotnet.BoogaBooster.Core\FourDotnet.BoogaBooster.Core.csproj" />
     <ProjectReference Include="..\..\Shared\FourDotnet.BoogaBooster.IntegrationMessages\FourDotnet.BoogaBooster.IntegrationMessages.csproj" />
