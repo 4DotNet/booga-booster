@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -7,7 +7,16 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="FourDotnet.BoogaBooster.DigitalTwin.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\FourDotnet.BoogaBooster.DigitalTwin.Abstractions\FourDotnet.BoogaBooster.DigitalTwin.Abstractions.csproj" />
+    <ProjectReference Include="..\..\Shared\FourDotnet.BoogaBooster.Core\FourDotnet.BoogaBooster.Core.csproj" />
   </ItemGroup>
 
 </Project>
