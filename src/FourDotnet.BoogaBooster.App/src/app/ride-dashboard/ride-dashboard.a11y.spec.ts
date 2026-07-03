@@ -1,6 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import axe from 'axe-core';
 
+import { QUEUE_SOURCE } from '../queue/data/queue-source';
+import { createQueueStatus, FakeQueueSource } from '../queue/testing/fake-queue-source';
 import { WEATHER_SOURCE } from '../weather/data/weather-source';
 import { FakeWeatherSource, createConditions } from '../weather/testing/fake-weather-source';
 import { RIDE_TELEMETRY_SOURCE } from './data/ride-telemetry-source';
@@ -19,16 +21,18 @@ import {
 describe('RideDashboard accessibility', () => {
   it('has no AXE violations', async () => {
     const source = new FakeRideTelemetrySource();
-    source.setTelemetry(
-      createTelemetry({ state: 'running', gondolas: createGondolas(10, true) }),
-    );
+    source.setTelemetry(createTelemetry({ state: 'running', gondolas: createGondolas(10, true) }));
     const weather = new FakeWeatherSource();
     weather.setStatus('ready');
     weather.setConditions(createConditions());
+    const queue = new FakeQueueSource();
+    queue.setStatus('ready');
+    queue.setQueue(createQueueStatus());
     TestBed.configureTestingModule({
       providers: [
         { provide: RIDE_TELEMETRY_SOURCE, useValue: source },
         { provide: WEATHER_SOURCE, useValue: weather },
+        { provide: QUEUE_SOURCE, useValue: queue },
       ],
     });
 
