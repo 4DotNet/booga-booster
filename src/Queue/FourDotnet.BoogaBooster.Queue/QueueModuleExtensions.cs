@@ -30,6 +30,7 @@ public static class QueueModuleExtensions
 
         builder.Services.TryAddSingleton(TimeProvider.System);
         builder.Services.AddSingleton<IRideQueueStore, InMemoryRideQueueStore>();
+        builder.Services.AddSingleton<IPersonGenerator, PersonGenerator>();
         builder.Services.AddSingleton<IRideQueueService, RideQueueService>();
         builder.Services.AddHostedService<RideQueueFillerService>();
 
