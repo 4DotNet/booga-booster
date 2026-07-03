@@ -1,4 +1,4 @@
-using FourDotnet.BoogaBooster.Core.Domain;
+using FourDotnet.BoogaBooster.Core;
 using FourDotnet.BoogaBooster.Weather.Abstractions;
 
 namespace FourDotnet.BoogaBooster.Weather.Domain;
@@ -11,6 +11,10 @@ namespace FourDotnet.BoogaBooster.Weather.Domain;
 /// </summary>
 public sealed class Weather : DomainModel
 {
+    private Temperature _temperature;
+    private Wind _wind;
+    private Sunshine _sunshine;
+    private Precipitation _precipitation;
     private PrecipitationType _activePrecipitationType = PrecipitationType.None;
 
     private Weather(
@@ -20,25 +24,25 @@ public sealed class Weather : DomainModel
         Precipitation precipitation)
         : base(isNew: true)
     {
-        Temperature = temperature;
-        Wind = wind;
-        Sunshine = sunshine;
-        Precipitation = precipitation;
+        _temperature = temperature;
+        _wind = wind;
+        _sunshine = sunshine;
+        _precipitation = precipitation;
         Regime = WeatherRegime.Calm;
         RemainingEventDuration = TimeSpan.Zero;
     }
 
     /// <summary>Current air temperature.</summary>
-    public Temperature Temperature { get; private set; }
+    public Temperature Temperature => _temperature;
 
     /// <summary>Current wind speed.</summary>
-    public Wind Wind { get; private set; }
+    public Wind Wind => _wind;
 
     /// <summary>Current sunshine intensity.</summary>
-    public Sunshine Sunshine { get; private set; }
+    public Sunshine Sunshine => _sunshine;
 
     /// <summary>Current precipitation.</summary>
-    public Precipitation Precipitation { get; private set; }
+    public Precipitation Precipitation => _precipitation;
 
     /// <summary>The regime the simulation is currently drifting toward.</summary>
     public WeatherRegime Regime { get; private set; }
@@ -57,28 +61,28 @@ public sealed class Weather : DomainModel
     public bool SetTemperature(Temperature value)
     {
         ArgumentNullException.ThrowIfNull(value);
-        return ApplyChange(Temperature, value, v => Temperature = v);
+        return ApplyChange(ref _temperature, value);
     }
 
     /// <summary>Sets the wind (validated by the value object).</summary>
     public bool SetWind(Wind value)
     {
         ArgumentNullException.ThrowIfNull(value);
-        return ApplyChange(Wind, value, v => Wind = v);
+        return ApplyChange(ref _wind, value);
     }
 
     /// <summary>Sets the sunshine (validated by the value object).</summary>
     public bool SetSunshine(Sunshine value)
     {
         ArgumentNullException.ThrowIfNull(value);
-        return ApplyChange(Sunshine, value, v => Sunshine = v);
+        return ApplyChange(ref _sunshine, value);
     }
 
     /// <summary>Sets the precipitation (validated by the value object).</summary>
     public bool SetPrecipitation(Precipitation value)
     {
         ArgumentNullException.ThrowIfNull(value);
-        return ApplyChange(Precipitation, value, v => Precipitation = v);
+        return ApplyChange(ref _precipitation, value);
     }
 
     /// <summary>

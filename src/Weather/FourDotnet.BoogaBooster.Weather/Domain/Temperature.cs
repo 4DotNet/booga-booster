@@ -1,4 +1,4 @@
-using FourDotnet.BoogaBooster.Core.Domain;
+using FourDotnet.BoogaBooster.Core;
 
 namespace FourDotnet.BoogaBooster.Weather.Domain;
 

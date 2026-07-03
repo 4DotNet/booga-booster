@@ -1,4 +1,4 @@
-using FourDotnet.BoogaBooster.Core.Domain;
+using FourDotnet.BoogaBooster.Core;
 using FourDotnet.BoogaBooster.Weather.Abstractions;
 using FourDotnet.BoogaBooster.Weather.Domain;
 using FourDotnet.BoogaBooster.Weather.Tests.Testing;

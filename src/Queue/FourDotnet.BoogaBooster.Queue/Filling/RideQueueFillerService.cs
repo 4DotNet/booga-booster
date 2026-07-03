@@ -50,15 +50,24 @@ internal sealed class RideQueueFillerService : BackgroundService
         {
             while (await timer.WaitForNextTickAsync(stoppingToken))
             {
-                foreach (var rideId in _options.RideIds)
-                {
-                    await FillRideAsync(rideId, stoppingToken);
-                }
+                await RunFillCycleAsync(stoppingToken);
             }
         }
         catch (OperationCanceledException)
         {
             // Normal shutdown.
+        }
+    }
+
+    /// <summary>
+    /// Runs a single fill cycle across every configured ride. Exposed for
+    /// deterministic testing of the fill behaviour without driving the timer.
+    /// </summary>
+    internal async Task RunFillCycleAsync(CancellationToken cancellationToken)
+    {
+        foreach (var rideId in _options.RideIds)
+        {
+            await FillRideAsync(rideId, cancellationToken);
         }
     }
 
