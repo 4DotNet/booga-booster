@@ -4,8 +4,10 @@ import { interval } from 'rxjs';
 
 import { RideTelemetrySource } from './ride-telemetry-source';
 import {
+  GONDOLAS_PER_HUB,
   GONDOLA_COUNT,
   Gondola,
+  HUB_COUNT,
   MotorDirection,
   RideCommand,
   RideState,
@@ -32,6 +34,7 @@ interface CommandState {
   millDirection: MotorDirection;
   hubPower: number;
   hubDirection: MotorDirection;
+  gondolaBrakeEngaged: boolean;
 }
 
 /**
@@ -51,10 +54,11 @@ export class SimulatedRideTelemetrySource implements RideTelemetrySource {
     millDirection: 'forward',
     hubPower: 0,
     hubDirection: 'forward',
+    gondolaBrakeEngaged: false,
   };
 
   private millSpeed = 0;
-  private readonly hubSpeeds = new Array<number>(GONDOLA_COUNT).fill(0);
+  private readonly hubSpeeds = new Array<number>(HUB_COUNT).fill(0);
   private seatStates = this.createInitialSeatStates();
 
   private readonly telemetrySignal = signal<RideTelemetry>(this.buildTelemetry());
@@ -80,6 +84,9 @@ export class SimulatedRideTelemetrySource implements RideTelemetrySource {
         break;
       case 'set-hub-direction':
         this.commands.hubDirection = command.direction;
+        break;
+      case 'set-gondola-brake':
+        this.commands.gondolaBrakeEngaged = command.engaged;
         break;
     }
     // Echo the command immediately so controls and status reflect it at once.
@@ -138,6 +145,7 @@ export class SimulatedRideTelemetrySource implements RideTelemetrySource {
         speedRpm: round(speed, 2),
       })),
       gondolas,
+      gondolaBrakeEngaged: this.commands.gondolaBrakeEngaged,
     };
   }
 
@@ -150,8 +158,9 @@ export class SimulatedRideTelemetrySource implements RideTelemetrySource {
         seats.push({ id: s + 1, state: this.seatStates[seatIndex] });
       }
       // Signs alternate per gondola and follow the motor directions so the
-      // panels show both push-back/push-forward and left/right forces.
-      const hubSpeed = this.hubSpeeds[g];
+      // panels show both push-back/push-forward and left/right forces. Each
+      // gondola takes the speed of the hub it is mounted on.
+      const hubSpeed = this.hubSpeeds[Math.floor(g / GONDOLAS_PER_HUB)];
       const verticalSign = this.commands.hubDirection === 'forward' ? 1 : -1;
       const lateralSign = g % 2 === 0 ? 1 : -1;
       const vertical = (hubSpeed / MAX_HUB_RPM) * 3 * verticalSign;

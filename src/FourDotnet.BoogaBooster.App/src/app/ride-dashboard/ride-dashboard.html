@@ -1,0 +1,41 @@
+<main class="dashboard">
+  <h1 class="sr-only">Ride operator dashboard</h1>
+
+  <section class="rail rail-left" aria-label="Controls">
+    <div class="panel">
+      <bb-status-summary
+        [state]="ride.state()"
+        [occupiedSeats]="ride.occupiedSeats()"
+        [securityState]="ride.securityState()"
+      />
+    </div>
+    <div class="panel">
+      <bb-operation-controls />
+    </div>
+    <div class="panel">
+      <bb-weather-panel />
+    </div>
+  </section>
+
+  <section class="center" aria-label="Ride visualization">
+    <bb-ride-visualization
+      [millSpeedRpm]="ride.mill().speedRpm"
+      [millDirection]="ride.mill().direction"
+      [hubSpeedRpm]="ride.hubSpeedRpm()"
+      [hubDirection]="ride.hubDirection()"
+      [gondolaBrakeEngaged]="ride.gondolaBrakeEngaged()"
+    />
+  </section>
+
+  <section class="rail rail-right" aria-label="Telemetry">
+    <div class="panel">
+      <bb-security-panel [gondolas]="ride.gondolas()" />
+    </div>
+    <div class="panel">
+      <bb-speed-panel [mill]="ride.mill()" [hubs]="ride.hubs()" />
+    </div>
+    <div class="panel">
+      <bb-gondola-panel [gondolas]="ride.gondolas()" />
+    </div>
+  </section>
+</main>

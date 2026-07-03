@@ -1,0 +1,316 @@
+:host {
+  display: block;
+}
+
+.weather {
+  display: grid;
+  gap: 0.75rem;
+}
+
+h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.scene {
+  --sun: 0.7;
+  --nice: 1;
+  position: relative;
+  height: 9rem;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  border: 1px solid var(--bb-border);
+  /* Sky darkens as niceness drops. */
+  background: linear-gradient(
+    180deg,
+    hsl(210deg 70% calc(30% + var(--nice) * 32%)),
+    hsl(210deg 45% calc(16% + var(--nice) * 14%))
+  );
+  isolation: isolate;
+}
+
+.scene[data-kind='rain'],
+.scene[data-kind='snow'],
+.scene[data-kind='hail'] {
+  background: linear-gradient(180deg, hsl(215deg 22% 34%), hsl(215deg 20% 18%));
+}
+
+.scene[data-kind='wind'] {
+  background: linear-gradient(180deg, hsl(200deg 18% 40%), hsl(205deg 20% 20%));
+}
+
+.sun {
+  position: absolute;
+  top: 1rem;
+  right: 1.25rem;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, #ffe9a8, #ffb54a);
+  opacity: calc(0.25 + var(--sun) * 0.75);
+  box-shadow: 0 0 calc(0.5rem + var(--sun) * 2.5rem) rgba(255, 197, 92, calc(0.3 + var(--sun) * 0.5));
+  animation: sun-pulse 6s ease-in-out infinite;
+}
+
+/* Dim the sun when precipitating or storming. */
+.scene[data-kind='rain'] .sun,
+.scene[data-kind='snow'] .sun,
+.scene[data-kind='hail'] .sun,
+.scene[data-kind='wind'] .sun {
+  opacity: 0.12;
+  box-shadow: none;
+}
+
+.cloud {
+  position: absolute;
+  height: 1.5rem;
+  width: 3.5rem;
+  border-radius: 1rem;
+  background: rgba(233, 238, 247, 0.75);
+  filter: blur(1px);
+  opacity: 0.7;
+}
+
+.cloud::before {
+  content: '';
+  position: absolute;
+  top: -0.7rem;
+  left: 0.9rem;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 50%;
+  background: inherit;
+}
+
+.cloud-a {
+  top: 1.4rem;
+  left: -4rem;
+  animation: drift 26s linear infinite;
+}
+
+.cloud-b {
+  top: 3.4rem;
+  left: -6rem;
+  transform: scale(0.75);
+  opacity: 0.5;
+  animation: drift 38s linear infinite;
+  animation-delay: -12s;
+}
+
+/* Clouds thicken during bad weather. */
+.scene[data-kind='rain'] .cloud,
+.scene[data-kind='snow'] .cloud,
+.scene[data-kind='hail'] .cloud,
+.scene[data-kind='wind'] .cloud {
+  opacity: 0.9;
+  background: rgba(210, 216, 227, 0.9);
+}
+
+.particles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.particle {
+  position: absolute;
+  top: -12%;
+  left: calc(var(--i) * 7.1%);
+  animation: fall 1.1s linear infinite;
+  animation-delay: calc(var(--i) * -0.13s);
+}
+
+.particles[data-kind='rain'] .particle {
+  width: 2px;
+  height: 0.8rem;
+  background: linear-gradient(180deg, rgba(174, 210, 255, 0.1), rgba(174, 210, 255, 0.9));
+  border-radius: 1px;
+  animation-duration: 0.75s;
+}
+
+.particles[data-kind='snow'] .particle::before {
+  content: '❄';
+  color: #eaf2ff;
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
+.particles[data-kind='snow'] .particle {
+  animation-name: fall-drift;
+  animation-duration: 3s;
+}
+
+.particles[data-kind='hail'] .particle::before {
+  content: '';
+  display: block;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: #dfe8f5;
+}
+
+.particles[data-kind='hail'] .particle {
+  animation-duration: 0.55s;
+}
+
+.streaks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.streak {
+  position: absolute;
+  left: -30%;
+  top: calc(1rem + var(--i) * 1.5rem);
+  width: 40%;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, rgba(226, 234, 246, 0.85), transparent);
+  animation: gust 0.9s linear infinite;
+  animation-delay: calc(var(--i) * -0.18s);
+}
+
+.summary {
+  margin: 0;
+  color: var(--bb-muted);
+  opacity: 0.72;
+  font-size: 0.7rem;
+  line-height: 1.3;
+}
+
+.readouts {
+  margin: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.readout {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+}
+
+.readout dt {
+  color: var(--bb-muted);
+}
+
+.readout dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.niceness {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.niceness-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.9rem;
+}
+
+.niceness-value {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.niceness-value[data-band='good'] {
+  color: var(--bb-ok);
+}
+
+.niceness-value[data-band='bad'] {
+  color: var(--bb-alert);
+}
+
+.meter {
+  height: 0.6rem;
+  border-radius: 0.4rem;
+  background: var(--bb-surface-2);
+  border: 1px solid var(--bb-border);
+  overflow: hidden;
+}
+
+.meter-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--bb-ok);
+  transition: width 0.4s ease;
+}
+
+.meter-fill[data-band='fair'] {
+  background: var(--bb-accent);
+}
+
+.meter-fill[data-band='bad'] {
+  background: var(--bb-alert);
+}
+
+.unavailable {
+  margin: 0;
+  color: var(--bb-muted);
+}
+
+@keyframes sun-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+@keyframes drift {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(24rem);
+  }
+}
+
+@keyframes fall {
+  to {
+    transform: translateY(11rem);
+  }
+}
+
+@keyframes fall-drift {
+  to {
+    transform: translate(0.8rem, 11rem);
+  }
+}
+
+@keyframes gust {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(320%);
+  }
+}
+
+/* Respect the user's motion preference: freeze everything. */
+@media (prefers-reduced-motion: reduce) {
+  .sun,
+  .cloud-a,
+  .cloud-b,
+  .particle,
+  .streak,
+  .meter-fill {
+    animation: none;
+    transition: none;
+  }
+
+  .particles,
+  .streaks {
+    display: none;
+  }
+}

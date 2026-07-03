@@ -22,7 +22,7 @@ var pubSub = builder.AddDaprComponent("pubsub", "pubsub.rabbitmq")
     .WithMetadata("password", rabbitMqPassword.Resource)
     .WaitFor(rabbitmq);
 
-builder.AddProject<Projects.FourDotnet_BoogaBooster_Api>("fourdotnet-boogabooster-api")
+var api = builder.AddProject<Projects.FourDotnet_BoogaBooster_Api>("fourdotnet-boogabooster-api")
     .WithReference(rabbitmq)
     .WaitFor(rabbitmq)
     .WithDaprSidecar(sidecar => sidecar
@@ -31,5 +31,13 @@ builder.AddProject<Projects.FourDotnet_BoogaBooster_Api>("fourdotnet-boogabooste
         // /dapr/subscribe hits an HTTP->HTTPS redirect and no subscriptions are registered.
         .WithOptions(new DaprSidecarOptions { AppProtocol = "https" })
         .WithReference(pubSub));
+
+// Angular frontend (Aspire JavaScript integration). AddViteApp runs the "dev" npm script,
+// installs dependencies, and injects the assigned port (--port/PORT) and API service-discovery
+// env vars. WithExternalHttpEndpoints exposes it outside the app network.
+builder.AddViteApp("frontend", "../../FourDotnet.BoogaBooster.App")
+    .WithReference(api)
+    .WaitFor(api)
+    .WithExternalHttpEndpoints();
 
 builder.Build().Run();
