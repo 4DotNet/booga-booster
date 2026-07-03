@@ -25,6 +25,7 @@
   </Folder>
   <Folder Name="/Tests/">
     <Project Path="Tests/FourDotnet.BoogaBooster.Core.Tests/FourDotnet.BoogaBooster.Core.Tests.csproj" />
+    <Project Path="Tests/FourDotnet.BoogaBooster.DigitalTwin.Tests/FourDotnet.BoogaBooster.DigitalTwin.Tests.csproj" />
     <Project Path="Tests/FourDotnet.BoogaBooster.IntegrationMessages.Tests/FourDotnet.BoogaBooster.IntegrationMessages.Tests.csproj" />
     <Project Path="Tests/FourDotnet.BoogaBooster.Queue.Tests/FourDotnet.BoogaBooster.Queue.Tests.csproj" />
     <Project Path="Tests/FourDotnet.BoogaBooster.Weather.Tests/FourDotnet.BoogaBooster.Weather.Tests.csproj" />
