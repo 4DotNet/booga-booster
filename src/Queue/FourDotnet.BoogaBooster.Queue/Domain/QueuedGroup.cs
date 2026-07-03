@@ -8,7 +8,7 @@ namespace FourDotnet.BoogaBooster.Queue.Domain;
 /// </summary>
 public sealed class QueuedGroup
 {
-    private readonly List<Guest> _members;
+    private readonly List<Person> _members;
 
     internal QueuedGroup(GroupArrival arrival)
     {
@@ -20,7 +20,10 @@ public sealed class QueuedGroup
 
     public Guid GroupId { get; private set; }
 
-    public IReadOnlyList<Guest> Members => _members;
+    public IReadOnlyList<Person> Members => _members;
 
     public int Size => _members.Count;
+
+    /// <summary>The combined weight of everyone in the group, in kilograms.</summary>
+    public int TotalWeightInKilograms => _members.Sum(m => m.WeightInKilograms);
 }
