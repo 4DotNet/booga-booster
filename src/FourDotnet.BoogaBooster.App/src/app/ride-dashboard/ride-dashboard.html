@@ -10,6 +10,9 @@
       />
     </div>
     <div class="panel">
+      <bb-queue-panel />
+    </div>
+    <div class="panel">
       <bb-operation-controls />
     </div>
     <div class="panel">
@@ -29,7 +32,12 @@
 
   <section class="rail rail-right" aria-label="Telemetry">
     <div class="panel">
-      <bb-security-panel [gondolas]="ride.gondolas()" />
+      <bb-security-panel
+        [passengers]="ride.occupiedSeats()"
+        [securityState]="ride.securityState()"
+        [totalKg]="ride.totalLoadKg()"
+        [loadBalance]="ride.loadBalanceState()"
+      />
     </div>
     <div class="panel">
       <bb-speed-panel [mill]="ride.mill()" [hubs]="ride.hubs()" />
