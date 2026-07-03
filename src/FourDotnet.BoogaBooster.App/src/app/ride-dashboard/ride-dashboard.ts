@@ -7,6 +7,7 @@ import { SpeedPanel } from './panels/speed-panel/speed-panel';
 import { StatusSummary } from './panels/status-summary/status-summary';
 import { RideStateService } from './state/ride-state.service';
 import { RideVisualization } from './visualization/ride-visualization';
+import { QueuePanel } from '../queue/queue-panel/queue-panel';
 import { WeatherPanel } from '../weather/weather-panel/weather-panel';
 
 /**
@@ -24,6 +25,7 @@ import { WeatherPanel } from '../weather/weather-panel/weather-panel';
     SecurityPanel,
     SpeedPanel,
     GondolaPanel,
+    QueuePanel,
     WeatherPanel,
   ],
   templateUrl: './ride-dashboard.html',
