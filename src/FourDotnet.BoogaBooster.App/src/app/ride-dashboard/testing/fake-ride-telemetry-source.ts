@@ -83,6 +83,9 @@ export function createTelemetry(overrides: Partial<RideTelemetry> = {}): RideTel
   };
 }
 
+/** A fixed, plausible passenger weight used for occupied seats in fixtures. */
+const FIXTURE_SEAT_KG = 70;
+
 /** Build 16 gondolas; by default the first `occupiedGondolas` are secured. */
 export function createGondolas(occupiedGondolas = 0, unsecuredSeat = false): Gondola[] {
   return Array.from({ length: GONDOLA_COUNT }, (_, g) => {
@@ -92,7 +95,7 @@ export function createGondolas(occupiedGondolas = 0, unsecuredSeat = false): Gon
       if (occupied) {
         state = unsecuredSeat && g === 0 && s === 0 ? 'occupied-unsecured' : 'secured';
       }
-      return { id: s + 1, state };
+      return { id: s + 1, state, occupiedKg: occupied ? FIXTURE_SEAT_KG : 0 };
     });
     return { id: g + 1, seats, gForce: { vertical: 0, lateral: 0 } };
   });
