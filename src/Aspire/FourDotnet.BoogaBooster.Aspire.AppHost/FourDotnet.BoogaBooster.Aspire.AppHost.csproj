@@ -12,4 +12,9 @@
     <ProjectReference Include="..\..\FourDotnet.BoogaBooster.Api\FourDotnet.BoogaBooster.Api.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.RabbitMQ" Version="13.4.6" />
+    <PackageReference Include="CommunityToolkit.Aspire.Hosting.Dapr" Version="13.0.0" />
+  </ItemGroup>
+
 </Project>

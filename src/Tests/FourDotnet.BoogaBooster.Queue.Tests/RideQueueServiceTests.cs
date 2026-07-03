@@ -1,0 +1,93 @@
+using FourDotnet.BoogaBooster.IntegrationMessages;
+using FourDotnet.BoogaBooster.IntegrationMessages.Events.Queue;
+using FourDotnet.BoogaBooster.Queue.Infrastructure;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using Moq;
+using Xunit;
+
+namespace FourDotnet.BoogaBooster.Queue.Tests;
+
+public class RideQueueServiceTests
+{
+    private static (RideQueueService service, Mock<IIntegrationEventPublisher> publisher, IRideQueueStore store) CreateService(int maxQueueLength = 100)
+    {
+        var options = Options.Create(new QueueModuleOptions { MaxQueueLength = maxQueueLength });
+        var store = new InMemoryRideQueueStore(options);
+        var publisher = new Mock<IIntegrationEventPublisher>();
+        publisher
+            .Setup(p => p.PublishAsync(It.IsAny<GroupQueuedIntegrationEvent>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var service = new RideQueueService(
+            store,
+            publisher.Object,
+            TimeProvider.System,
+            NullLogger<RideQueueService>.Instance);
+
+        return (service, publisher, store);
+    }
+
+    [Fact]
+    public async Task EnqueueGroupAsync_PublishesGroupQueuedEvent_WithGroupIdAndCount()
+    {
+        var (service, publisher, _) = CreateService();
+        var rideId = Guid.NewGuid();
+
+        var result = await service.EnqueueGroupAsync(rideId, groupSize: 3, CancellationToken.None);
+
+        Assert.Equal(3, result.Size);
+        publisher.Verify(
+            p => p.PublishAsync(
+                It.Is<GroupQueuedIntegrationEvent>(e =>
+                    e.RideId == rideId &&
+                    e.GroupId == result.GroupId &&
+                    e.PeopleCount == 3),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task EnqueueGroupAsync_AddsGroupToRideStatus()
+    {
+        var (service, _, _) = CreateService();
+        var rideId = Guid.NewGuid();
+
+        await service.EnqueueGroupAsync(rideId, 2, CancellationToken.None);
+        await service.EnqueueGroupAsync(rideId, 4, CancellationToken.None);
+
+        var status = service.GetStatus(rideId);
+
+        Assert.Equal(rideId, status.RideId);
+        Assert.Equal(2, status.GroupCount);
+        Assert.Equal(6, status.PeopleWaiting);
+        Assert.Equal([2, 4], status.Groups.Select(g => g.Size));
+    }
+
+    [Fact]
+    public async Task EnqueueGroupAsync_RejectsNonPositiveSize()
+    {
+        var (service, publisher, _) = CreateService();
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => service.EnqueueGroupAsync(Guid.NewGuid(), 0, CancellationToken.None));
+
+        publisher.Verify(
+            p => p.PublishAsync(It.IsAny<GroupQueuedIntegrationEvent>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public void GetStatus_ForUnknownRide_ReturnsEmptySnapshot()
+    {
+        var (service, _, _) = CreateService();
+        var rideId = Guid.NewGuid();
+
+        var status = service.GetStatus(rideId);
+
+        Assert.Equal(rideId, status.RideId);
+        Assert.Equal(0, status.GroupCount);
+        Assert.Equal(0, status.PeopleWaiting);
+        Assert.Empty(status.Groups);
+    }
+}

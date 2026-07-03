@@ -8,10 +8,14 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.9" />
+    <PackageReference Include="Dapr.AspNetCore" Version="1.18.4" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Aspire\FourDotnet.BoogaBooster.Aspire.ServiceDefaults\FourDotnet.BoogaBooster.Aspire.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\Shared\FourDotnet.BoogaBooster.IntegrationMessages\FourDotnet.BoogaBooster.IntegrationMessages.csproj" />
+    <ProjectReference Include="..\Queue\FourDotnet.BoogaBooster.Queue\FourDotnet.BoogaBooster.Queue.csproj" />
+    <ProjectReference Include="..\Weather\FourDotnet.BoogaBooster.Weather\FourDotnet.BoogaBooster.Weather.csproj" />
   </ItemGroup>
 
 </Project>

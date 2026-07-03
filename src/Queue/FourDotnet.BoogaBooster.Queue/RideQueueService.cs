@@ -1,0 +1,80 @@
+using FourDotnet.BoogaBooster.IntegrationMessages;
+using FourDotnet.BoogaBooster.IntegrationMessages.Events.Queue;
+using FourDotnet.BoogaBooster.Queue.Abstractions;
+using FourDotnet.BoogaBooster.Queue.Domain;
+using FourDotnet.BoogaBooster.Queue.Infrastructure;
+using Microsoft.Extensions.Logging;
+
+namespace FourDotnet.BoogaBooster.Queue;
+
+/// <summary>
+/// Default <see cref="IRideQueueService"/>. Enqueues arriving groups onto the
+/// in-memory per-ride queues and publishes a <see cref="GroupQueuedIntegrationEvent"/>
+/// for every group that joins a line.
+/// </summary>
+internal sealed class RideQueueService : IRideQueueService
+{
+    private readonly IRideQueueStore _store;
+    private readonly IIntegrationEventPublisher _publisher;
+    private readonly TimeProvider _timeProvider;
+    private readonly ILogger<RideQueueService> _logger;
+
+    public RideQueueService(
+        IRideQueueStore store,
+        IIntegrationEventPublisher publisher,
+        TimeProvider timeProvider,
+        ILogger<RideQueueService> logger)
+    {
+        _store = store;
+        _publisher = publisher;
+        _timeProvider = timeProvider;
+        _logger = logger;
+    }
+
+    public async Task<QueuedGroupDto> EnqueueGroupAsync(
+        Guid rideId,
+        int groupSize,
+        CancellationToken cancellationToken)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(groupSize, 1);
+
+        var queue = _store.GetOrCreate(rideId);
+        var group = queue.Enqueue(GroupArrival.OfSize(groupSize));
+
+        _logger.LogInformation(
+            "Group {GroupId} of {Size} joined ride {RideId}; {PeopleWaiting} now waiting.",
+            group.GroupId,
+            group.Size,
+            rideId,
+            queue.PeopleWaiting);
+
+        var integrationEvent = new GroupQueuedIntegrationEvent(
+            RideId: rideId,
+            GroupId: group.GroupId,
+            PeopleCount: group.Size,
+            QueuedAt: _timeProvider.GetUtcNow());
+
+        await _publisher.PublishAsync(integrationEvent, cancellationToken);
+
+        return new QueuedGroupDto(group.GroupId, group.Size);
+    }
+
+    public QueueStatusDto GetStatus(Guid rideId)
+    {
+        var queue = _store.Find(rideId);
+        if (queue is null)
+        {
+            return new QueueStatusDto(rideId, GroupCount: 0, PeopleWaiting: 0, Groups: []);
+        }
+
+        var groups = queue.SnapshotGroups()
+            .Select(g => new QueuedGroupDto(g.GroupId, g.Size))
+            .ToArray();
+
+        return new QueueStatusDto(
+            rideId,
+            GroupCount: groups.Length,
+            PeopleWaiting: groups.Sum(g => g.Size),
+            Groups: groups);
+    }
+}

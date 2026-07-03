@@ -14,6 +14,15 @@ A background service SHALL run for the lifetime of the host and periodically add
 - **WHEN** the host starts and later shuts down
 - **THEN** the fill service begins filling on start and stops filling on shutdown without throwing
 
+### Requirement: Default arrival rate when weather is not yet integrated
+
+Until the Weather module is integrated, the fill service SHALL use a configurable fixed arrival rate — by default between 4 and 8 people per fill cycle (one cycle per minute) — partitioned into a variety of group sizes. The bounds and interval SHALL be configurable.
+
+#### Scenario: Default rate enqueues 4 to 8 people per cycle
+
+- **WHEN** a fill cycle runs with the default configuration and the queue is below capacity
+- **THEN** between 4 and 8 people are enqueued that cycle, split across one or more groups whose sizes vary
+
 ### Requirement: Arrival rate is modulated by weather
 
 The number of guests arriving per fill cycle SHALL scale with the current weather condition obtained from the Weather module. Good weather SHALL yield a higher arrival rate and bad weather SHALL yield a lower arrival rate, down to few or no arrivals in the worst conditions.

@@ -1,3 +1,9 @@
+using FourDotnet.BoogaBooster.IntegrationMessages;
+using FourDotnet.BoogaBooster.Queue;
+using FourDotnet.BoogaBooster.Queue.Endpoints;
+using FourDotnet.BoogaBooster.Weather;
+using FourDotnet.BoogaBooster.Weather.Endpoints;
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
@@ -5,6 +11,13 @@ builder.AddServiceDefaults();
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+
+// Integration messaging: registers the Dapr client and the integration-event publisher.
+builder.AddBoogaBoosterIntegrationMessages();
+
+// Compose modules (ADR-0007).
+builder.AddWeatherModule();
+builder.AddQueueModule();
 
 var app = builder.Build();
 
@@ -16,30 +29,15 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+// Unwrap Dapr CloudEvents envelopes and expose the Dapr subscription endpoint so that
+// endpoints annotated with WithTopic(...) are discovered by the sidecar.
+app.UseCloudEvents();
+app.MapSubscribeHandler();
+
 app.UseHttpsRedirection();
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
+// Map module endpoints (ADR-0007).
+app.MapWeatherEndpoints();
+app.MapQueueEndpoints();
 
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}

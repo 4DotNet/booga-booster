@@ -47,6 +47,20 @@ The queue SHALL expose the group at its front as the next group to board, withou
 - **WHEN** the queue is empty
 - **THEN** inspecting the next group returns no group
 
+### Requirement: Enqueuing a group publishes a group-queued integration event
+
+Whenever a group of guests is added to a ride's queue, the system SHALL publish a `GroupQueued` integration event carrying the ride identifier, the group identifier, and the number of people in the group, so other modules can react to arrivals. Publication is a side effect of a successful enqueue.
+
+#### Scenario: A group-queued event is published on enqueue
+
+- **WHEN** a group of 3 guests is enqueued onto a ride's queue
+- **THEN** a `GroupQueued` integration event is published whose group identifier matches the enqueued group and whose people count is 3
+
+#### Scenario: No event is published when the group is rejected
+
+- **WHEN** an enqueue is rejected because the queue is at its maximum length
+- **THEN** no `GroupQueued` integration event is published for that arrival
+
 ### Requirement: Queue tracks its lifecycle state
 
 The ride queue SHALL be a domain model that tracks its lifecycle state per the domain-model standard. A queue newly created in memory SHALL start as `New`; a queue rehydrated from the data store SHALL start as `Pristine`; an enqueue or dequeue that changes its contents SHALL move it to `Modified`; an operation that results in no actual change SHALL move it to `Touched`.

@@ -21,6 +21,12 @@
   </Folder>
   <Folder Name="/Shared/">
     <Project Path="Shared/FourDotnet.BoogaBooster.Core/FourDotnet.BoogaBooster.Core.csproj" />
+    <Project Path="Shared/FourDotnet.BoogaBooster.IntegrationMessages/FourDotnet.BoogaBooster.IntegrationMessages.csproj" />
+  </Folder>
+  <Folder Name="/Tests/">
+    <Project Path="Tests/FourDotnet.BoogaBooster.IntegrationMessages.Tests/FourDotnet.BoogaBooster.IntegrationMessages.Tests.csproj" />
+    <Project Path="Tests/FourDotnet.BoogaBooster.Queue.Tests/FourDotnet.BoogaBooster.Queue.Tests.csproj" />
+    <Project Path="Tests/FourDotnet.BoogaBooster.Weather.Tests/FourDotnet.BoogaBooster.Weather.Tests.csproj" />
   </Folder>
   <Project Path="FourDotnet.BoogaBooster.Api/FourDotnet.BoogaBooster.Api.csproj" />
 </Solution>
