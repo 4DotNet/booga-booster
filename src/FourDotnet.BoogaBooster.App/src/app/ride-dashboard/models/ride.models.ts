@@ -20,6 +20,9 @@ export type SeatState = 'empty' | 'occupied-unsecured' | 'secured';
 /** Overall security roll-up across every occupied seat. */
 export type SecurityState = 'secured' | 'unsecured';
 
+/** Overall rotational load-balance roll-up across every gondola. */
+export type LoadBalanceState = 'safe' | 'unsafe';
+
 /** Number of gondolas arranged around the central mill. */
 export const GONDOLA_COUNT = 16;
 
@@ -30,7 +33,7 @@ export const HUB_COUNT = 4;
 export const GONDOLAS_PER_HUB = GONDOLA_COUNT / HUB_COUNT;
 
 /** Fixed number of seats per gondola. */
-export const SEATS_PER_GONDOLA = 4;
+export const SEATS_PER_GONDOLA = 2;
 
 /** Lowest allowed motor power, in percent. */
 export const MIN_POWER = 0;
@@ -38,10 +41,20 @@ export const MIN_POWER = 0;
 /** Highest allowed motor power, in percent. */
 export const MAX_POWER = 100;
 
+/**
+ * Maximum allowed normalized rotational imbalance (see {@link loadEccentricity})
+ * before the ride is considered off-balance. An evenly-spread load, or two
+ * equal loads seated opposite each other, stays well under this threshold; a
+ * load concentrated on one side of the mill exceeds it.
+ */
+export const MAX_SAFE_ECCENTRICITY = 0.35;
+
 /** A single passenger seat. */
 export interface Seat {
   readonly id: number;
   readonly state: SeatState;
+  /** Weight measured by the seat's load cell, in kg (0 when empty). */
+  readonly occupiedKg: number;
 }
 
 /**
@@ -149,4 +162,45 @@ export function clampPower(value: number, min = MIN_POWER, max = MAX_POWER): num
     return min;
   }
   return Math.min(max, Math.max(min, value));
+}
+
+/** Total ride load, in kg: the sum of every seat's sensed weight. */
+export function totalLoadKg(gondolas: readonly Gondola[]): number {
+  return gondolas.reduce(
+    (total, gondola) =>
+      total + gondola.seats.reduce((seatTotal, seat) => seatTotal + seat.occupiedKg, 0),
+    0,
+  );
+}
+
+/**
+ * Normalized rotational imbalance of the load around the central mill, in
+ * `[0, 1]`. The 16 gondolas sit at even angular positions; for each gondola at
+ * index `i` its angle is `(i / count) * 2π` and its weight is the sum of its
+ * seats' `occupiedKg`. The eccentricity is the magnitude of the weight-vector
+ * sum divided by the total weight — `0` for an evenly-spread (or empty) load,
+ * approaching `1` as the load concentrates on one side of the mill.
+ */
+export function loadEccentricity(gondolas: readonly Gondola[]): number {
+  let sumX = 0;
+  let sumY = 0;
+  let totalWeight = 0;
+
+  gondolas.forEach((gondola, index) => {
+    const weight = gondola.seats.reduce((seatTotal, seat) => seatTotal + seat.occupiedKg, 0);
+    const angle = (index / gondolas.length) * 2 * Math.PI;
+    sumX += weight * Math.cos(angle);
+    sumY += weight * Math.sin(angle);
+    totalWeight += weight;
+  });
+
+  if (totalWeight === 0) {
+    return 0;
+  }
+  return Math.sqrt(sumX * sumX + sumY * sumY) / totalWeight;
+}
+
+/** Safe only when the load's rotational eccentricity is within tolerance. */
+export function loadBalanceState(gondolas: readonly Gondola[]): LoadBalanceState {
+  return loadEccentricity(gondolas) <= MAX_SAFE_ECCENTRICITY ? 'safe' : 'unsafe';
 }
