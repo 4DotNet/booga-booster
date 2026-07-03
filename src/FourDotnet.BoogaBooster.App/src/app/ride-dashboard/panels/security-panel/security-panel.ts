@@ -1,37 +1,31 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 
-import { Gondola, SeatState } from '../../models/ride.models';
-
-interface SeatView {
-  readonly key: string;
-  readonly gondolaId: number;
-  readonly seatId: number;
-  readonly state: SeatState;
-  readonly icon: string;
-  readonly label: string;
-}
+import { LoadBalanceState, SecurityState } from '../../models/ride.models';
 
 /**
- * Top-right panel: total occupied seats plus each seat's secured, unsecured or
- * empty state. Each state has a distinct icon and text label, never colour alone.
+ * Top-right panel: an overview of passenger load and security, never per-seat
+ * detail. Row one reports the occupied-seat count and whether every occupied
+ * seat is secured; row two reports the total ride load weight and whether it
+ * is balanced around the mill. Safe/unsafe is always conveyed by icon and
+ * text, never colour alone.
  */
 @Component({
   selector: 'bb-security-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="security" aria-labelledby="security-heading">
-      <h2 id="security-heading">Security</h2>
-      <p class="total" aria-live="polite">
-        {{ occupiedCount() }} occupied seat{{ occupiedCount() === 1 ? '' : 's' }}
+      <h2 id="security-heading">Load & security</h2>
+      <p class="row" [attr.data-state]="loadState()">
+        <span class="icon" aria-hidden="true">{{ loadIcon() }}</span>
+        <span
+          >Load: {{ passengers() }} passenger{{ passengers() === 1 ? '' : 's' }} —
+          {{ loadState() }}</span
+        >
       </p>
-      <ul class="seats">
-        @for (seat of seats(); track seat.key) {
-          <li class="seat" [attr.data-state]="seat.state">
-            <span class="icon" aria-hidden="true">{{ seat.icon }}</span>
-            <span class="sr-only">{{ seat.label }}</span>
-          </li>
-        }
-      </ul>
+      <p class="row" [attr.data-state]="loadBalance()">
+        <span class="icon" aria-hidden="true">{{ weightIcon() }}</span>
+        <span>Weight: {{ totalKg() }} kilos — {{ loadBalance() }}</span>
+      </p>
     </section>
   `,
   styles: `
@@ -43,90 +37,34 @@ interface SeatView {
       margin: 0;
       font-size: 1rem;
     }
-    .total {
+    .row {
       margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
       font-weight: 600;
     }
-    .seats {
-      list-style: none;
-      margin: 0;
-      padding: 0;
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(1.75rem, 1fr));
-      gap: 0.3rem;
-    }
-    .seat {
-      display: grid;
-      place-items: center;
-      aspect-ratio: 1;
-      border-radius: 0.35rem;
-      border: 1px solid var(--bb-border);
-      background: var(--bb-surface-2);
-    }
-    .seat[data-state='secured'] {
-      border-color: var(--bb-ok);
+    .row[data-state='safe'] {
       color: var(--bb-ok);
     }
-    .seat[data-state='occupied-unsecured'] {
-      border-color: var(--bb-alert);
+    .row[data-state='unsafe'] {
       color: var(--bb-alert);
     }
     .icon {
-      font-size: 0.85rem;
+      font-weight: 700;
       line-height: 1;
-    }
-    .sr-only {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      padding: 0;
-      margin: -1px;
-      overflow: hidden;
-      clip: rect(0, 0, 0, 0);
-      white-space: nowrap;
-      border: 0;
     }
   `,
 })
 export class SecurityPanel {
-  readonly gondolas = input.required<readonly Gondola[]>();
+  readonly passengers = input.required<number>();
+  readonly securityState = input.required<SecurityState>();
+  readonly totalKg = input.required<number>();
+  readonly loadBalance = input.required<LoadBalanceState>();
 
-  protected readonly seats = computed<SeatView[]>(() =>
-    this.gondolas().flatMap((gondola) =>
-      gondola.seats.map((seat) => ({
-        key: `${gondola.id}-${seat.id}`,
-        gondolaId: gondola.id,
-        seatId: seat.id,
-        state: seat.state,
-        icon: iconFor(seat.state),
-        label: `Gondola ${gondola.id} seat ${seat.id}: ${labelFor(seat.state)}`,
-      })),
-    ),
+  protected readonly loadState = computed(() =>
+    this.securityState() === 'secured' ? 'safe' : 'unsafe',
   );
-
-  protected readonly occupiedCount = computed(
-    () => this.seats().filter((seat) => seat.state !== 'empty').length,
-  );
-}
-
-function iconFor(state: SeatState): string {
-  switch (state) {
-    case 'secured':
-      return '🔒';
-    case 'occupied-unsecured':
-      return '⚠';
-    default:
-      return '·';
-  }
-}
-
-function labelFor(state: SeatState): string {
-  switch (state) {
-    case 'secured':
-      return 'secured';
-    case 'occupied-unsecured':
-      return 'occupied, not secured';
-    default:
-      return 'empty';
-  }
+  protected readonly loadIcon = computed(() => (this.loadState() === 'safe' ? '✓' : '⚠'));
+  protected readonly weightIcon = computed(() => (this.loadBalance() === 'safe' ? '✓' : '⚠'));
 }
