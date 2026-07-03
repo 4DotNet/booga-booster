@@ -16,6 +16,7 @@
     <ProjectReference Include="..\Shared\FourDotnet.BoogaBooster.IntegrationMessages\FourDotnet.BoogaBooster.IntegrationMessages.csproj" />
     <ProjectReference Include="..\Queue\FourDotnet.BoogaBooster.Queue\FourDotnet.BoogaBooster.Queue.csproj" />
     <ProjectReference Include="..\Weather\FourDotnet.BoogaBooster.Weather\FourDotnet.BoogaBooster.Weather.csproj" />
+    <ProjectReference Include="..\DigitalTwin\FourDotnet.BoogaBooster.DigitalTwin\FourDotnet.BoogaBooster.DigitalTwin.csproj" />
   </ItemGroup>
 
 </Project>
