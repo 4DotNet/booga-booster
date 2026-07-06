@@ -41,6 +41,7 @@ interface CommandState {
   hubPower: number;
   hubDirection: MotorDirection;
   gondolaBrakeEngaged: boolean;
+  brakesEngaged: boolean;
 }
 
 /**
@@ -61,6 +62,7 @@ export class SimulatedRideTelemetrySource implements RideTelemetrySource {
     hubPower: 0,
     hubDirection: 'forward',
     gondolaBrakeEngaged: false,
+    brakesEngaged: false,
   };
 
   private millSpeed = 0;
@@ -105,8 +107,11 @@ export class SimulatedRideTelemetrySource implements RideTelemetrySource {
         // so this is a no-op here.
         break;
       case 'brake-engines':
-        this.commands.millPower = 0;
-        this.commands.hubPower = 0;
+        this.commands.brakesEngaged = command.engaged;
+        if (command.engaged) {
+          this.commands.millPower = 0;
+          this.commands.hubPower = 0;
+        }
         break;
     }
     // Echo the command immediately so controls and status reflect it at once.
@@ -169,6 +174,7 @@ export class SimulatedRideTelemetrySource implements RideTelemetrySource {
       })),
       gondolas,
       gondolaBrakeEngaged: this.commands.gondolaBrakeEngaged,
+      brakesEngaged: this.commands.brakesEngaged,
     };
   }
 
