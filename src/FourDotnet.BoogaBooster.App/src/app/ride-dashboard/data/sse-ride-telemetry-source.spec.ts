@@ -42,8 +42,11 @@ class FakeEventSource implements EventSourceLike {
   }
 }
 
-/** A representative telemetry stream DTO: ride started, one hub/gondola non-zero. */
-function runningDto(): RideTelemetryStreamDto {
+/**
+ * A representative telemetry stream DTO: ride started, one hub/gondola
+ * non-zero, and one occupied+secured seat per gondola (16 boarded total).
+ */
+function runningDto(overrides: Partial<RideTelemetryStreamDto> = {}): RideTelemetryStreamDto {
   return {
     state: 3, // Started
     availableTransitions: [4, 6],
@@ -53,6 +56,7 @@ function runningDto(): RideTelemetryStreamDto {
     mill: {
       powerWatts: 45000,
       rpm: 5,
+      direction: 0,
       loadKg: 0,
       passengerLoadKg: 0,
       imbalanceMillimeters: 0,
@@ -63,6 +67,7 @@ function runningDto(): RideTelemetryStreamDto {
       index: i,
       powerWatts: 7500,
       rpm: 10,
+      direction: 0,
       loadKg: 0,
     })),
     gondolas: Array.from({ length: GONDOLA_COUNT }, (_, g) => ({
@@ -76,10 +81,62 @@ function runningDto(): RideTelemetryStreamDto {
       loadKg: 0,
       isSafeToDispatch: true,
       seats: [
-        { position: 0, occupiedKg: 70, restraint: 2 },
-        { position: 1, occupiedKg: 0, restraint: 0 },
+        { position: 0, occupiedKg: 70, restraint: 2, isOccupied: true, isSecured: true },
+        { position: 1, occupiedKg: 0, restraint: 0, isOccupied: false, isSecured: false },
       ],
     })),
+    boardedPassengerCount: GONDOLA_COUNT,
+    ...overrides,
+  };
+}
+
+/**
+ * A `Loading`-state telemetry stream DTO with every seat empty and no
+ * passengers boarded yet; the backend now streams frames during boarding
+ * too, so tests override individual gondolas/seats to simulate passengers
+ * arriving and securing their restraints.
+ */
+function loadingDto(overrides: Partial<RideTelemetryStreamDto> = {}): RideTelemetryStreamDto {
+  return {
+    state: 1, // Loading
+    availableTransitions: [2],
+    isSafeToStart: false,
+    safetyReason: 0,
+    simulationTimeSeconds: 3,
+    mill: {
+      powerWatts: 0,
+      rpm: 0,
+      direction: 0,
+      loadKg: 0,
+      passengerLoadKg: 0,
+      imbalanceMillimeters: 0,
+      isBalanced: true,
+      isOverloaded: false,
+    },
+    hubs: Array.from({ length: HUB_COUNT }, (_, i) => ({
+      index: i,
+      powerWatts: 0,
+      rpm: 0,
+      direction: 0,
+      loadKg: 0,
+    })),
+    gondolas: Array.from({ length: GONDOLA_COUNT }, (_, g) => ({
+      hubIndex: Math.floor(g / GONDOLAS_PER_HUB),
+      index: g % GONDOLAS_PER_HUB,
+      brake: 0, // Engaged
+      angleDegrees: 0,
+      rpm: 0,
+      lateralG: 0,
+      forwardG: 0,
+      loadKg: 0,
+      isSafeToDispatch: false,
+      seats: [
+        { position: 0, occupiedKg: 0, restraint: 0, isOccupied: false, isSecured: false },
+        { position: 1, occupiedKg: 0, restraint: 0, isOccupied: false, isSecured: false },
+      ],
+    })),
+    boardedPassengerCount: 0,
+    ...overrides,
   };
 }
 
@@ -180,7 +237,7 @@ describe('SseRideTelemetrySource', () => {
     expect(source.telemetry().gondolaBrakeEngaged).toBe(false);
   });
 
-  it('set-mill-direction and set-hub-direction make no HTTP call but echo locally', () => {
+  it('set-mill-direction and set-hub-direction post the direction and optimistically echo it', () => {
     const source = TestBed.inject(SseRideTelemetrySource);
 
     source.applyCommand({ kind: 'set-mill-direction', direction: 'reverse' });
@@ -189,21 +246,42 @@ describe('SseRideTelemetrySource', () => {
     expect(source.telemetry().mill.direction).toBe('reverse');
     expect(source.telemetry().hubs.every((hub) => hub.direction === 'reverse')).toBe(true);
 
-    http.verify(); // no requests issued for either command
+    http.expectOne('/api/ride/main-direction').flush(null, { status: 202, statusText: 'Accepted' });
+    http.expectOne('/api/ride/hub-direction').flush(null, { status: 202, statusText: 'Accepted' });
   });
 
-  it('brake-engines posts to the engine-brake endpoint and optimistically zeroes mill/hub power', () => {
+  it('brake-engines(true) posts { engaged: true } and optimistically zeroes mill/hub power', () => {
     const source = TestBed.inject(SseRideTelemetrySource);
     fakeEventSource.emit('message', runningDto());
     expect(source.telemetry().mill.power).toBe(50);
 
-    source.applyCommand({ kind: 'brake-engines' });
+    source.applyCommand({ kind: 'brake-engines', engaged: true });
 
     const req = http.expectOne('/api/ride/engine-brake');
     expect(req.request.method).toBe('POST');
-    expect(req.request.body).toEqual({});
+    expect(req.request.body).toEqual({ engaged: true });
     req.flush(null, { status: 202, statusText: 'Accepted' });
 
+    expect(source.telemetry().mill.power).toBe(0);
+    expect(source.telemetry().hubs.every((hub) => hub.power === 0)).toBe(true);
+    expect(source.telemetry().brakesEngaged).toBe(true);
+  });
+
+  it('brake-engines(false) posts { engaged: false } and leaves power at zero without restoring it', () => {
+    const source = TestBed.inject(SseRideTelemetrySource);
+    fakeEventSource.emit('message', runningDto());
+
+    source.applyCommand({ kind: 'brake-engines', engaged: true });
+    http.expectOne('/api/ride/engine-brake').flush(null, { status: 202, statusText: 'Accepted' });
+
+    source.applyCommand({ kind: 'brake-engines', engaged: false });
+
+    const req = http.expectOne('/api/ride/engine-brake');
+    expect(req.request.body).toEqual({ engaged: false });
+    req.flush(null, { status: 202, statusText: 'Accepted' });
+
+    expect(source.telemetry().brakesEngaged).toBe(false);
+    // Releasing does not restore the pre-brake power.
     expect(source.telemetry().mill.power).toBe(0);
     expect(source.telemetry().hubs.every((hub) => hub.power === 0)).toBe(true);
   });
@@ -216,5 +294,109 @@ describe('SseRideTelemetrySource', () => {
     const req = http.expectOne('/api/ride/state');
     expect(req.request.body).toEqual({ state: 'Loading' });
     req.flush(null, { status: 202, statusText: 'Accepted' });
+  });
+
+  describe('boarding during Loading/Safe/Offloading', () => {
+    it('maps an occupied, not-yet-secured seat to occupied-unsecured', () => {
+      const source = TestBed.inject(SseRideTelemetrySource);
+      const dto = loadingDto();
+      const gondolas = dto.gondolas.map((gondola, i) =>
+        i === 0
+          ? {
+              ...gondola,
+              seats: [
+                { position: 0, occupiedKg: 68, restraint: 1, isOccupied: true, isSecured: false },
+                gondola.seats[1],
+              ],
+            }
+          : gondola,
+      );
+
+      fakeEventSource.emit('ride-telemetry', { ...dto, gondolas, boardedPassengerCount: 1 });
+
+      expect(source.telemetry().gondolas[0].seats[0].state).toBe('occupied-unsecured');
+    });
+
+    it('maps an occupied and secured seat to secured', () => {
+      const source = TestBed.inject(SseRideTelemetrySource);
+      const dto = loadingDto();
+      const gondolas = dto.gondolas.map((gondola, i) =>
+        i === 0
+          ? {
+              ...gondola,
+              seats: [
+                { position: 0, occupiedKg: 68, restraint: 2, isOccupied: true, isSecured: true },
+                gondola.seats[1],
+              ],
+            }
+          : gondola,
+      );
+
+      fakeEventSource.emit('ride-telemetry', { ...dto, gondolas, boardedPassengerCount: 1 });
+
+      expect(source.telemetry().gondolas[0].seats[0].state).toBe('secured');
+    });
+
+    it('carries the frame boarded-passenger count onto the mapped telemetry', () => {
+      const source = TestBed.inject(SseRideTelemetrySource);
+
+      fakeEventSource.emit('ride-telemetry', loadingDto({ boardedPassengerCount: 9 }));
+
+      expect(source.telemetry().boardedPassengerCount).toBe(9);
+    });
+
+    it('updates the boarded count and total weight across two successive loading frames', () => {
+      const source = TestBed.inject(SseRideTelemetrySource);
+
+      // Frame 1: one passenger has boarded but not yet secured the restraint.
+      const firstDto = loadingDto();
+      const firstGondolas = firstDto.gondolas.map((gondola, i) =>
+        i === 0
+          ? {
+              ...gondola,
+              seats: [
+                { position: 0, occupiedKg: 68, restraint: 0, isOccupied: true, isSecured: false },
+                gondola.seats[1],
+              ],
+            }
+          : gondola,
+      );
+      fakeEventSource.emit('ride-telemetry', {
+        ...firstDto,
+        gondolas: firstGondolas,
+        boardedPassengerCount: 1,
+      });
+
+      expect(source.telemetry().boardedPassengerCount).toBe(1);
+      expect(source.telemetry().gondolas[0].seats[0].occupiedKg).toBe(68);
+
+      // Frame 2: a second passenger boards a different gondola and secures.
+      const secondGondolas = firstGondolas.map((gondola, i) =>
+        i === 1
+          ? {
+              ...gondola,
+              seats: [
+                { position: 0, occupiedKg: 75, restraint: 2, isOccupied: true, isSecured: true },
+                gondola.seats[1],
+              ],
+            }
+          : gondola,
+      );
+      fakeEventSource.emit('ride-telemetry', {
+        ...firstDto,
+        gondolas: secondGondolas,
+        boardedPassengerCount: 2,
+      });
+
+      const telemetry = source.telemetry();
+      expect(telemetry.boardedPassengerCount).toBe(2);
+      expect(telemetry.gondolas[1].seats[0].state).toBe('secured');
+      const totalKg = telemetry.gondolas.reduce(
+        (total, gondola) =>
+          total + gondola.seats.reduce((seatTotal, seat) => seatTotal + seat.occupiedKg, 0),
+        0,
+      );
+      expect(totalKg).toBe(143);
+    });
   });
 });
