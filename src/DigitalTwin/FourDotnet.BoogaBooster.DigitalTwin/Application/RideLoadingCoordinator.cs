@@ -1,0 +1,114 @@
+using FourDotnet.BoogaBooster.DigitalTwin.Abstractions;
+using FourDotnet.BoogaBooster.DigitalTwin.Domain;
+using FourDotnet.BoogaBooster.Queue.Abstractions;
+using Microsoft.Extensions.Logging;
+
+namespace FourDotnet.BoogaBooster.DigitalTwin.Application;
+
+/// <summary>
+/// Drains a ride's waiting line into its free seats while the ride is
+/// <see cref="RideState.Loading"/>. Each pass repeatedly boards the first waiting
+/// group that fits the remaining capacity — looking ahead past a too-large front
+/// group to the next two groups to backfill smaller ones — and stops when no group
+/// in that window fits (the ride is full) or the queue empties. Because a pass is
+/// idempotent and re-runs every simulation tick, a group that joins the queue while
+/// the ride is still loading boards on the next tick.
+/// </summary>
+/// <remarks>
+/// The Queue contract (<see cref="IRideQueueService"/>) is an optional dependency so
+/// the DigitalTwin module still resolves on its own: when the Queue module is not
+/// present, every loading pass is a no-op.
+/// </remarks>
+public sealed class RideLoadingCoordinator
+{
+    /// <summary>How far past the front of the line a pass looks to backfill a fitting group.</summary>
+    private const int LookAheadWindow = 3;
+
+    private readonly IRideStore _store;
+    private readonly ILogger<RideLoadingCoordinator> _logger;
+    private readonly IRideQueueService? _queueService;
+
+    public RideLoadingCoordinator(
+        IRideStore store,
+        ILogger<RideLoadingCoordinator> logger,
+        IRideQueueService? queueService = null)
+    {
+        _store = store ?? throw new ArgumentNullException(nameof(store));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _queueService = queueService;
+    }
+
+    /// <summary>
+    /// Runs a single loading pass for <paramref name="rideId"/>. Does nothing unless
+    /// the ride is <see cref="RideState.Loading"/> and the Queue module is wired up.
+    /// </summary>
+    public async Task RunLoadingPassAsync(Guid rideId, CancellationToken cancellationToken)
+    {
+        if (_queueService is null || _store.CurrentState != RideState.Loading)
+        {
+            return;
+        }
+
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            var emptyGondolas = _store.EmptyGondolaCount;
+            if (emptyGondolas <= 0)
+            {
+                return; // The ride is full — no empty gondola left to seat a fresh group.
+            }
+
+            var status = _queueService.GetStatus(rideId);
+            if (status.Groups.Count == 0)
+            {
+                return; // Nobody waiting.
+            }
+
+            var chosen = FirstFittingGroup(status.Groups, emptyGondolas);
+            if (chosen is null)
+            {
+                return; // None of the first three waiting groups fit — the ride is full.
+            }
+
+            var taken = await _queueService
+                .TakeGroupAsync(rideId, chosen.GroupId, cancellationToken)
+                .ConfigureAwait(false);
+            if (taken is null)
+            {
+                continue; // The group was already gone; re-read the line and retry.
+            }
+
+            var members = taken.People
+                .Select(person => new PassengerWeight(person.WeightInKilograms))
+                .ToArray();
+            _store.BoardGroup(members);
+
+            _logger.LogInformation(
+                "Boarded group {GroupId} of {Size} onto ride {RideId}; {EmptyGondolas} gondola(s) still free.",
+                taken.GroupId,
+                taken.Size,
+                rideId,
+                _store.EmptyGondolaCount);
+        }
+    }
+
+    /// <summary>
+    /// The first group within the look-ahead window (the front three) whose members
+    /// all fit the remaining <paramref name="emptyGondolas"/>, or <c>null</c> when
+    /// none of them fit. A group of <c>N</c> needs <c>ceil(N / 2)</c> empty gondolas.
+    /// </summary>
+    private static QueuedGroupDto? FirstFittingGroup(IReadOnlyList<QueuedGroupDto> groups, int emptyGondolas)
+    {
+        var window = Math.Min(groups.Count, LookAheadWindow);
+        for (var i = 0; i < window; i++)
+        {
+            var group = groups[i];
+            var requiredGondolas = (group.Size + 1) / 2;
+            if (requiredGondolas <= emptyGondolas)
+            {
+                return group;
+            }
+        }
+
+        return null;
+    }
+}
