@@ -48,20 +48,45 @@ public static class RideParameters
     public static readonly TimeSpan TelemetryInterval = TimeSpan.FromSeconds(1d / 30d);
 
     // --- Mill motor & losses ---
+    // The loss coefficients are sized against the mill's very large rotating inertia
+    // (~1.65e5 kg·m² empty, ~3e5 loaded) so a de-powered mill coasts to rest in a
+    // believable time. The increase is biased toward Coulomb/viscous friction — the
+    // terms that dominate the low-speed tail — because aerodynamic drag (∝ ω²) is
+    // already the largest loss at cruise, so raising it much would drop the terminal
+    // speed and felt G. See docs/03 §3.3 and openspec change increase-spin-drag.
     public const double MillStallTorque = 60_000d;
     public const double MillMaxPowerWatts = 90_000d;
-    public const double MillCoulombFriction = 800d;
-    public const double MillViscousFriction = 1_500d;
-    public const double MillAeroDrag = 5_000d;
+    public const double MillCoulombFriction = 10_000d;
+    public const double MillViscousFriction = 3_500d;
+    public const double MillAeroDrag = 6_000d;
     public const double MillMaxAngularVelocity = 2.5d;
 
+    /// <summary>
+    /// Braking torque added to the mill's Coulomb drag while the engine brake is
+    /// engaged (N·m). A near-constant opposing torque, sized well above
+    /// <see cref="MillStallTorque"/> against the mill's large inertia so a spinning
+    /// mill (up to <see cref="MillMaxAngularVelocity"/>) is brought to a complete
+    /// rest within a couple of seconds — a real brake, not just cutting power.
+    /// </summary>
+    public const double MillBrakeTorque = 200_000d;
+
     // --- Hub motor & losses ---
+    // Raised alongside the mill (smaller factor) so the hubs also settle promptly and
+    // no hub keeps creeping after the mill has effectively stopped.
     public const double HubStallTorque = 8_000d;
     public const double HubMaxPowerWatts = 15_000d;
-    public const double HubCoulombFriction = 100d;
-    public const double HubViscousFriction = 200d;
-    public const double HubAeroDrag = 150d;
+    public const double HubCoulombFriction = 400d;
+    public const double HubViscousFriction = 500d;
+    public const double HubAeroDrag = 200d;
     public const double HubMaxAngularVelocity = 5d;
+
+    /// <summary>
+    /// Braking torque added to each hub's Coulomb drag while the engine brake is
+    /// engaged (N·m). Sized above <see cref="HubStallTorque"/> for the hub inertia
+    /// so a spinning hub (up to <see cref="HubMaxAngularVelocity"/>) settles to a
+    /// complete rest within a couple of seconds, in step with the braking mill.
+    /// </summary>
+    public const double HubBrakeTorque = 20_000d;
 
     /// <summary>Angular-speed floor in the motor curve — avoids divide-by-zero at standstill.</summary>
     public const double OmegaEpsilon = 1e-3d;
