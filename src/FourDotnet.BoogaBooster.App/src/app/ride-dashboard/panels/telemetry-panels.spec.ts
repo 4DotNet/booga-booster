@@ -60,9 +60,9 @@ describe('SpeedPanel', () => {
     fixture.detectChanges();
 
     const host = fixture.nativeElement as HTMLElement;
-    expect(host.textContent).toContain('4.5 rpm');
+    expect(host.textContent).toContain('4.50 rpm');
     expect(host.querySelectorAll('.hub').length).toBe(HUB_COUNT);
-    expect(host.textContent).toContain('12 rpm');
+    expect(host.textContent).toContain('12.00 rpm');
   });
 });
 

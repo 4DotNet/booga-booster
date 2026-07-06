@@ -80,9 +80,9 @@ export class SpeedPanel {
   readonly mill = input.required<Mill>();
   readonly hubs = input.required<readonly Hub[]>();
 
-  /** The speed magnitude in rpm, rounded, without its direction sign. */
-  protected magnitude(rpm: number): number {
-    return Math.abs(rpm);
+  /** The speed magnitude in rpm, always to two decimals, without its direction sign. */
+  protected magnitude(rpm: number): string {
+    return Math.abs(rpm).toFixed(2);
   }
 
   /** The rotation direction as a lowercase word. */
