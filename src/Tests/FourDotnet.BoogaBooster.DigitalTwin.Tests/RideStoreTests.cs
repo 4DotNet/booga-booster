@@ -4,6 +4,8 @@ using FourDotnet.BoogaBooster.DigitalTwin.Abstractions;
 using FourDotnet.BoogaBooster.DigitalTwin.Application;
 using FourDotnet.BoogaBooster.DigitalTwin.Domain;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Moq;
 using Xunit;
 
@@ -76,7 +78,9 @@ public sealed class RideStoreTests
     {
         var store = new RideStore(new RandomRideEventSampler(seed: 1));
         var logger = new Mock<ILogger<RideSimulationService>>().Object;
-        var service = new RideSimulationService(store, TimeProvider.System, logger);
+        var coordinator = new RideLoadingCoordinator(store, NullLogger<RideLoadingCoordinator>.Instance);
+        var options = Options.Create(new DigitalTwinModuleOptions());
+        var service = new RideSimulationService(store, coordinator, options, TimeProvider.System, logger);
 
         var before = store.GetTelemetry().SimulationTimeSeconds;
         service.Tick();
