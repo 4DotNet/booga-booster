@@ -83,6 +83,30 @@ internal sealed class RideQueueService : IRideQueueService
             Groups: groups);
     }
 
+    public Task<QueuedGroupDto?> TakeGroupAsync(
+        Guid rideId,
+        Guid groupId,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var queue = _store.Find(rideId);
+        var removed = queue?.Remove(groupId);
+        if (removed is null)
+        {
+            return Task.FromResult<QueuedGroupDto?>(null);
+        }
+
+        _logger.LogInformation(
+            "Group {GroupId} of {Size} left ride {RideId}'s queue to board; {PeopleWaiting} still waiting.",
+            removed.GroupId,
+            removed.Size,
+            rideId,
+            queue!.PeopleWaiting);
+
+        return Task.FromResult<QueuedGroupDto?>(ToDto(removed));
+    }
+
     private static QueuedGroupDto ToDto(QueuedGroup group)
     {
         var people = group.Members
