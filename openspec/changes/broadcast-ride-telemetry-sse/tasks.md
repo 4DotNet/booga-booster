@@ -1,28 +1,28 @@
 ## 1. Consult the style guide
 
-- [ ] 1.1 Query the `4dotnet-csharp-style-guide` MCP server for ADR-0002 (minimal APIs), ADR-0007 (endpoints in module), ADR-0004 (module/abstractions boundary), and the unit-testing guideline before writing any C#.
+- [x] 1.1 Query the `4dotnet-csharp-style-guide` MCP server for ADR-0002 (minimal APIs), ADR-0007 (endpoints in module), ADR-0004 (module/abstractions boundary), and the unit-testing guideline before writing any C#.
 
 ## 2. Backend: telemetry rate and stream producer
 
-- [ ] 2.1 Add `RideParameters.TelemetryInterval` (default 30 Hz, e.g. `TimeSpan.FromSeconds(1.0 / 30)`), documented as decoupled from the physics `TimeStep` (1/120 s).
-- [ ] 2.2 Add an `IsRunning` predicate to the ride/store (true only in the running/`Started` state) so emission can be gated without hard-coding an enum name.
-- [ ] 2.3 Create `Application/RideTelemetryStream.cs`: an injectable producer with `IAsyncEnumerable<RideTelemetry> Stream([EnumeratorCancellation] CancellationToken ct)` that loops — when the ride is running `yield return _store.GetTelemetry()`, then `await Task.Delay(RideParameters.TelemetryInterval, _timeProvider, ct)`; skip yielding while not running; exit cleanly on cancellation. Inject `IRideStore` and `TimeProvider`.
+- [x] 2.1 Add `RideParameters.TelemetryInterval` (default 30 Hz, e.g. `TimeSpan.FromSeconds(1.0 / 30)`), documented as decoupled from the physics `TimeStep` (1/120 s).
+- [x] 2.2 Add an `IsRunning` predicate to the ride/store (true only in the running/`Started` state) so emission can be gated without hard-coding an enum name.
+- [x] 2.3 Create `Application/RideTelemetryStream.cs`: an injectable producer with `IAsyncEnumerable<RideTelemetry> Stream([EnumeratorCancellation] CancellationToken ct)` that loops — when the ride is running `yield return _store.GetTelemetry()`, then `await Task.Delay(RideParameters.TelemetryInterval, _timeProvider, ct)`; skip yielding while not running; exit cleanly on cancellation. Inject `IRideStore` and `TimeProvider`.
 - [ ] 2.4 (Optional hardening) emit a slow SSE-comment heartbeat while the ride is idle to keep intermediaries from dropping the connection.
-- [ ] 2.5 Register `RideTelemetryStream` in `DigitalTwinModuleExtensions`.
+- [x] 2.5 Register `RideTelemetryStream` in `DigitalTwinModuleExtensions`.
 
 ## 3. Backend: SSE endpoint
 
-- [ ] 3.1 Add `GET /ride/telemetry/stream` to `DigitalTwinEndpoints`: resolve `RideTelemetryStream`, return `TypedResults.ServerSentEvents(stream.Stream(ct), eventType: "ride-telemetry")`, taking the request `CancellationToken`. Name it (`WithName`) and keep it a thin dispatcher.
-- [ ] 3.2 Confirm the app's JSON options serialize `RideTelemetry` (and its enums) the way the frontend expects; align enum serialization (string vs number) with the existing telemetry endpoint.
-- [ ] 3.3 Keep the existing `GET /ride/telemetry` one-shot endpoint unchanged.
+- [x] 3.1 Add `GET /ride/telemetry/stream` to `DigitalTwinEndpoints`: resolve `RideTelemetryStream`, return `TypedResults.ServerSentEvents(stream.Stream(ct), eventType: "ride-telemetry")`, taking the request `CancellationToken`. Name it (`WithName`) and keep it a thin dispatcher.
+- [x] 3.2 Confirm the app's JSON options serialize `RideTelemetry` (and its enums) the way the frontend expects; align enum serialization (string vs number) with the existing telemetry endpoint.
+- [x] 3.3 Keep the existing `GET /ride/telemetry` one-shot endpoint unchanged.
 
 ## 4. Backend tests (DigitalTwin.Tests, xUnit v3)
 
-- [ ] 4.1 Producer emits frames at the telemetry cadence while the ride is running (drive a fake `TimeProvider`, assert frame count/timing).
-- [ ] 4.2 Producer emits no frames while the ride is not running, and resumes emitting once it enters the running state.
-- [ ] 4.3 Producer completes/stops promptly when the cancellation token is cancelled (client disconnect).
-- [ ] 4.4 Each emitted frame is a full `RideTelemetry` (mill + all hubs + all gondolas + seats populated).
-- [ ] 4.5 `dotnet build BoogaBooster.slnx` and `dotnet test BoogaBooster.slnx` green; module coverage stays ≥ 80%.
+- [x] 4.1 Producer emits frames at the telemetry cadence while the ride is running (drive a fake `TimeProvider`, assert frame count/timing).
+- [x] 4.2 Producer emits no frames while the ride is not running, and resumes emitting once it enters the running state.
+- [x] 4.3 Producer completes/stops promptly when the cancellation token is cancelled (client disconnect).
+- [x] 4.4 Each emitted frame is a full `RideTelemetry` (mill + all hubs + all gondolas + seats populated).
+- [x] 4.5 `dotnet build BoogaBooster.slnx` and `dotnet test BoogaBooster.slnx` green; module coverage stays ≥ 80%.
 
 ## 5. Frontend: SSE telemetry source
 

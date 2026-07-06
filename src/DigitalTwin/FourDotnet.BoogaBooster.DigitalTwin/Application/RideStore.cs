@@ -28,6 +28,17 @@ public sealed class RideStore : IRideStore, IRideTelemetryProvider
         }
     }
 
+    public bool IsRunning
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _ride.IsRunning;
+            }
+        }
+    }
+
     public RideTelemetry Advance(TimeSpan dt)
     {
         lock (_gate)

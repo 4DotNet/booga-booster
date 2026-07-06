@@ -1,6 +1,7 @@
 using FourDotnet.BoogaBooster.Core;
 using FourDotnet.BoogaBooster.Core.Cqrs;
 using FourDotnet.BoogaBooster.DigitalTwin.Abstractions;
+using FourDotnet.BoogaBooster.DigitalTwin.Application;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.BoardPassenger;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.GetRideTelemetry;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.RequestRideStateTransition;
@@ -50,6 +51,15 @@ public static class DigitalTwinEndpoints
             return Results.Ok(telemetry);
         })
         .WithName("GetRideTelemetry");
+
+        // Live telemetry broadcast over Server-Sent Events. The connection is held open
+        // for the client's lifetime; full RideTelemetry snapshots are pushed at the
+        // telemetry rate while the ride is running (see RideTelemetryStream).
+        group.MapGet("/telemetry/stream", (
+            RideTelemetryStream stream,
+            CancellationToken cancellationToken) =>
+            TypedResults.ServerSentEvents(stream.Stream(cancellationToken), eventType: "ride-telemetry"))
+        .WithName("StreamRideTelemetry");
 
         group.MapPost("/main-power", (
             SetPowerRequest request,

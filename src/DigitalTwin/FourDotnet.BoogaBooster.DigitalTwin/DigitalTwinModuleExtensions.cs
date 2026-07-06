@@ -42,6 +42,9 @@ public static class DigitalTwinModuleExtensions
         services.TryAddSingleton<IRideStore>(sp => sp.GetRequiredService<RideStore>());
         services.TryAddSingleton<IRideTelemetryProvider>(sp => sp.GetRequiredService<RideStore>());
 
+        // The SSE telemetry broadcast producer (samples the store at the telemetry rate).
+        services.TryAddSingleton<RideTelemetryStream>();
+
         // Feature handlers (CQRS — ADR-0005/0006).
         services.AddScoped<IQueryHandler<GetRideTelemetryQuery, RideTelemetry>, GetRideTelemetryQueryHandler>();
         services.AddScoped<ICommandHandler<SetMainEnginePowerCommand>, SetMainEnginePowerCommandHandler>();

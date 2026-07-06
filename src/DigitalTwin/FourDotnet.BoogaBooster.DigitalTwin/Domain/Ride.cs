@@ -81,6 +81,14 @@ public sealed class Ride : DomainModel
     public bool ConstraintsLocked =>
         _state is RideState.Started or RideState.Stopping or RideState.EmergencyStop;
 
+    /// <summary>
+    /// <c>true</c> while the ride is in motion — running, or braking to a stop. This is
+    /// exactly the set of states in which <see cref="Advance"/> steps the physics, and
+    /// the condition that gates the live telemetry broadcast.
+    /// </summary>
+    public bool IsRunning =>
+        _state is RideState.Started or RideState.Stopping or RideState.EmergencyStop;
+
     /// <summary><c>true</c> when the ride is at rest and safe to be loaded/started.</summary>
     public bool IsSafeToStart =>
         _state is RideState.Idle or RideState.Loading or RideState.Safe

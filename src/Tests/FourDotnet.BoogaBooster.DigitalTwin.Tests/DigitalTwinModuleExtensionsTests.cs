@@ -37,6 +37,7 @@ public sealed class DigitalTwinModuleExtensionsTests
         Assert.NotNull(provider.GetRequiredService<IRideEventSampler>());
         Assert.NotNull(provider.GetRequiredService<IRideStore>());
         Assert.NotNull(provider.GetRequiredService<IRideTelemetryProvider>());
+        Assert.NotNull(provider.GetRequiredService<RideTelemetryStream>());
     }
 
     [Fact]

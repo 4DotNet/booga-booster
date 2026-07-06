@@ -14,6 +14,12 @@ public interface IRideStore
     /// <summary>Returns a consistent snapshot of the ride's current telemetry.</summary>
     RideTelemetry GetTelemetry();
 
+    /// <summary>
+    /// <c>true</c> while the ride is in motion (running or braking to a stop) — the
+    /// condition under which the live telemetry broadcast emits frames.
+    /// </summary>
+    bool IsRunning { get; }
+
     /// <summary>Advances the simulation by one fixed <paramref name="dt"/> step.</summary>
     RideTelemetry Advance(TimeSpan dt);
 
