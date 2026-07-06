@@ -28,13 +28,35 @@ public sealed class RideStore : IRideStore, IRideTelemetryProvider
         }
     }
 
-    public bool IsRunning
+    public bool IsActive
     {
         get
         {
             lock (_gate)
             {
-                return _ride.IsRunning;
+                return _ride.IsActive;
+            }
+        }
+    }
+
+    public RideState CurrentState
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _ride.CurrentState;
+            }
+        }
+    }
+
+    public int EmptyGondolaCount
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _ride.EmptyGondolaCount;
             }
         }
     }
@@ -66,6 +88,24 @@ public sealed class RideStore : IRideStore, IRideTelemetryProvider
         }
     }
 
+    public RideTelemetry SetMainEngineDirection(MotorDirection direction)
+    {
+        lock (_gate)
+        {
+            _ride.SetMainEngineDirection(direction);
+            return _ride.ToTelemetry();
+        }
+    }
+
+    public RideTelemetry SetHubEngineDirection(MotorDirection direction)
+    {
+        lock (_gate)
+        {
+            _ride.SetHubEngineDirection(direction);
+            return _ride.ToTelemetry();
+        }
+    }
+
     public RideTelemetry BoardPassenger(int hubIndex, int gondolaIndex, SeatPosition seat, PassengerWeight? weight)
     {
         lock (_gate)
@@ -73,6 +113,17 @@ public sealed class RideStore : IRideStore, IRideTelemetryProvider
             var passenger = new Passenger(weight ?? _sampler.NextPassengerWeight());
             var delay = _sampler.NextRestraintCloseDelay();
             _ride.BoardPassenger(hubIndex, gondolaIndex, seat, passenger, delay);
+            return _ride.ToTelemetry();
+        }
+    }
+
+    public RideTelemetry BoardGroup(IReadOnlyList<PassengerWeight> members)
+    {
+        ArgumentNullException.ThrowIfNull(members);
+
+        lock (_gate)
+        {
+            _ride.BoardGroup(members, _sampler.NextRestraintCloseDelay, _sampler.NextGondolaSelection);
             return _ride.ToTelemetry();
         }
     }
@@ -86,11 +137,11 @@ public sealed class RideStore : IRideStore, IRideTelemetryProvider
         }
     }
 
-    public RideTelemetry BrakeEngines()
+    public RideTelemetry SetEngineBrakes(bool engaged)
     {
         lock (_gate)
         {
-            _ride.BrakeEngines();
+            _ride.SetEngineBrakes(engaged);
             return _ride.ToTelemetry();
         }
     }
