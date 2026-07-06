@@ -1,7 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 
-import { podMotionFor } from '../models/ride.models';
-import { RideVisualization, angularVelocity, rpmToRadPerSec } from './ride-visualization';
+import { RideVisualization, angularVelocity, podFreeAngle, rpmToRadPerSec } from './ride-visualization';
 
 describe('RideVisualization', () => {
   function render() {
@@ -28,20 +27,23 @@ describe('RideVisualization', () => {
     expect(rpmToRadPerSec(0)).toBe(0);
   });
 
-  it('signs angular velocity by motor direction', () => {
-    expect(angularVelocity(60, 'forward')).toBeCloseTo(2 * Math.PI, 5);
-    expect(angularVelocity(60, 'reverse')).toBeCloseTo(-2 * Math.PI, 5);
-    expect(Math.abs(angularVelocity(0, 'reverse'))).toBe(0);
+  it('derives angular velocity from signed rpm', () => {
+    expect(angularVelocity(60)).toBeCloseTo(2 * Math.PI, 5);
+    expect(angularVelocity(-60)).toBeCloseTo(-2 * Math.PI, 5);
+    expect(angularVelocity(0)).toBe(0);
   });
 
   it('coerces a non-finite rpm to 0 instead of corrupting the rotation', () => {
-    expect(angularVelocity(NaN, 'forward')).toBe(0);
-    expect(angularVelocity(Infinity, 'forward')).toBe(0);
-    expect(Math.abs(angularVelocity(-Infinity, 'reverse'))).toBe(0);
+    expect(angularVelocity(NaN)).toBe(0);
+    expect(angularVelocity(Infinity)).toBe(0);
+    expect(angularVelocity(-Infinity)).toBe(0);
   });
 
-  it('locks the pods when braked and frees them when released', () => {
-    expect(podMotionFor(true)).toEqual({ freedom: 0, swing: 0 });
-    expect(podMotionFor(false)).toEqual({ freedom: 1, swing: 1 });
+  it('advances the free pod trajectory with the combined rotation', () => {
+    // At rest the pod sits at its phase-shifted swing baseline.
+    expect(podFreeAngle(0, 0)).toBe(0);
+    expect(podFreeAngle(0, Math.PI / 2)).toBeCloseTo(1, 5);
+    // The trajectory counter-rotates against the combined spin.
+    expect(podFreeAngle(Math.PI, 0)).toBeCloseTo(-Math.PI, 5);
   });
 });
