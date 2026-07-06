@@ -131,3 +131,73 @@ describe('GondolaPanel', () => {
     expect(verticalMetric?.getAttribute('aria-label')).toContain('g');
   });
 });
+
+describe('GondolaPanel severity', () => {
+  /** A single-gondola fixture with a chosen weight and g-forces. */
+  function gondola(id: number, weightKg: number, vertical: number, lateral: number): Gondola {
+    return {
+      id,
+      seats: [
+        { id: 1, state: 'secured', occupiedKg: weightKg },
+        { id: 2, state: 'empty', occupiedKg: 0 },
+      ],
+      gForce: { vertical, lateral },
+      angleDegrees: 0,
+    };
+  }
+
+  function render(gondolas: Gondola[]): HTMLElement {
+    const fixture = TestBed.createComponent(GondolaPanel);
+    fixture.componentRef.setInput('gondolas', gondolas);
+    fixture.detectChanges();
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  const weightLevel = (card: Element) =>
+    card.querySelector('.metric[aria-label*="weight"]')?.getAttribute('data-level');
+  const verticalLevel = (card: Element) =>
+    card.querySelector('.metric[aria-label*="vertical"]')?.getAttribute('data-level');
+  const lateralLevel = (card: Element) =>
+    card.querySelector('.metric[aria-label*="lateral"]')?.getAttribute('data-level');
+
+  it('marks weight over 250 as warn (orange) and over 300 as alert (red), inclusive limits stay normal', () => {
+    const cards = render([
+      gondola(1, 250, 0, 0), // at the warn limit -> still normal
+      gondola(2, 260, 0, 0), // over 250 -> warn
+      gondola(3, 300, 0, 0), // at the alert limit -> warn, not alert
+      gondola(4, 320, 0, 0), // over 300 -> alert
+    ]).querySelectorAll('.card');
+
+    expect(weightLevel(cards[0])).toBe('normal');
+    expect(weightLevel(cards[1])).toBe('warn');
+    expect(weightLevel(cards[2])).toBe('warn');
+    expect(weightLevel(cards[3])).toBe('alert');
+  });
+
+  it('marks vertical g beyond ±4.5 and lateral g beyond ±2 as alert, limits themselves stay normal', () => {
+    const cards = render([
+      gondola(1, 0, 4.5, 2), // exactly at both limits -> normal
+      gondola(2, 0, 4.6, 0), // vertical over +4.5 -> alert
+      gondola(3, 0, -4.6, 0), // vertical under -4.5 -> alert
+      gondola(4, 0, 0, 2.1), // lateral over +2 -> alert
+      gondola(5, 0, 0, -2.1), // lateral under -2 -> alert
+    ]).querySelectorAll('.card');
+
+    expect(verticalLevel(cards[0])).toBe('normal');
+    expect(lateralLevel(cards[0])).toBe('normal');
+    expect(verticalLevel(cards[1])).toBe('alert');
+    expect(verticalLevel(cards[2])).toBe('alert');
+    expect(lateralLevel(cards[3])).toBe('alert');
+    expect(lateralLevel(cards[4])).toBe('alert');
+  });
+
+  it('spells out the over-limit status in the accessible name, never colour alone', () => {
+    const host = render([gondola(1, 320, 4.6, 0)]);
+    expect(
+      host.querySelector('.metric[aria-label*="weight"]')?.getAttribute('aria-label'),
+    ).toContain('over safe limit');
+    expect(
+      host.querySelector('.metric[aria-label*="vertical"]')?.getAttribute('aria-label'),
+    ).toContain('over safe limit');
+  });
+});
