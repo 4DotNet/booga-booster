@@ -139,6 +139,14 @@ I · α = −(C_coulomb·sign(ω) + C_viscous·ω + k_aero·ω·|ω|)
 The Coulomb term guarantees the ride actually *stops* in finite time rather than
 asymptotically creeping — the viscous and drag terms alone would only approach zero.
 
+Because the mill's inertia is enormous, the **Coulomb term is what sets the coast-down
+time**: aerodynamic drag (∝ ω²) fades below ~1 rad/s, so the long low-speed tail is
+governed almost entirely by `C_coulomb / I`. The loss coefficients are therefore sized to
+give a believable coast — a de-powered mill settling to rest in **~30 s empty and ~50 s
+fully loaded** (a fully loaded rig has ~2.5× the inertia, so it legitimately coasts longer),
+rather than the several-minute creep that tiny losses produce. See the appendix for the
+shipped baseline values.
+
 ---
 
 ## 3.5 The E-stop ramp (not an instant halt)
