@@ -15,10 +15,21 @@ public interface IRideStore
     RideTelemetry GetTelemetry();
 
     /// <summary>
-    /// <c>true</c> while the ride is in motion (running or braking to a stop) — the
-    /// condition under which the live telemetry broadcast emits frames.
+    /// <c>true</c> while the ride is active — in any lifecycle state except
+    /// <see cref="RideState.Idle"/>. The condition under which the live telemetry
+    /// broadcast emits frames, so boarding and loading are observable and not only
+    /// the running ride.
     /// </summary>
-    bool IsRunning { get; }
+    bool IsActive { get; }
+
+    /// <summary>The ride's current lifecycle state (a cheap read for the loading coordinator).</summary>
+    RideState CurrentState { get; }
+
+    /// <summary>
+    /// The number of completely empty gondolas — the ride's spare boarding capacity.
+    /// A group of <c>N</c> needs <c>ceil(N / 2)</c> of these to board.
+    /// </summary>
+    int EmptyGondolaCount { get; }
 
     /// <summary>Advances the simulation by one fixed <paramref name="dt"/> step.</summary>
     RideTelemetry Advance(TimeSpan dt);
@@ -29,6 +40,12 @@ public interface IRideStore
     /// <summary>Sets the hub engine power (applied identically to all four hubs).</summary>
     RideTelemetry SetHubEnginePower(EnginePower power);
 
+    /// <summary>Sets the main (mill) engine rotation direction.</summary>
+    RideTelemetry SetMainEngineDirection(MotorDirection direction);
+
+    /// <summary>Sets the hub engine rotation direction (applied identically to all four hubs).</summary>
+    RideTelemetry SetHubEngineDirection(MotorDirection direction);
+
     /// <summary>
     /// Boards a passenger into a seat. When <paramref name="weight"/> is
     /// <c>null</c> a random weight is drawn; the natural restraint-close delay is
@@ -36,11 +53,22 @@ public interface IRideStore
     /// </summary>
     RideTelemetry BoardPassenger(int hubIndex, int gondolaIndex, SeatPosition seat, PassengerWeight? weight);
 
+    /// <summary>
+    /// Boards a whole group as a unit (idle/loading only), seating its members two
+    /// per gondola with an odd member alone. The group boards only when the ride has
+    /// <c>ceil(N / 2)</c> empty gondolas; otherwise the domain rejects it and nobody
+    /// is seated. Each member's natural restraint-close delay is drawn from the sampler.
+    /// </summary>
+    RideTelemetry BoardGroup(IReadOnlyList<PassengerWeight> members);
+
     /// <summary>Engages or releases a specific gondola's yaw brake.</summary>
     RideTelemetry SetGondolaBrake(int hubIndex, int gondolaIndex, GondolaBrakeState brake);
 
-    /// <summary>Applies the brakes to the drive engines (cuts mill and hub power).</summary>
-    RideTelemetry BrakeEngines();
+    /// <summary>
+    /// Engages or releases the engine brake on the mill and every hub. Engaging cuts
+    /// drive power and applies a strong braking torque for a fast stop.
+    /// </summary>
+    RideTelemetry SetEngineBrakes(bool engaged);
 
     /// <summary>
     /// Requests an operator-triggered lifecycle transition to <paramref name="target"/>.
