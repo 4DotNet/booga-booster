@@ -21,6 +21,8 @@
     <ProjectReference Include="..\..\DigitalTwin\FourDotnet.BoogaBooster.DigitalTwin\FourDotnet.BoogaBooster.DigitalTwin.csproj" />
     <ProjectReference Include="..\..\DigitalTwin\FourDotnet.BoogaBooster.DigitalTwin.Abstractions\FourDotnet.BoogaBooster.DigitalTwin.Abstractions.csproj" />
     <ProjectReference Include="..\..\Shared\FourDotnet.BoogaBooster.Core\FourDotnet.BoogaBooster.Core.csproj" />
+    <!-- The loading-coordinator tests arrange groups through the Queue public contract. -->
+    <ProjectReference Include="..\..\Queue\FourDotnet.BoogaBooster.Queue.Abstractions\FourDotnet.BoogaBooster.Queue.Abstractions.csproj" />
   </ItemGroup>
 
 </Project>
