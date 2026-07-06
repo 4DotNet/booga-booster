@@ -39,4 +39,49 @@ public sealed class SamplerTests
         Assert.Equal(a.NextPassengerWeight().Kilograms, b.NextPassengerWeight().Kilograms);
         Assert.Equal(a.NextRestraintCloseDelay(), b.NextRestraintCloseDelay());
     }
+
+    [Fact]
+    public void Gondola_selection_returns_distinct_in_range_indices()
+    {
+        var sampler = new RandomRideEventSampler(seed: 7);
+
+        for (var i = 0; i < 1000; i++)
+        {
+            var selection = sampler.NextGondolaSelection(total: 16, count: 5);
+
+            Assert.Equal(5, selection.Count);
+            Assert.Equal(5, selection.Distinct().Count());
+            Assert.All(selection, index => Assert.InRange(index, 0, 15));
+        }
+    }
+
+    [Fact]
+    public void Selecting_every_gondola_is_a_permutation_of_all_indices()
+    {
+        var sampler = new RandomRideEventSampler(seed: 7);
+
+        var selection = sampler.NextGondolaSelection(total: 16, count: 16);
+
+        Assert.Equal(Enumerable.Range(0, 16), selection.OrderBy(index => index));
+    }
+
+    [Fact]
+    public void Gondola_selection_does_not_always_follow_the_natural_order()
+    {
+        var sampler = new RandomRideEventSampler(seed: 7);
+
+        var selection = sampler.NextGondolaSelection(total: 16, count: 16);
+
+        // A random draw of all sixteen must not come back in 0..15 order — that would
+        // mean load never spreads and always fills the first gondolas first.
+        Assert.NotEqual(Enumerable.Range(0, 16), selection);
+    }
+
+    [Fact]
+    public void Selecting_more_than_are_available_is_rejected()
+    {
+        var sampler = new RandomRideEventSampler(seed: 7);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => sampler.NextGondolaSelection(total: 3, count: 4));
+    }
 }
