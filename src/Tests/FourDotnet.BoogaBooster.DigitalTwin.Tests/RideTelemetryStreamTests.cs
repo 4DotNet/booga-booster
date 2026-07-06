@@ -34,7 +34,7 @@ public sealed class RideTelemetryStreamTests
     }
 
     [Fact]
-    public async Task It_emits_nothing_while_the_ride_is_not_running_then_resumes_once_it_runs()
+    public async Task It_emits_nothing_while_the_ride_is_idle_then_resumes_once_it_is_active()
     {
         var store = new RideStore(new RandomRideEventSampler(seed: 1)); // idle
         var clock = new FakeTimeProvider();
@@ -53,6 +53,44 @@ public sealed class RideTelemetryStreamTests
         clock.Advance(RideParameters.TelemetryInterval);
         Assert.True(await pending);
         Assert.Equal(RideState.Started, frames.Current.State);
+    }
+
+    [Fact]
+    public async Task It_emits_frames_while_the_ride_is_loading()
+    {
+        var store = new RideStore(new RandomRideEventSampler(seed: 1));
+        store.BoardPassenger(0, 0, SeatPosition.Left, new PassengerWeight(75d)); // moves the ride into Loading
+        var clock = new FakeTimeProvider();
+        var stream = new RideTelemetryStream(store, clock);
+
+        await using var frames = stream.Stream(CancellationToken.None).GetAsyncEnumerator();
+
+        // Boarding happens during Loading, and the stream must show it — not stay silent
+        // until the ride runs.
+        Assert.True(await frames.MoveNextAsync());
+        Assert.Equal(RideState.Loading, frames.Current.State);
+        Assert.Equal(1, frames.Current.BoardedPassengerCount);
+    }
+
+    [Fact]
+    public async Task It_shows_boarding_progress_across_successive_frames()
+    {
+        var store = new RideStore(new RandomRideEventSampler(seed: 1));
+        store.BoardPassenger(0, 0, SeatPosition.Left, new PassengerWeight(75d));
+        var clock = new FakeTimeProvider();
+        var stream = new RideTelemetryStream(store, clock);
+
+        await using var frames = stream.Stream(CancellationToken.None).GetAsyncEnumerator();
+
+        Assert.True(await frames.MoveNextAsync());
+        Assert.Equal(1, frames.Current.BoardedPassengerCount);
+
+        // A second passenger boards while the stream is live; the next frame reflects it.
+        store.BoardPassenger(0, 1, SeatPosition.Right, new PassengerWeight(80d));
+        var next = frames.MoveNextAsync();
+        clock.Advance(RideParameters.TelemetryInterval);
+        Assert.True(await next);
+        Assert.Equal(2, frames.Current.BoardedPassengerCount);
     }
 
     [Fact]
