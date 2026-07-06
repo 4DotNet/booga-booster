@@ -11,7 +11,7 @@ import {
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
-import { MotorDirection, podMotionFor } from '../models/ride.models';
+import { MotorDirection } from '../models/ride.models';
 
 /** Ride geometry (metres) — mirrors the reference model's parameter set. */
 const P = {
@@ -58,17 +58,39 @@ function finiteOrZero(value: number): number {
 }
 
 /**
- * Signed angular velocity (rad/s) for a motor's sensed speed and direction.
- * A non-finite `rpm` (e.g. an absent/malformed telemetry frame) is treated as
- * stopped rather than corrupting the animation loop's accumulated rotation.
+ * Signed angular velocity (rad/s) from a motor's sensed speed. The telemetry
+ * `rpm` is already signed — negative while the body physically turns in reverse
+ * — so the rotation direction is carried by the sign of `rpm` alone and the
+ * commanded direction must NOT be applied again (doing so would cancel out a
+ * reversal). A non-finite `rpm` (e.g. an absent/malformed telemetry frame) is
+ * treated as stopped rather than corrupting the loop's accumulated rotation.
  */
-export function angularVelocity(rpm: number, direction: MotorDirection): number {
-  return rpmToRadPerSec(finiteOrZero(rpm)) * (direction === 'reverse' ? -1 : 1);
+export function angularVelocity(rpm: number): number {
+  return rpmToRadPerSec(finiteOrZero(rpm));
+}
+
+/**
+ * Free-running pod angle (radians) for the accumulated combined rotation and a
+ * pod's phase offset: a counter-rotation against the combined spin plus a
+ * phase-shifted swing. This is the trajectory a pod follows while its brake is
+ * released. The render loop applies only this angle's per-frame change, and
+ * skips it while the brake is engaged, so a braked pod holds its current
+ * rotation instead of snapping back to the hub-arm alignment.
+ */
+export function podFreeAngle(comboA: number, phase: number): number {
+  return -comboA + Math.sin(comboA + phase);
 }
 
 interface GondolaNode {
   readonly obj: THREE.Object3D;
   readonly phase: number;
+  /**
+   * The pod's free-trajectory angle sampled on the previous frame. Drives the
+   * per-frame delta applied while the brake is released, and is refreshed every
+   * frame (braked or not) so releasing the brake resumes from the held position
+   * without a jump.
+   */
+  prevFree: number;
 }
 
 /**
@@ -141,6 +163,14 @@ export class RideVisualization {
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     host.appendChild(renderer.domElement);
 
+    // The canvas is created by three.js, not by the Angular template, so the
+    // component's emulated-encapsulation styles (`.viz canvas { … }`) never match
+    // it. Size it explicitly so it always fills the host and displays correctly on
+    // HiDPI screens regardless of the (device-pixel-scaled) drawing-buffer size.
+    renderer.domElement.style.display = 'block';
+    renderer.domElement.style.width = '100%';
+    renderer.domElement.style.height = '100%';
+
     const scene = new THREE.Scene();
     scene.fog = new THREE.Fog(0x0f1420, 40, 95);
 
@@ -167,8 +197,8 @@ export class RideVisualization {
     renderer.setAnimationLoop(() => {
       const dt = finiteOrZero(Math.min(clock.getDelta(), MAX_STEP_S));
       if (!reducedMotion) {
-        const wm = angularVelocity(this.millSpeedRpm(), this.millDirection());
-        const wh = angularVelocity(this.hubSpeedRpm(), this.hubDirection());
+        const wm = angularVelocity(this.millSpeedRpm());
+        const wh = angularVelocity(this.hubSpeedRpm());
         // `angularVelocity` already guards `rpm`, but the accumulators are
         // re-guarded here too so a bad frame can never leave `rotation.y`
         // non-finite, however it might arise.
@@ -177,30 +207,60 @@ export class RideVisualization {
         comboA = finiteOrZero(comboA + (wm + wh) * dt);
       }
 
-      const pod = podMotionFor(this.gondolaBrakeEngaged());
+      const braked = this.gondolaBrakeEngaged();
       mainPivot.rotation.y = mainA;
       for (const hub of hubPivots) {
         hub.rotation.y = hubA;
       }
       for (const gondola of gondolas) {
-        gondola.obj.rotation.y =
-          -pod.freedom * comboA + pod.swing * Math.sin(comboA + gondola.phase);
+        // The pods' free trajectory keeps advancing with the combined rotation.
+        // Apply only its change since the previous frame, and only while the
+        // brake is released — so an engaged brake holds each pod exactly where
+        // it is rather than snapping it back to the hub-arm alignment.
+        const freeAngle = podFreeAngle(comboA, gondola.phase);
+        const delta = freeAngle - gondola.prevFree;
+        gondola.prevFree = freeAngle;
+        if (!braked) {
+          gondola.obj.rotation.y = finiteOrZero(gondola.obj.rotation.y + delta);
+        }
       }
 
       controls.update();
       renderer.render(scene, camera);
     });
 
-    const resize = new ResizeObserver(() => {
+    // Resizing is deferred to the next animation frame and skipped when the size
+    // hasn't changed. Doing this work synchronously inside the observer callback is
+    // what provokes the browser's "ResizeObserver loop completed with undelivered
+    // notifications" error — which, under the high-rate telemetry re-renders, floods
+    // the global error handler and can destabilize the canvas.
+    let lastWidth = width;
+    let lastHeight = height;
+    let resizeHandle = 0;
+    const applyResize = (): void => {
+      resizeHandle = 0;
       const w = host.clientWidth || width;
       const h = host.clientHeight || height;
+      if (w === lastWidth && h === lastHeight) {
+        return;
+      }
+      lastWidth = w;
+      lastHeight = h;
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h, false);
+    };
+    const resize = new ResizeObserver(() => {
+      if (resizeHandle === 0) {
+        resizeHandle = requestAnimationFrame(applyResize);
+      }
     });
     resize.observe(host);
 
     this.destroyRef.onDestroy(() => {
+      if (resizeHandle !== 0) {
+        cancelAnimationFrame(resizeHandle);
+      }
       resize.disconnect();
       renderer.setAnimationLoop(null);
       controls.dispose();
@@ -306,7 +366,7 @@ export class RideVisualization {
         pod.position.y = -P.gondolaDrop;
         gondolaPivot.add(pod);
 
-        gondolas.push({ obj: gondolaPivot, phase: (k * 4 + j) * 0.7 });
+        gondolas.push({ obj: gondolaPivot, phase: (k * 4 + j) * 0.7, prevFree: 0 });
       }
     }
 
