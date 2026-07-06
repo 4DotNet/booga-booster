@@ -40,17 +40,22 @@ number buried in the physics.
 | Wind cutoff | `windMax` | 18 | m/s |
 | E-stop decel ramp | — | 8 | s |
 
-## Loss-model coefficients (tune to taste)
+## Loss-model coefficients
 
-Not fixed by the plan — pick values that give the sanity-check behaviour below, then lock
-them in as the golden-scenario baseline.
+Not fixed by the plan — picked to give the sanity-check behaviour below and locked in as the
+golden-scenario baseline. The coefficients are sized against each body's rotating inertia so
+a de-powered rig coasts to rest in a believable time (doc 3 §3.4); the increase is biased
+toward Coulomb/viscous friction (which govern the low-speed tail) over aerodynamic drag
+(which mostly sets terminal speed).
 
-| Parameter | Symbol | Role |
-|-----------|--------|------|
-| Coulomb friction | `C_coulomb` | constant bearing drag (sets a clean stop) |
-| Viscous friction | `C_viscous` | speed-proportional bearing drag |
-| Aerodynamic drag | `k_aero` | ω² air resistance (sets terminal speed) |
-| Motor speed floor | `ω_eps` | ~1e-3 rad/s, divide-by-zero guard (doc 3 §3.1) |
+| Parameter | Symbol | Role | Mill | Hub |
+|-----------|--------|------|-----:|----:|
+| Coulomb friction | `C_coulomb` | constant bearing drag (sets a clean, bounded-time stop) | 10,000 | 400 |
+| Viscous friction | `C_viscous` | speed-proportional bearing drag | 3,500 | 500 |
+| Aerodynamic drag | `k_aero` | ω² air resistance (sets terminal speed) | 6,000 | 200 |
+| Motor speed floor | `ω_eps` | ~1e-3 rad/s, divide-by-zero guard (doc 3 §3.1) | 1e-3 | 1e-3 |
+
+Units: `C_coulomb` in N·m, `C_viscous` in N·m·s/rad, `k_aero` in N·m·s²/rad².
 
 ## Sanity check
 
@@ -58,7 +63,12 @@ With these parameters, a **full ride** (~2.4 t of carts + people orbiting at 6 m
 
 - has a mill moment of inertia around **2×10⁵ kg·m²**,
 - reaches cruise in **~15–25 s** on 90 kW,
-- and produces **~2–3 g** at the seats.
+- settles at a natural terminal speed of **~2.1 rad/s** — a little below the `ω_max = 2.5`
+  safety cap, because the losses (dominated by aero drag at cruise) balance the motor
+  before the cap; the cap is a ceiling, not the operating point,
+- produces roughly **~2 g** at the seats at that terminal speed,
+- and, once power is cut, **coasts to rest in ~30 s empty / ~50 s fully loaded** (the loaded
+  rig carries ~2.5× the inertia, so it coasts longer).
 
 If your numbers land far outside those ranges, something in the inertia model (doc 2) or
 the motor/loss balance (doc 3) is off.
