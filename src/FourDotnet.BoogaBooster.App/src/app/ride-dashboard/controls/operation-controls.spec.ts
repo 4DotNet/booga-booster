@@ -146,14 +146,59 @@ describe('OperationControls', () => {
     expect(host.querySelector('#controls-hint')).toBeNull();
   });
 
-  it('applies engine brakes when the "Apply brakes" button is clicked while started', () => {
+  it('engages the engine brake toggle when clicked while started, and reflects aria-pressed', () => {
+    lifecycle.setState('started');
+    const fixture = render();
+    const button = fixture.nativeElement.querySelector('.apply-brakes') as HTMLButtonElement;
+
+    expect(button.getAttribute('aria-pressed')).toBe('false');
+    expect(button.textContent?.trim()).toBe('Apply brakes');
+
+    button.click();
+    fixture.detectChanges();
+
+    expect(source.commands).toContainEqual({ kind: 'brake-engines', engaged: true });
+    expect(button.getAttribute('aria-pressed')).toBe('true');
+    expect(button.textContent?.trim()).toBe('Release brakes');
+  });
+
+  it('releases the engine brake toggle when clicked again', () => {
     lifecycle.setState('started');
     const fixture = render();
     const button = fixture.nativeElement.querySelector('.apply-brakes') as HTMLButtonElement;
 
     button.click();
     fixture.detectChanges();
+    button.click();
+    fixture.detectChanges();
 
-    expect(source.commands).toContainEqual({ kind: 'brake-engines' });
+    expect(source.commands).toContainEqual({ kind: 'brake-engines', engaged: false });
+    expect(button.getAttribute('aria-pressed')).toBe('false');
+    expect(button.textContent?.trim()).toBe('Apply brakes');
+  });
+
+  it('disables the power sliders while the engine brake is engaged, and re-enables on release', () => {
+    lifecycle.setState('started');
+    const fixture = render();
+    const millSlider = fixture.nativeElement.querySelector('#mill-power') as HTMLInputElement;
+    const hubSlider = fixture.nativeElement.querySelector('#hub-power') as HTMLInputElement;
+    const button = fixture.nativeElement.querySelector('.apply-brakes') as HTMLButtonElement;
+
+    expect(millSlider.disabled).toBe(false);
+    expect(hubSlider.disabled).toBe(false);
+
+    button.click();
+    fixture.detectChanges();
+
+    expect(millSlider.disabled).toBe(true);
+    expect(hubSlider.disabled).toBe(true);
+    // The toggle itself stays enabled so the operator can release it again.
+    expect(button.disabled).toBe(false);
+
+    button.click();
+    fixture.detectChanges();
+
+    expect(millSlider.disabled).toBe(false);
+    expect(hubSlider.disabled).toBe(false);
   });
 });
