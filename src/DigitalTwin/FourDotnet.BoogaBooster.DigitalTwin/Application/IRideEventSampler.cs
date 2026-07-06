@@ -14,4 +14,16 @@ public interface IRideEventSampler
 
     /// <summary>A random natural restraint-close delay (10–30 s by default).</summary>
     TimeSpan NextRestraintCloseDelay();
+
+    /// <summary>
+    /// A random selection of <paramref name="count"/> distinct positions in the range
+    /// <c>[0, <paramref name="total"/>)</c> — used to choose which of the currently
+    /// empty gondolas a boarding group takes, so a passenger grabs a random gondola
+    /// and load spreads unpredictably across the mill. The returned positions are
+    /// distinct and each is a valid index into a list of <paramref name="total"/> items.
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="count"/> is negative or greater than <paramref name="total"/>.
+    /// </exception>
+    IReadOnlyList<int> NextGondolaSelection(int total, int count);
 }
