@@ -13,6 +13,7 @@ public sealed class Hub : DomainModel
 {
     private readonly Gondola[] _gondolas;
     private EnginePower _power = EnginePower.Off;
+    private MotorDirection _direction = MotorDirection.Forward;
     private double _angle;
     private double _omega;
 
@@ -37,6 +38,9 @@ public sealed class Hub : DomainModel
 
     /// <summary>The commanded motor power.</summary>
     public EnginePower Power => _power;
+
+    /// <summary>The commanded rotation direction (independent of power).</summary>
+    public MotorDirection Direction => _direction;
 
     /// <summary>Current rotation angle (rad).</summary>
     public double Angle => _angle;
@@ -142,6 +146,9 @@ public sealed class Hub : DomainModel
         return ApplyChange(ref _power, power);
     }
 
+    /// <summary>Sets the hub's commanded rotation direction.</summary>
+    public bool SetDirection(MotorDirection direction) => ApplyChange(ref _direction, direction);
+
     /// <summary>Advances natural passenger behaviour across all gondolas.</summary>
     public void AdvanceNaturalBehavior(TimeSpan elapsed)
     {
@@ -153,18 +160,22 @@ public sealed class Hub : DomainModel
 
     /// <summary>
     /// Advances the hub one physics step, then its gondolas. The mill's angle and
-    /// speed are threaded through because the gondola field depends on them.
+    /// speed are threaded through because the gondola field depends on them, and the
+    /// engine-brake flag because the hubs brake together with the mill.
     /// </summary>
-    public void AdvancePhysics(double millAngle, double millOmega, double dt)
+    public void AdvancePhysics(double millAngle, double millOmega, bool brakesEngaged, double dt)
     {
-        var drive = RotationalDynamics.MotorTorque(
+        var drive = _direction.Sign() * RotationalDynamics.MotorTorque(
             _power.Fraction, _omega, RideParameters.HubStallTorque, RideParameters.HubMaxPowerWatts);
+
+        var coulomb = RideParameters.HubCoulombFriction
+            + (brakesEngaged ? RideParameters.HubBrakeTorque : 0d);
 
         var step = RotationalDynamics.Integrate(
             _omega,
             _angle,
             drive,
-            RideParameters.HubCoulombFriction,
+            coulomb,
             RideParameters.HubViscousFriction,
             RideParameters.HubAeroDrag,
             Inertia,
@@ -221,5 +232,6 @@ public sealed class Hub : DomainModel
         Index,
         ConsumedPowerWatts,
         RotationalDynamics.ToRpm(_omega),
+        _direction,
         LoadKg);
 }
