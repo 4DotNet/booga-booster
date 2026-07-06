@@ -19,4 +19,19 @@ public interface IRideQueueService
 
     /// <summary>Returns a snapshot of the given ride's waiting line.</summary>
     QueueStatusDto GetStatus(Guid rideId);
+
+    /// <summary>
+    /// Removes the group identified by <paramref name="groupId"/> from the given
+    /// ride's queue — wherever it currently sits in the line — and returns it, so a
+    /// boarding caller can take a specific group it chose from a
+    /// <see cref="GetStatus"/> snapshot (including a group behind the front when the
+    /// front group is too large to board). The order of the remaining groups is
+    /// preserved.
+    /// </summary>
+    /// <returns>
+    /// The removed group, or <c>null</c> when no such group is in the ride's queue
+    /// — for example it was already taken or the ride has no queue. A caller should
+    /// treat <c>null</c> as "already gone" and move on rather than retry.
+    /// </returns>
+    Task<QueuedGroupDto?> TakeGroupAsync(Guid rideId, Guid groupId, CancellationToken cancellationToken);
 }
