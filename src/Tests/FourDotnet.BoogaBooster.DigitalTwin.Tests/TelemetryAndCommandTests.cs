@@ -34,6 +34,58 @@ public sealed class TelemetryAndCommandTests
     }
 
     [Fact]
+    public void Telemetry_counts_boarded_passengers_as_occupied_seats()
+    {
+        var store = NewStore();
+
+        var telemetry = store.BoardGroup(new[]
+        {
+            new PassengerWeight(70d),
+            new PassengerWeight(80d),
+            new PassengerWeight(90d),
+        });
+
+        Assert.Equal(3, telemetry.BoardedPassengerCount);
+        var occupied = telemetry.Gondolas.SelectMany(g => g.Seats).Count(s => s.IsOccupied);
+        Assert.Equal(3, occupied);
+    }
+
+    [Fact]
+    public void Empty_ride_reports_zero_boarded_passengers()
+    {
+        Assert.Equal(0, NewStore().GetTelemetry().BoardedPassengerCount);
+    }
+
+    [Fact]
+    public void Seat_telemetry_reports_occupied_and_unsecured_then_secured_after_the_countdown()
+    {
+        var store = NewStore();
+        store.BoardPassenger(0, 0, SeatPosition.Left, new PassengerWeight(75d));
+
+        var seatWhileLoading = SeatOf(store.GetTelemetry());
+        Assert.True(seatWhileLoading.IsOccupied);
+        Assert.False(seatWhileLoading.IsSecured);
+        Assert.NotEqual(RestraintState.Secured, seatWhileLoading.Restraint);
+
+        // The maximum natural delay is 30 s; advance a little past it.
+        var steps = (int)(31d / TestHelpers.Dt.TotalSeconds);
+        for (var i = 0; i < steps; i++)
+        {
+            store.Advance(TestHelpers.Dt);
+        }
+
+        var seatAfter = SeatOf(store.GetTelemetry());
+        Assert.True(seatAfter.IsOccupied);
+        Assert.True(seatAfter.IsSecured);
+        Assert.Equal(RestraintState.Secured, seatAfter.Restraint);
+    }
+
+    private static SeatTelemetry SeatOf(RideTelemetry telemetry) =>
+        telemetry.Gondolas
+            .Single(g => g is { HubIndex: 0, Index: 0 })
+            .Seats.Single(s => s.Position == SeatPosition.Left);
+
+    [Fact]
     public void Setting_main_power_emits_the_consumed_watts()
     {
         var telemetry = NewStore().SetMainEnginePower(new EnginePower(100));
@@ -99,27 +151,44 @@ public sealed class TelemetryAndCommandTests
     }
 
     [Fact]
-    public void Braking_the_engines_cuts_mill_and_hub_power()
+    public void Engaging_the_engine_brake_cuts_mill_and_hub_power_and_reports_engaged()
     {
         var store = NewStore();
         store.SetMainEnginePower(new EnginePower(80));
         store.SetHubEnginePower(new EnginePower(60));
 
-        var telemetry = store.BrakeEngines();
+        var telemetry = store.SetEngineBrakes(true);
 
+        Assert.True(telemetry.BrakesEngaged);
         Assert.Equal(0d, telemetry.Mill.PowerWatts);
         Assert.All(telemetry.Hubs, h => Assert.Equal(0d, h.PowerWatts));
     }
 
     [Fact]
-    public async Task Brake_engines_handler_drives_the_store()
+    public void Releasing_the_engine_brake_reports_released()
+    {
+        var store = NewStore();
+        store.SetEngineBrakes(true);
+
+        var telemetry = store.SetEngineBrakes(false);
+
+        Assert.False(telemetry.BrakesEngaged);
+    }
+
+    [Fact]
+    public async Task Brake_engines_handler_engages_and_releases_the_store_brake()
     {
         var store = NewStore();
         store.SetMainEnginePower(new EnginePower(80));
 
-        await new BrakeEnginesCommandHandler(store).HandleAsync(new BrakeEnginesCommand(), CancellationToken.None);
+        await new BrakeEnginesCommandHandler(store).HandleAsync(new BrakeEnginesCommand(true), CancellationToken.None);
 
+        Assert.True(store.GetTelemetry().BrakesEngaged);
         Assert.Equal(0d, store.GetTelemetry().Mill.PowerWatts);
+
+        await new BrakeEnginesCommandHandler(store).HandleAsync(new BrakeEnginesCommand(false), CancellationToken.None);
+
+        Assert.False(store.GetTelemetry().BrakesEngaged);
     }
 
     [Fact]
