@@ -72,6 +72,94 @@ public class RideQueueTests
     }
 
     [Fact]
+    public void Remove_ById_ReturnsGroupAndShrinksTheLine()
+    {
+        var queue = NewQueue();
+        var first = queue.Enqueue(QueueTestData.Group(2));
+        var second = queue.Enqueue(QueueTestData.Group(3));
+
+        var removed = queue.Remove(first.GroupId);
+
+        Assert.NotNull(removed);
+        Assert.Equal(first.GroupId, removed!.GroupId);
+        Assert.Equal(1, queue.GroupCount);
+        Assert.Equal(3, queue.PeopleWaiting);
+        Assert.Equal(second.GroupId, queue.PeekNextGroup()!.GroupId);
+    }
+
+    [Fact]
+    public void Remove_NonFrontGroup_PreservesOrderOfTheRest()
+    {
+        var queue = NewQueue();
+        var first = queue.Enqueue(QueueTestData.Group(1));
+        var second = queue.Enqueue(QueueTestData.Group(2));
+        var third = queue.Enqueue(QueueTestData.Group(3));
+
+        var removed = queue.Remove(second.GroupId);
+
+        Assert.NotNull(removed);
+        Assert.Equal(second.GroupId, removed!.GroupId);
+        Assert.Equal(
+            new[] { first.GroupId, third.GroupId },
+            queue.SnapshotGroups().Select(g => g.GroupId));
+    }
+
+    [Fact]
+    public void Remove_AbsentOrAlreadyTakenId_ReturnsNull()
+    {
+        var queue = NewQueue();
+        var group = queue.Enqueue(QueueTestData.Group(2));
+
+        Assert.Null(queue.Remove(Guid.NewGuid()));
+
+        Assert.NotNull(queue.Remove(group.GroupId));
+        Assert.Null(queue.Remove(group.GroupId));
+        Assert.Equal(0, queue.GroupCount);
+    }
+
+    [Fact]
+    public async Task Enqueue_And_Remove_Concurrently_KeepOrderingIntact()
+    {
+        var queue = NewQueue(maxPeople: 10_000);
+        var enqueued = new System.Collections.Concurrent.ConcurrentQueue<Guid>();
+
+        var cancellationToken = TestContext.Current.CancellationToken;
+
+        var filler = Task.Run(
+            () =>
+            {
+                for (var i = 0; i < 500; i++)
+                {
+                    enqueued.Enqueue(queue.Enqueue(QueueTestData.Group(1)).GroupId);
+                }
+            },
+            cancellationToken);
+
+        var remover = Task.Run(
+            () =>
+            {
+                var removedCount = 0;
+                while (removedCount < 200)
+                {
+                    if (enqueued.TryDequeue(out var id) && queue.Remove(id) is not null)
+                    {
+                        removedCount++;
+                    }
+                }
+            },
+            cancellationToken);
+
+        await Task.WhenAll(filler, remover);
+
+        // Every surviving group is still a distinct, contiguous single-person group:
+        // no interleaving or corruption from concurrent enqueue/remove.
+        var groups = queue.SnapshotGroups();
+        Assert.Equal(300, groups.Count);
+        Assert.Equal(groups.Count, groups.Select(g => g.GroupId).Distinct().Count());
+        Assert.All(groups, g => Assert.Equal(1, g.Size));
+    }
+
+    [Fact]
     public void Enqueue_MarksAggregateModified()
     {
         // A queue rehydrated from a store (Pristine) transitions to Modified on enqueue.
