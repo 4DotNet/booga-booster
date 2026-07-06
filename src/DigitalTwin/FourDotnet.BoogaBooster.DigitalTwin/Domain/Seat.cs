@@ -154,5 +154,5 @@ public sealed class Seat : DomainModel
     }
 
     /// <summary>Projects the seat's sensors onto the telemetry DTO.</summary>
-    public SeatTelemetry ToTelemetry() => new(Position, OccupiedKg, _restraint);
+    public SeatTelemetry ToTelemetry() => new(Position, OccupiedKg, _restraint, IsOccupied, IsSecured);
 }
