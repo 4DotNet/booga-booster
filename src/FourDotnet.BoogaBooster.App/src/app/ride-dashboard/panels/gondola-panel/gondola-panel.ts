@@ -2,6 +2,25 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
 
 import { Gondola, SeatState } from '../../models/ride.models';
 
+/**
+ * Severity of a gondola metric against its safe limits: `normal` within
+ * limits, `warn` for an elevated-but-tolerable value, `alert` for a value
+ * over the safe limit.
+ */
+type MetricLevel = 'normal' | 'warn' | 'alert';
+
+/** Combined gondola weight (kg) above which the value is elevated (warn). */
+const WEIGHT_WARN_KG = 250;
+
+/** Combined gondola weight (kg) above which the value is over the safe limit (alert). */
+const WEIGHT_ALERT_KG = 300;
+
+/** Vertical g-force magnitude above which the value is over the safe limit (alert). */
+const VERTICAL_G_LIMIT = 4.5;
+
+/** Lateral g-force magnitude above which the value is over the safe limit (alert). */
+const LATERAL_G_LIMIT = 2;
+
 interface SeatView {
   readonly key: string;
   readonly state: SeatState;
@@ -13,9 +32,12 @@ interface GondolaView {
   readonly id: number;
   readonly seats: readonly SeatView[];
   readonly weightKg: number;
+  readonly weightLevel: MetricLevel;
   readonly weightLabel: string;
   readonly vertical: string;
+  readonly verticalLevel: MetricLevel;
   readonly lateral: string;
+  readonly lateralLevel: MetricLevel;
   readonly verticalLabel: string;
   readonly lateralLabel: string;
 }
@@ -47,13 +69,25 @@ interface GondolaView {
               }
             </div>
             <div class="metrics">
-              <span class="metric" [attr.aria-label]="gondola.weightLabel">
+              <span
+                class="metric"
+                [attr.data-level]="gondola.weightLevel"
+                [attr.aria-label]="gondola.weightLabel"
+              >
                 {{ gondola.weightKg }} kg
               </span>
-              <span class="metric" [attr.aria-label]="gondola.verticalLabel">
+              <span
+                class="metric"
+                [attr.data-level]="gondola.verticalLevel"
+                [attr.aria-label]="gondola.verticalLabel"
+              >
                 V {{ gondola.vertical }} g
               </span>
-              <span class="metric" [attr.aria-label]="gondola.lateralLabel">
+              <span
+                class="metric"
+                [attr.data-level]="gondola.lateralLevel"
+                [attr.aria-label]="gondola.lateralLabel"
+              >
                 L {{ gondola.lateral }} g
               </span>
             </div>
@@ -127,6 +161,23 @@ interface GondolaView {
       color: var(--bb-muted);
       font-variant-numeric: tabular-nums;
     }
+    /* An out-of-limit metric becomes a filled badge: orange when elevated,
+       red when over the safe limit. Dark text on the fill keeps the value
+       legible (WCAG AA), and the accessible name spells out the status so
+       colour never carries the meaning alone. */
+    .metric[data-level='warn'],
+    .metric[data-level='alert'] {
+      color: var(--bb-accent-contrast);
+      font-weight: 700;
+      border-radius: 0.25rem;
+      padding: 0 0.3rem;
+    }
+    .metric[data-level='warn'] {
+      background: var(--bb-alert);
+    }
+    .metric[data-level='alert'] {
+      background: var(--bb-danger);
+    }
     .sr-only {
       position: absolute;
       width: 1px;
@@ -154,18 +205,56 @@ export class GondolaPanel {
       const weightKg = gondola.seats.reduce((total, seat) => total + seat.occupiedKg, 0);
       const vertical = signed(gondola.gForce.vertical);
       const lateral = signed(gondola.gForce.lateral);
+      const weightLevel = weightLevelFor(weightKg);
+      const verticalLevel = gForceLevelFor(gondola.gForce.vertical, VERTICAL_G_LIMIT);
+      const lateralLevel = gForceLevelFor(gondola.gForce.lateral, LATERAL_G_LIMIT);
       return {
         id: gondola.id,
         seats,
         weightKg,
-        weightLabel: `Gondola ${gondola.id} weight ${weightKg} kg`,
+        weightLevel,
+        weightLabel: `Gondola ${gondola.id} weight ${weightKg} kg${statusSuffix(weightLevel)}`,
         vertical,
+        verticalLevel,
         lateral,
-        verticalLabel: `Gondola ${gondola.id} vertical g-force ${vertical} g`,
-        lateralLabel: `Gondola ${gondola.id} lateral g-force ${lateral} g`,
+        lateralLevel,
+        verticalLabel: `Gondola ${gondola.id} vertical g-force ${vertical} g${statusSuffix(verticalLevel)}`,
+        lateralLabel: `Gondola ${gondola.id} lateral g-force ${lateral} g${statusSuffix(lateralLevel)}`,
       };
     }),
   );
+}
+
+/** Classifies a gondola's combined weight against its warn/alert limits. */
+function weightLevelFor(weightKg: number): MetricLevel {
+  if (weightKg > WEIGHT_ALERT_KG) {
+    return 'alert';
+  }
+  if (weightKg > WEIGHT_WARN_KG) {
+    return 'warn';
+  }
+  return 'normal';
+}
+
+/**
+ * Classifies a signed g-force against its safe magnitude limit: `alert` once
+ * the value passes the limit in either direction (e.g. above +4.5 or below
+ * -4.5), otherwise `normal`.
+ */
+function gForceLevelFor(value: number, limit: number): MetricLevel {
+  return Math.abs(value) > limit ? 'alert' : 'normal';
+}
+
+/** Accessible-name suffix that spells out a non-normal metric's status. */
+function statusSuffix(level: MetricLevel): string {
+  switch (level) {
+    case 'alert':
+      return ', over safe limit';
+    case 'warn':
+      return ', above warning limit';
+    default:
+      return '';
+  }
 }
 
 /** Left/right label for a gondola's two seats, by their position index. */
