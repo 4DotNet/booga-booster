@@ -98,6 +98,49 @@ public class RideQueueServiceTests
     }
 
     [Fact]
+    public async Task TakeGroupAsync_RemovesTheChosenGroup_AndReturnsIt()
+    {
+        var (service, _, _) = CreateService();
+        var rideId = Guid.NewGuid();
+        await service.EnqueueGroupAsync(rideId, 2, CancellationToken.None);
+        var second = await service.EnqueueGroupAsync(rideId, 4, CancellationToken.None);
+
+        var taken = await service.TakeGroupAsync(rideId, second.GroupId, CancellationToken.None);
+
+        Assert.NotNull(taken);
+        Assert.Equal(second.GroupId, taken!.GroupId);
+        Assert.Equal(4, taken.Size);
+
+        var status = service.GetStatus(rideId);
+        Assert.Equal(1, status.GroupCount);
+        Assert.Equal(2, status.PeopleWaiting);
+        Assert.DoesNotContain(status.Groups, g => g.GroupId == second.GroupId);
+    }
+
+    [Fact]
+    public async Task TakeGroupAsync_ForAbsentOrAlreadyTakenGroup_ReturnsNull()
+    {
+        var (service, _, _) = CreateService();
+        var rideId = Guid.NewGuid();
+        var group = await service.EnqueueGroupAsync(rideId, 3, CancellationToken.None);
+
+        Assert.Null(await service.TakeGroupAsync(rideId, Guid.NewGuid(), CancellationToken.None));
+
+        Assert.NotNull(await service.TakeGroupAsync(rideId, group.GroupId, CancellationToken.None));
+        Assert.Null(await service.TakeGroupAsync(rideId, group.GroupId, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task TakeGroupAsync_ForUnknownRide_ReturnsNull()
+    {
+        var (service, _, _) = CreateService();
+
+        var taken = await service.TakeGroupAsync(Guid.NewGuid(), Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Null(taken);
+    }
+
+    [Fact]
     public void GetStatus_ForUnknownRide_ReturnsEmptySnapshot()
     {
         var (service, _, _) = CreateService();
