@@ -81,6 +81,10 @@ public sealed class Gondola : DomainModel
     /// <summary><c>true</c> when neither seat is occupied.</summary>
     public bool IsEmpty => !_left.IsOccupied && !_right.IsOccupied;
 
+    /// <summary>How many of the gondola's two seats are occupied (0–2).</summary>
+    public int OccupiedSeatCount =>
+        (_left.IsOccupied ? 1 : 0) + (_right.IsOccupied ? 1 : 0);
+
     /// <summary>Returns the seat at <paramref name="position"/>.</summary>
     public Seat GetSeat(SeatPosition position) =>
         position == SeatPosition.Left ? _left : _right;
