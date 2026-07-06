@@ -3,6 +3,7 @@ using FourDotnet.BoogaBooster.DigitalTwin.Abstractions;
 using FourDotnet.BoogaBooster.DigitalTwin.Application;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.BoardPassenger;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.GetRideTelemetry;
+using FourDotnet.BoogaBooster.DigitalTwin.Features.RequestRideStateTransition;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.SetGondolaBrake;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.SetHubEnginePower;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.SetMainEnginePower;
@@ -49,6 +50,7 @@ public static class DigitalTwinModuleExtensions
         services.AddScoped<ICommandHandler<SetGondolaBrakeCommand>, SetGondolaBrakeCommandHandler>();
         services.AddScoped<ICommandHandler<StartRideCommand>, StartRideCommandHandler>();
         services.AddScoped<ICommandHandler<StopRideCommand>, StopRideCommandHandler>();
+        services.AddScoped<ICommandHandler<RequestRideStateTransitionCommand>, RequestRideStateTransitionCommandHandler>();
 
         // The autonomous fixed-timestep simulation loop.
         services.AddHostedService<RideSimulationService>();

@@ -4,9 +4,11 @@
   <section class="rail rail-left" aria-label="Controls">
     <div class="panel">
       <bb-status-summary
-        [state]="ride.state()"
+        [state]="lifecycle.state()"
+        [availableTransitions]="lifecycle.availableTransitions()"
         [occupiedSeats]="ride.occupiedSeats()"
         [securityState]="ride.securityState()"
+        (transition)="lifecycle.requestTransition($event)"
       />
     </div>
     <div class="panel">

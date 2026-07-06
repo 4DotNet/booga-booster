@@ -5,6 +5,7 @@ import { GondolaPanel } from './panels/gondola-panel/gondola-panel';
 import { SecurityPanel } from './panels/security-panel/security-panel';
 import { SpeedPanel } from './panels/speed-panel/speed-panel';
 import { StatusSummary } from './panels/status-summary/status-summary';
+import { RideLifecycleService } from './state/ride-lifecycle.service';
 import { RideStateService } from './state/ride-state.service';
 import { RideVisualization } from './visualization/ride-visualization';
 import { QueuePanel } from '../queue/queue-panel/queue-panel';
@@ -33,4 +34,5 @@ import { WeatherPanel } from '../weather/weather-panel/weather-panel';
 })
 export class RideDashboard {
   protected readonly ride = inject(RideStateService);
+  protected readonly lifecycle = inject(RideLifecycleService);
 }

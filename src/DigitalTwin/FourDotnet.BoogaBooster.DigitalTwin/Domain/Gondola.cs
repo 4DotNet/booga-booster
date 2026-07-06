@@ -78,6 +78,9 @@ public sealed class Gondola : DomainModel
     /// </summary>
     public bool IsSafeToDispatch => !_left.NeedsSecuring && !_right.NeedsSecuring;
 
+    /// <summary><c>true</c> when neither seat is occupied.</summary>
+    public bool IsEmpty => !_left.IsOccupied && !_right.IsOccupied;
+
     /// <summary>Returns the seat at <paramref name="position"/>.</summary>
     public Seat GetSeat(SeatPosition position) =>
         position == SeatPosition.Left ? _left : _right;
@@ -101,6 +104,22 @@ public sealed class Gondola : DomainModel
     public void ReleaseBrake()
     {
         _brake = GondolaBrakeState.Released;
+        MarkChanged();
+    }
+
+    /// <summary>Releases both safety restraints so seated passengers can leave (offloading).</summary>
+    public void ReleaseRestraints()
+    {
+        _left.OpenRestraint();
+        _right.OpenRestraint();
+        MarkChanged();
+    }
+
+    /// <summary>Lets any seated passengers leave once their restraints are released.</summary>
+    public void Offload()
+    {
+        _left.Unboard();
+        _right.Unboard();
         MarkChanged();
     }
 

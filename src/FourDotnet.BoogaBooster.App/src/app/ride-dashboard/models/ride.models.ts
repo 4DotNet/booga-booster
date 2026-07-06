@@ -8,8 +8,13 @@
  * feed later) and the presentational panels.
  */
 
-/** Overall operating state of the ride. */
-export type RideState = 'stopped' | 'running' | 'emergency';
+/**
+ * Overall lifecycle state of the ride, backed by the server-side state
+ * machine (see `RideLifecycleService`). Order matches the backend's
+ * `RideState` enum index (`0=Idle` … `6=EmergencyStop`).
+ */
+export type RideState =
+  'idle' | 'loading' | 'safe' | 'started' | 'stopping' | 'offloading' | 'emergency-stop';
 
 /** Direction a motor drives its rotation. */
 export type MotorDirection = 'forward' | 'reverse';
@@ -92,11 +97,27 @@ export interface Gondola {
 /** A full snapshot of ride telemetry. */
 export interface RideTelemetry {
   readonly state: RideState;
+  /** The operator-triggerable target states legal right now. */
+  readonly availableTransitions: readonly RideState[];
   readonly mill: Mill;
   readonly hubs: readonly Hub[];
   readonly gondolas: readonly Gondola[];
   /** Whether the gondola brakes are engaged (pods held) or released (pods swing free). */
   readonly gondolaBrakeEngaged: boolean;
+}
+
+/**
+ * Raw wire shape of the lifecycle fields on `GET /api/ride/telemetry` that
+ * {@link RideLifecycleService} cares about. `state`/`availableTransitions`
+ * may arrive as numeric enum indices or as PascalCase names (System.Text.Json
+ * default), so both are accepted here — see `toRideState`. The response also
+ * carries `mill`/`hubs`/`gondolas`/`simulationTimeSeconds`/`isSafeToStart`/
+ * `safetyReason`, which are not modelled here: the dashboard's physics
+ * panels stay driven by the client simulator, not this feed.
+ */
+export interface RideTelemetryDto {
+  readonly state: number | string;
+  readonly availableTransitions: readonly (number | string)[];
 }
 
 /** Set the central mill motor power (0–100). */
@@ -129,13 +150,20 @@ export interface SetGondolaBrakeCommand {
   readonly engaged: boolean;
 }
 
+/** Request a ride lifecycle transition. */
+export interface RequestStateTransitionCommand {
+  readonly kind: 'request-state-transition';
+  readonly state: RideState;
+}
+
 /** Any operator command the ride-state service can dispatch. */
 export type RideCommand =
   | SetMillPowerCommand
   | SetHubPowerCommand
   | SetMillDirectionCommand
   | SetHubDirectionCommand
-  | SetGondolaBrakeCommand;
+  | SetGondolaBrakeCommand
+  | RequestStateTransitionCommand;
 
 /** Pod motion values derived from the gondola brake state. */
 export interface PodMotion {
@@ -203,4 +231,67 @@ export function loadEccentricity(gondolas: readonly Gondola[]): number {
 /** Safe only when the load's rotational eccentricity is within tolerance. */
 export function loadBalanceState(gondolas: readonly Gondola[]): LoadBalanceState {
   return loadEccentricity(gondolas) <= MAX_SAFE_ECCENTRICITY ? 'safe' : 'unsafe';
+}
+
+/**
+ * The seven lifecycle states in the backend `RideState` enum's index order
+ * (`0=Idle` … `6=EmergencyStop`); used to map a numeric wire value and to
+ * enumerate every state (e.g. for the transition button grid).
+ */
+export const RIDE_STATE_BY_INDEX: readonly RideState[] = [
+  'idle',
+  'loading',
+  'safe',
+  'started',
+  'stopping',
+  'offloading',
+  'emergency-stop',
+];
+
+/** The backend's PascalCase name for each lifecycle state. */
+const RIDE_STATE_NAMES: Readonly<Record<RideState, string>> = {
+  idle: 'Idle',
+  loading: 'Loading',
+  safe: 'Safe',
+  started: 'Started',
+  stopping: 'Stopping',
+  offloading: 'Offloading',
+  'emergency-stop': 'EmergencyStop',
+};
+
+/** Human-readable label for a lifecycle state, e.g. `'emergency-stop'` → `'Emergency stop'`. */
+const RIDE_STATE_LABELS: Readonly<Record<RideState, string>> = {
+  idle: 'Idle',
+  loading: 'Loading',
+  safe: 'Safe',
+  started: 'Started',
+  stopping: 'Stopping',
+  offloading: 'Offloading',
+  'emergency-stop': 'Emergency stop',
+};
+
+/**
+ * Maps the server's numeric or string `RideState` value onto the frontend
+ * union. Accepts a numeric enum index or a PascalCase name, matched
+ * case-insensitively; falls back to `'idle'` for an unrecognized value.
+ */
+export function toRideState(value: number | string): RideState {
+  if (typeof value === 'number') {
+    return RIDE_STATE_BY_INDEX[value] ?? 'idle';
+  }
+  const normalized = value.toLowerCase();
+  return (
+    RIDE_STATE_BY_INDEX.find((state) => RIDE_STATE_NAMES[state].toLowerCase() === normalized) ??
+    'idle'
+  );
+}
+
+/** Maps a frontend lifecycle state back onto the backend's PascalCase name. */
+export function toRideStateName(state: RideState): string {
+  return RIDE_STATE_NAMES[state];
+}
+
+/** Human-friendly ride-state label, e.g. `'emergency-stop'` → `'Emergency stop'`. */
+export function rideStateLabel(state: RideState): string {
+  return RIDE_STATE_LABELS[state];
 }

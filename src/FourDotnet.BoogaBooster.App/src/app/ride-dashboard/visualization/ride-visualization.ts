@@ -199,7 +199,14 @@ export class RideVisualization {
     sun.position.set(14, 24, 10);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
-    Object.assign(sun.shadow.camera, { left: -20, right: 20, top: 20, bottom: -20, near: 1, far: 70 });
+    Object.assign(sun.shadow.camera, {
+      left: -20,
+      right: 20,
+      top: 20,
+      bottom: -20,
+      near: 1,
+      far: 70,
+    });
     scene.add(sun);
   }
 

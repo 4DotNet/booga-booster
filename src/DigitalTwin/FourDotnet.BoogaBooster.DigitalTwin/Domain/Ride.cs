@@ -5,14 +5,50 @@ namespace FourDotnet.BoogaBooster.DigitalTwin.Domain;
 
 /// <summary>
 /// The ride aggregate root (ADR-0003). Every command — set power, board a
-/// passenger, work a brake, start, stop — goes through here so the safety
-/// invariants live in one place: the ride can only start when every occupied
-/// restraint is secured, the combined passenger weight is within the maximum safe
-/// load, and the load is balanced. It owns the whole rig through the
-/// <see cref="GreatMill"/> and advances the simulation one fixed step at a time.
+/// passenger, work a brake, change lifecycle state — goes through here so the
+/// safety invariants live in one place. A guarded state machine owns the ride's
+/// lifecycle (<see cref="RideState"/>): it decides which transitions are legal
+/// from the current state, evaluates each transition's guard, and runs the entry
+/// side-effects (locking/releasing the safety constraints, applying brakes,
+/// cutting power). It owns the whole rig through the <see cref="GreatMill"/> and
+/// advances the simulation one fixed step at a time.
 /// </summary>
 public sealed class Ride : DomainModel
 {
+    /// <summary>One legal operator-triggered edge: a target state and an optional guard.</summary>
+    private sealed record Transition(RideState Target, Func<Ride, bool>? Guard);
+
+    /// <summary>
+    /// The operator-triggerable transition table — the single description of "what may
+    /// follow what". Automatic (condition-driven) transitions are handled in
+    /// <see cref="Advance"/> and deliberately excluded here so they are never offered
+    /// as a button.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<RideState, IReadOnlyList<Transition>> OperatorTransitions =
+        new Dictionary<RideState, IReadOnlyList<Transition>>
+        {
+            [RideState.Idle] = [new Transition(RideState.Loading, null)],
+            [RideState.Loading] =
+            [
+                new Transition(RideState.Safe, static ride => ride.IsSafe),
+                new Transition(RideState.EmergencyStop, null),
+            ],
+            [RideState.Safe] =
+            [
+                new Transition(RideState.Started, static ride => ride.IsSafe),
+                new Transition(RideState.Loading, null),
+                new Transition(RideState.EmergencyStop, null),
+            ],
+            [RideState.Started] =
+            [
+                new Transition(RideState.Stopping, null),
+                new Transition(RideState.EmergencyStop, null),
+            ],
+            [RideState.Stopping] = [new Transition(RideState.EmergencyStop, null)],
+            [RideState.Offloading] = [],
+            [RideState.EmergencyStop] = [],
+        };
+
     private readonly GreatMill _mill = new();
     private RideState _state = RideState.Idle;
     private double _simulationTimeSeconds;
@@ -37,10 +73,47 @@ public sealed class Ride : DomainModel
     /// <summary>Why the ride is (not) safe to start right now.</summary>
     public RideSafetyReason SafetyReason => EvaluateSafety();
 
-    /// <summary><c>true</c> when <see cref="Start"/> would succeed right now.</summary>
+    /// <summary>
+    /// <c>true</c> while the safety constraints are locked — from the moment the ride
+    /// starts until it comes to rest and begins offloading. Occupied restraints are
+    /// never released while this is <c>true</c>.
+    /// </summary>
+    public bool ConstraintsLocked =>
+        _state is RideState.Started or RideState.Stopping or RideState.EmergencyStop;
+
+    /// <summary><c>true</c> when the ride is at rest and safe to be loaded/started.</summary>
     public bool IsSafeToStart =>
-        _state is RideState.Idle or RideState.Boarding or RideState.Ready
+        _state is RideState.Idle or RideState.Loading or RideState.Safe
         && EvaluateSafety() == RideSafetyReason.None;
+
+    /// <summary>
+    /// The operator-triggerable states the ride may legally move to right now, with
+    /// each guard already evaluated. Automatic transitions are excluded.
+    /// </summary>
+    public IReadOnlyList<RideState> AvailableTransitions
+    {
+        get
+        {
+            if (!OperatorTransitions.TryGetValue(_state, out var edges))
+            {
+                return [];
+            }
+
+            var available = new List<RideState>(edges.Count);
+            foreach (var edge in edges)
+            {
+                if (edge.Guard is null || edge.Guard(this))
+                {
+                    available.Add(edge.Target);
+                }
+            }
+
+            return available;
+        }
+    }
+
+    /// <summary><c>true</c> when every safety interlock is currently satisfied.</summary>
+    private bool IsSafe => EvaluateSafety() == RideSafetyReason.None;
 
     /// <summary>Sets the main (mill) engine power.</summary>
     public bool SetMainEnginePower(EnginePower power)
@@ -73,13 +146,13 @@ public sealed class Ride : DomainModel
     {
         ArgumentNullException.ThrowIfNull(passenger);
 
-        if (_state is not (RideState.Idle or RideState.Boarding or RideState.Ready))
+        if (_state is not (RideState.Idle or RideState.Loading))
         {
-            throw new DomainValidationException($"Passengers can only board while the ride is idle or boarding (state: {_state}).");
+            throw new DomainValidationException($"Passengers can only board while the ride is idle or loading (state: {_state}).");
         }
 
         _mill.GetHub(hubIndex).GetGondola(gondolaIndex).Board(seat, passenger, restraintCloseDelay);
-        _state = RideState.Boarding;
+        _state = RideState.Loading;
         MarkChanged();
     }
 
@@ -100,47 +173,52 @@ public sealed class Ride : DomainModel
     }
 
     /// <summary>
-    /// Starts the ride. Releases the gondola brakes so they can swing freely, and
-    /// begins spinning.
+    /// Requests an operator-triggered transition to <paramref name="target"/>. The
+    /// state machine is the sole arbiter: a transition that is not defined from the
+    /// current state, or whose guard is not satisfied, is rejected and the state is
+    /// left unchanged.
     /// </summary>
     /// <exception cref="DomainValidationException">
-    /// Thrown when the ride is not in a startable state, an occupied restraint is not
-    /// secured, or the load is unbalanced.
+    /// Thrown when the transition is not legal from the current state, or its guard
+    /// (for example the ride-safety interlock) is not satisfied.
     /// </exception>
-    public void Start()
+    public void RequestTransition(RideState target)
     {
-        if (_state is not (RideState.Idle or RideState.Boarding or RideState.Ready))
+        if (!OperatorTransitions.TryGetValue(_state, out var edges))
         {
-            throw new DomainValidationException($"The ride cannot start from state {_state}.");
+            throw new DomainValidationException($"The ride cannot transition out of {_state}.");
         }
 
-        var reason = EvaluateSafety();
-        if (reason != RideSafetyReason.None)
+        Transition? edge = null;
+        foreach (var candidate in edges)
         {
-            throw new DomainValidationException($"The ride is not safe to start: {DescribeSafety(reason)}");
+            if (candidate.Target == target)
+            {
+                edge = candidate;
+                break;
+            }
         }
 
-        _mill.ReleaseAllGondolaBrakes();
-        _state = RideState.Running;
-        MarkChanged();
-    }
-
-    /// <summary>Begins a controlled ramp down: cuts power and coasts to a stop.</summary>
-    public void Stop()
-    {
-        if (_state is not (RideState.Running or RideState.Ready))
+        if (edge is null)
         {
-            return;
+            throw new DomainValidationException($"The ride cannot transition from {_state} to {target}.");
         }
 
-        _mill.CutAllPower();
-        _state = _state == RideState.Ready ? RideState.Idle : RideState.Stopping;
+        if (edge.Guard is not null && !edge.Guard(this))
+        {
+            throw new DomainValidationException(
+                $"The ride cannot transition from {_state} to {target}: {DescribeSafety(EvaluateSafety())}");
+        }
+
+        ApplyEntry(target);
+        _state = target;
         MarkChanged();
     }
 
     /// <summary>
-    /// Advances the whole simulation one fixed step: natural passenger behaviour,
-    /// readiness re-evaluation, and — while running or stopping — the physics.
+    /// Advances the whole simulation one fixed step: state-dependent natural passenger
+    /// behaviour, the automatic (condition-driven) transitions, and — while in
+    /// motion — the physics.
     /// </summary>
     public void Advance(TimeSpan dt)
     {
@@ -149,18 +227,43 @@ public sealed class Ride : DomainModel
             throw new DomainValidationException("The simulation step must be positive.");
         }
 
-        _mill.AdvanceNaturalBehavior(dt);
-        UpdateReadiness();
+        // 1. Natural behaviour depends on the lifecycle state: while loading, seated
+        //    passengers secure their restraints; while offloading, they leave.
+        switch (_state)
+        {
+            case RideState.Loading:
+            case RideState.Safe:
+                _mill.AdvanceNaturalBehavior(dt);
+                break;
+            case RideState.Offloading:
+                _mill.Offload();
+                break;
+        }
 
-        if (_state is RideState.Running or RideState.Stopping)
+        // 2. Automatic demotion: a ride that is no longer safe drops out of Safe.
+        if (_state == RideState.Safe && !IsSafe)
+        {
+            _state = RideState.Loading;
+        }
+
+        // 3. Physics while in motion; a stopping/emergency ride settles into offloading
+        //    (releasing the safety constraints) once it reaches a complete rest.
+        if (_state is RideState.Started or RideState.Stopping or RideState.EmergencyStop)
         {
             _mill.AdvancePhysics(dt.TotalSeconds);
 
-            if (_state == RideState.Stopping && _mill.IsAtRest)
+            if (_state is RideState.Stopping or RideState.EmergencyStop && _mill.IsAtRest)
             {
                 _mill.EngageAllGondolaBrakes();
-                _state = RideState.Idle;
+                EnterOffloading();
+                _state = RideState.Offloading;
             }
+        }
+
+        // 4. Offloading returns to idle once the last rider has left.
+        if (_state == RideState.Offloading && _mill.IsEmpty)
+        {
+            _state = RideState.Idle;
         }
 
         _simulationTimeSeconds += dt.TotalSeconds;
@@ -172,7 +275,7 @@ public sealed class Ride : DomainModel
     {
         var reason = EvaluateSafety();
         var isSafeToStart =
-            _state is RideState.Idle or RideState.Boarding or RideState.Ready
+            _state is RideState.Idle or RideState.Loading or RideState.Safe
             && reason == RideSafetyReason.None;
 
         var hubs = new List<HubTelemetry>(RideParameters.HubCount);
@@ -191,23 +294,52 @@ public sealed class Ride : DomainModel
             _simulationTimeSeconds,
             isSafeToStart,
             reason,
+            AvailableTransitions,
             _mill.ToTelemetry(),
             hubs,
             gondolas);
     }
 
-    private void UpdateReadiness()
+    /// <summary>Runs the entry side-effects for the state being entered.</summary>
+    private void ApplyEntry(RideState target)
     {
-        switch (_state)
+        switch (target)
         {
-            case RideState.Boarding when EvaluateSafety() == RideSafetyReason.None:
-                _state = RideState.Ready;
+            case RideState.Started:
+                EnterStarted();
                 break;
-            case RideState.Ready when EvaluateSafety() != RideSafetyReason.None:
-                _state = RideState.Boarding;
+            case RideState.Stopping:
+                EnterStopping();
                 break;
+            case RideState.EmergencyStop:
+                EnterEmergencyStop();
+                break;
+            case RideState.Offloading:
+                EnterOffloading();
+                break;
+            // Idle, Loading and Safe carry no entry side-effect.
         }
     }
+
+    /// <summary>Locks the safety constraints and releases the gondola brakes so the pods swing.</summary>
+    private void EnterStarted() => _mill.ReleaseAllGondolaBrakes();
+
+    /// <summary>Cuts power and applies the brakes for a controlled ramp-down.</summary>
+    private void EnterStopping()
+    {
+        _mill.CutAllPower();
+        _mill.EngageAllGondolaBrakes();
+    }
+
+    /// <summary>Immediately cuts power and applies the brakes from an active state.</summary>
+    private void EnterEmergencyStop()
+    {
+        _mill.CutAllPower();
+        _mill.EngageAllGondolaBrakes();
+    }
+
+    /// <summary>The ride is at rest: releases the safety constraints so passengers can leave.</summary>
+    private void EnterOffloading() => _mill.ReleaseAllRestraints();
 
     private RideSafetyReason EvaluateSafety()
     {

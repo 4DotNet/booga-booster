@@ -75,11 +75,20 @@ public sealed class RideStore : IRideStore, IRideTelemetryProvider
         }
     }
 
+    public RideTelemetry RequestStateTransition(RideState target)
+    {
+        lock (_gate)
+        {
+            _ride.RequestTransition(target);
+            return _ride.ToTelemetry();
+        }
+    }
+
     public RideTelemetry StartRide()
     {
         lock (_gate)
         {
-            _ride.Start();
+            _ride.RequestTransition(RideState.Started);
             return _ride.ToTelemetry();
         }
     }
@@ -88,7 +97,7 @@ public sealed class RideStore : IRideStore, IRideTelemetryProvider
     {
         lock (_gate)
         {
-            _ride.Stop();
+            _ride.RequestTransition(RideState.Stopping);
             return _ride.ToTelemetry();
         }
     }

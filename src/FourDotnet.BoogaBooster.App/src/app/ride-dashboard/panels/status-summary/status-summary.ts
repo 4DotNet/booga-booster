@@ -1,10 +1,19 @@
-import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 
-import { RideState, SecurityState } from '../../models/ride.models';
+import {
+  RIDE_STATE_BY_INDEX,
+  RideState,
+  SecurityState,
+  rideStateLabel,
+} from '../../models/ride.models';
 
 /**
- * Top-left panel: at-a-glance ride state, occupied-seat count and the overall
- * security roll-up. Security is conveyed by text and an icon, never colour alone.
+ * Top-left panel: at-a-glance ride state, occupied-seat count, the overall
+ * security roll-up, and the lifecycle transition controls. Security and
+ * lifecycle state are conveyed by text and icon/attributes, never colour
+ * alone. Purely presentational: the current state and the legal transitions
+ * both come from the server (`RideLifecycleService`, via `ride-dashboard`),
+ * and a click only emits — it never decides legality itself.
  */
 @Component({
   selector: 'bb-status-summary',
@@ -33,6 +42,26 @@ import { RideState, SecurityState } from '../../models/ride.models';
           </dd>
         </div>
       </dl>
+
+      <div class="transitions" role="group" aria-labelledby="transitions-heading">
+        <h3 id="transitions-heading">Lifecycle transitions</h3>
+        <div class="transition-grid">
+          @for (candidate of lifecycleStates; track candidate) {
+            <button
+              type="button"
+              class="transition-button"
+              [disabled]="!isAvailable(candidate)"
+              [attr.aria-current]="isCurrent(candidate) ? 'true' : null"
+              (click)="onTransitionClick(candidate)"
+            >
+              <span>{{ rideStateLabel(candidate) }}</span>
+              @if (isCurrent(candidate)) {
+                <span class="current-badge">(current)</span>
+              }
+            </button>
+          }
+        </div>
+      </div>
     </section>
   `,
   styles: `
@@ -43,8 +72,13 @@ import { RideState, SecurityState } from '../../models/ride.models';
       margin: 0 0 0.75rem;
       font-size: 1rem;
     }
+    h3 {
+      margin: 0 0 0.5rem;
+      font-size: 0.9rem;
+      color: var(--bb-muted);
+    }
     .metrics {
-      margin: 0;
+      margin: 0 0 1rem;
       display: grid;
       gap: 0.5rem;
     }
@@ -65,10 +99,12 @@ import { RideState, SecurityState } from '../../models/ride.models';
     .state {
       text-transform: capitalize;
     }
-    .state[data-state='running'] {
+    .state[data-state='started'],
+    .state[data-state='safe'] {
       color: var(--bb-ok);
     }
-    .state[data-state='emergency'] {
+    .state[data-state='stopping'],
+    .state[data-state='emergency-stop'] {
       color: var(--bb-alert);
     }
     .security {
@@ -85,14 +121,59 @@ import { RideState, SecurityState } from '../../models/ride.models';
     .icon {
       font-weight: 700;
     }
+    .transitions {
+      display: block;
+    }
+    .transition-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.5rem;
+    }
+    .transition-button {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.15rem;
+      padding: 0.5rem 0.4rem;
+      border-radius: 0.5rem;
+      border: 1px solid var(--bb-border);
+      background: var(--bb-surface-2);
+      color: inherit;
+      font: inherit;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    .transition-button:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+    .transition-button[aria-current='true'] {
+      border-color: var(--bb-accent);
+      font-weight: 700;
+    }
+    .transition-button:focus-visible {
+      outline: 2px solid var(--bb-focus);
+      outline-offset: 2px;
+    }
+    .current-badge {
+      font-size: 0.7rem;
+      font-weight: 400;
+      color: var(--bb-muted);
+    }
   `,
 })
 export class StatusSummary {
   readonly state = input.required<RideState>();
+  readonly availableTransitions = input.required<readonly RideState[]>();
   readonly occupiedSeats = input.required<number>();
   readonly securityState = input.required<SecurityState>();
 
-  protected readonly stateLabel = computed(() => this.state());
+  readonly transition = output<RideState>();
+
+  /** Every lifecycle state, in a fixed order, driving the transition button grid. */
+  protected readonly lifecycleStates: readonly RideState[] = RIDE_STATE_BY_INDEX;
+
+  protected readonly stateLabel = computed(() => rideStateLabel(this.state()));
   protected readonly securityText = computed(() =>
     this.securityState() === 'secured' ? 'Secured' : 'Unsecured',
   );
@@ -104,4 +185,23 @@ export class StatusSummary {
       ? 'All occupied seats secured'
       : 'One or more occupied seats not secured',
   );
+
+  protected readonly rideStateLabel = rideStateLabel;
+
+  /** Whether `candidate` is one of the server's currently-legal transitions. */
+  protected isAvailable(candidate: RideState): boolean {
+    return this.availableTransitions().includes(candidate);
+  }
+
+  /** Whether `candidate` is the ride's current lifecycle state. */
+  protected isCurrent(candidate: RideState): boolean {
+    return this.state() === candidate;
+  }
+
+  /** Emit a transition request; only ever called for a legal, enabled button. */
+  protected onTransitionClick(candidate: RideState): void {
+    if (this.isAvailable(candidate)) {
+      this.transition.emit(candidate);
+    }
+  }
 }

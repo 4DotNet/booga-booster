@@ -3,6 +3,7 @@ using FourDotnet.BoogaBooster.Core.Cqrs;
 using FourDotnet.BoogaBooster.DigitalTwin.Abstractions;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.BoardPassenger;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.GetRideTelemetry;
+using FourDotnet.BoogaBooster.DigitalTwin.Features.RequestRideStateTransition;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.SetGondolaBrake;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.SetHubEnginePower;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.SetMainEnginePower;
@@ -32,6 +33,10 @@ public static class DigitalTwinEndpoints
 
     /// <summary>The request body for working a gondola brake.</summary>
     public sealed record SetBrakeRequest(int HubIndex, int GondolaIndex, string? Brake);
+
+    /// <summary>The request body for requesting a ride lifecycle transition.</summary>
+    /// <param name="State">The target state name (e.g. "Loading", "Started", "EmergencyStop").</param>
+    public sealed record SetStateRequest(string? State);
 
     public static IEndpointRouteBuilder MapDigitalTwinEndpoints(this IEndpointRouteBuilder endpoints)
     {
@@ -92,6 +97,24 @@ public static class DigitalTwinEndpoints
         })
         .WithName("SetGondolaBrake");
 
+        // The lifecycle state machine is driven through /state. The /start and /stop
+        // shortcuts are retained and delegate to the same machine (Started/Stopping).
+        group.MapPost("/state", (
+            SetStateRequest request,
+            ICommandHandler<RequestRideStateTransitionCommand> handler,
+            CancellationToken cancellationToken) =>
+        {
+            if (!TryParseState(request.State, out var state))
+            {
+                return Task.FromResult(Results.BadRequest($"Unknown ride state '{request.State}'."));
+            }
+
+            return DispatchAsync(() => handler.HandleAsync(
+                new RequestRideStateTransitionCommand(state),
+                cancellationToken));
+        })
+        .WithName("RequestRideStateTransition");
+
         group.MapPost("/start", (
             ICommandHandler<StartRideCommand> handler,
             CancellationToken cancellationToken) =>
@@ -125,4 +148,7 @@ public static class DigitalTwinEndpoints
 
     private static bool TryParseBrake(string? value, out GondolaBrakeState brake)
         => Enum.TryParse(value, ignoreCase: true, out brake) && Enum.IsDefined(brake);
+
+    private static bool TryParseState(string? value, out RideState state)
+        => Enum.TryParse(value, ignoreCase: true, out state) && Enum.IsDefined(state);
 }

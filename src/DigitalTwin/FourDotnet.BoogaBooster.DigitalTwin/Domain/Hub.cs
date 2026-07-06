@@ -107,6 +107,23 @@ public sealed class Hub : DomainModel
     /// <summary><c>true</c> when the hub has effectively stopped rotating.</summary>
     public bool IsAtRest => Math.Abs(_omega) < 1e-3d;
 
+    /// <summary><c>true</c> when every gondola on the hub is empty.</summary>
+    public bool IsEmpty
+    {
+        get
+        {
+            foreach (var gondola in _gondolas)
+            {
+                if (!gondola.IsEmpty)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+    }
+
     /// <summary>Returns the gondola at <paramref name="index"/> on this hub.</summary>
     public Gondola GetGondola(int index)
     {
@@ -178,6 +195,24 @@ public sealed class Hub : DomainModel
         foreach (var gondola in _gondolas)
         {
             gondola.ReleaseBrake();
+        }
+    }
+
+    /// <summary>Releases every gondola's safety restraints (used when offloading).</summary>
+    public void ReleaseAllRestraints()
+    {
+        foreach (var gondola in _gondolas)
+        {
+            gondola.ReleaseRestraints();
+        }
+    }
+
+    /// <summary>Lets passengers leave every gondola once their restraints are released.</summary>
+    public void Offload()
+    {
+        foreach (var gondola in _gondolas)
+        {
+            gondola.Offload();
         }
     }
 

@@ -5,6 +5,7 @@ using Xunit;
 
 namespace FourDotnet.BoogaBooster.DigitalTwin.Tests;
 
+/// <summary>The safety interlock that guards the loadingsafestarted transitions.</summary>
 public sealed class RideSafetyTests
 {
     [Fact]
@@ -18,45 +19,50 @@ public sealed class RideSafetyTests
     }
 
     [Fact]
-    public void Boarding_moves_the_ride_to_boarding_and_flags_the_unsecured_restraint()
+    public void Boarding_moves_the_ride_to_loading_and_flags_the_unsecured_restraint()
     {
         var ride = Ride.Create();
         ride.BoardPassenger(0, 0, SeatPosition.Left, Passenger.OfWeight(75), TimeSpan.FromSeconds(10));
 
-        Assert.Equal(RideState.Boarding, ride.CurrentState);
+        Assert.Equal(RideState.Loading, ride.CurrentState);
         Assert.Equal(RideSafetyReason.UnsecuredRestraint, ride.SafetyReason);
         Assert.False(ride.IsSafeToStart);
     }
 
     [Fact]
-    public void The_ride_cannot_start_while_a_restraint_is_unsecured()
+    public void The_ride_cannot_reach_safe_while_a_restraint_is_unsecured()
     {
         var ride = Ride.Create();
         ride.BoardPassenger(0, 0, SeatPosition.Left, Passenger.OfWeight(75), TimeSpan.FromSeconds(10));
 
-        Assert.Throws<DomainValidationException>(() => ride.Start());
+        Assert.Throws<DomainValidationException>(() => ride.RequestTransition(RideState.Safe));
+        Assert.Equal(RideState.Loading, ride.CurrentState);
     }
 
     [Fact]
-    public void Once_every_occupied_restraint_is_secured_the_ride_becomes_ready_and_starts()
+    public void Once_every_occupied_restraint_is_secured_the_ride_can_reach_safe_and_start()
     {
         var ride = Ride.Create();
         ride.BoardPassenger(0, 0, SeatPosition.Left, Passenger.OfWeight(75), TimeSpan.FromSeconds(1));
 
         Advance(ride, seconds: 2d);
 
-        Assert.Equal(RideState.Ready, ride.CurrentState);
+        // No auto-promotion: the ride stays Loading until the operator declares it safe.
+        Assert.Equal(RideState.Loading, ride.CurrentState);
         Assert.True(ride.IsSafeToStart);
 
-        ride.Start();
+        ride.RequestTransition(RideState.Safe);
+        Assert.Equal(RideState.Safe, ride.CurrentState);
 
-        Assert.Equal(RideState.Running, ride.CurrentState);
-        // Starting releases the gondola brakes so they can swing freely.
+        ride.RequestTransition(RideState.Started);
+        Assert.Equal(RideState.Started, ride.CurrentState);
+        // Starting locks the safety constraints and releases the gondola brakes.
+        Assert.True(ride.ConstraintsLocked);
         Assert.Equal(GondolaBrakeState.Released, ride.Mill.GetHub(0).GetGondola(0).Brake);
     }
 
     [Fact]
-    public void An_unbalanced_load_blocks_the_start_even_when_secured()
+    public void An_unbalanced_load_blocks_reaching_safe_even_when_secured()
     {
         var ride = Ride.Create();
         // Load only hub 0 heavily — secured, but badly unbalanced.
@@ -69,47 +75,23 @@ public sealed class RideSafetyTests
         Advance(ride, seconds: 1d);
 
         Assert.Equal(RideSafetyReason.UnbalancedLoad, ride.SafetyReason);
-        Assert.Throws<DomainValidationException>(() => ride.Start());
+        Assert.Throws<DomainValidationException>(() => ride.RequestTransition(RideState.Safe));
     }
 
     [Fact]
-    public void An_overloaded_ride_blocks_the_start_even_when_secured_and_balanced()
+    public void An_overloaded_ride_blocks_reaching_safe_even_when_secured_and_balanced()
     {
         var ride = Ride.Create();
         // Fill every seat symmetrically with the heaviest passengers: balanced and
         // secured, but 32 × 130 kg = 4160 kg — over the 3200 kg maximum load.
-        foreach (var hub in ride.Mill.Hubs)
-        {
-            foreach (var gondola in hub.Gondolas)
-            {
-                ride.BoardPassenger(hub.Index, gondola.Index, SeatPosition.Left, Passenger.OfWeight(130), TimeSpan.Zero);
-                ride.BoardPassenger(hub.Index, gondola.Index, SeatPosition.Right, Passenger.OfWeight(130), TimeSpan.Zero);
-            }
-        }
+        FillEverySeat(ride, kilograms: 130);
 
         Advance(ride, seconds: 1d);
 
         Assert.True(ride.Mill.IsBalanced);
         Assert.Equal(RideSafetyReason.Overloaded, ride.SafetyReason);
         Assert.False(ride.IsSafeToStart);
-        Assert.Throws<DomainValidationException>(() => ride.Start());
-    }
-
-    [Fact]
-    public void Stopping_ramps_down_and_engages_the_brakes_at_rest()
-    {
-        var ride = Ride.Create();
-        ride.BoardPassenger(0, 0, SeatPosition.Left, Passenger.OfWeight(75), TimeSpan.FromSeconds(1));
-        Advance(ride, seconds: 2d);
-        ride.Start();
-
-        ride.Stop();
-        Assert.Equal(RideState.Stopping, ride.CurrentState);
-
-        // With no power applied the ride is already at rest, so it settles to idle.
-        Advance(ride, seconds: 1d);
-        Assert.Equal(RideState.Idle, ride.CurrentState);
-        Assert.Equal(GondolaBrakeState.Engaged, ride.Mill.GetHub(0).GetGondola(0).Brake);
+        Assert.Throws<DomainValidationException>(() => ride.RequestTransition(RideState.Safe));
     }
 
     [Fact]
@@ -118,13 +100,26 @@ public sealed class RideSafetyTests
         var ride = Ride.Create();
         ride.BoardPassenger(0, 0, SeatPosition.Left, Passenger.OfWeight(75), TimeSpan.FromSeconds(1));
         Advance(ride, seconds: 2d);
-        ride.Start();
+        ride.RequestTransition(RideState.Safe);
+        ride.RequestTransition(RideState.Started);
 
         Assert.Throws<DomainValidationException>(() =>
             ride.BoardPassenger(1, 0, SeatPosition.Left, Passenger.OfWeight(75), TimeSpan.Zero));
     }
 
-    private static void Advance(Ride ride, double seconds)
+    internal static void FillEverySeat(Ride ride, double kilograms)
+    {
+        foreach (var hub in ride.Mill.Hubs)
+        {
+            foreach (var gondola in hub.Gondolas)
+            {
+                ride.BoardPassenger(hub.Index, gondola.Index, SeatPosition.Left, Passenger.OfWeight(kilograms), TimeSpan.Zero);
+                ride.BoardPassenger(hub.Index, gondola.Index, SeatPosition.Right, Passenger.OfWeight(kilograms), TimeSpan.Zero);
+            }
+        }
+    }
+
+    internal static void Advance(Ride ride, double seconds)
     {
         var steps = (int)(seconds / TestHelpers.Dt.TotalSeconds);
         for (var i = 0; i < steps; i++)

@@ -99,6 +99,11 @@ export class SimulatedRideTelemetrySource implements RideTelemetrySource {
       case 'set-gondola-brake':
         this.commands.gondolaBrakeEngaged = command.engaged;
         break;
+      case 'request-state-transition':
+        // Lifecycle transitions are backend-authoritative (see
+        // `RideLifecycleService`); the simulator only tracks physics state,
+        // so this is a no-op here.
+        break;
     }
     // Echo the command immediately so controls and status reflect it at once.
     this.telemetrySignal.set(this.buildTelemetry());
@@ -144,6 +149,9 @@ export class SimulatedRideTelemetrySource implements RideTelemetrySource {
     const gondolas = this.buildGondolas();
     return {
       state: this.deriveState(),
+      // The simulator drives physics only; lifecycle transitions are
+      // server-authoritative via `RideLifecycleService`.
+      availableTransitions: [],
       mill: {
         power: this.commands.millPower,
         direction: this.commands.millDirection,
@@ -190,7 +198,7 @@ export class SimulatedRideTelemetrySource implements RideTelemetrySource {
   }
 
   private deriveState(): RideState {
-    return this.commands.millPower > 0 || this.commands.hubPower > 0 ? 'running' : 'stopped';
+    return this.commands.millPower > 0 || this.commands.hubPower > 0 ? 'started' : 'idle';
   }
 
   /** Ten gondolas start fully occupied and secured (20 riders); rest empty. */

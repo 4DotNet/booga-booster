@@ -3,6 +3,7 @@ using FourDotnet.BoogaBooster.DigitalTwin.Abstractions;
 using FourDotnet.BoogaBooster.DigitalTwin.Application;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.BoardPassenger;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.GetRideTelemetry;
+using FourDotnet.BoogaBooster.DigitalTwin.Features.RequestRideStateTransition;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.SetGondolaBrake;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.SetHubEnginePower;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.SetMainEnginePower;
@@ -64,6 +65,7 @@ public sealed class DigitalTwinModuleExtensionsTests
         Assert.NotNull(sp.GetRequiredService<ICommandHandler<SetGondolaBrakeCommand>>());
         Assert.NotNull(sp.GetRequiredService<ICommandHandler<StartRideCommand>>());
         Assert.NotNull(sp.GetRequiredService<ICommandHandler<StopRideCommand>>());
+        Assert.NotNull(sp.GetRequiredService<ICommandHandler<RequestRideStateTransitionCommand>>());
     }
 
     [Fact]

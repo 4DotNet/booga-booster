@@ -145,6 +145,23 @@ public sealed class GreatMill : DomainModel
         }
     }
 
+    /// <summary><c>true</c> when every gondola across the ride is empty.</summary>
+    public bool IsEmpty
+    {
+        get
+        {
+            foreach (var hub in _hubs)
+            {
+                if (!hub.IsEmpty)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+    }
+
     /// <summary>Returns the hub at <paramref name="index"/>.</summary>
     public Hub GetHub(int index)
     {
@@ -234,6 +251,24 @@ public sealed class GreatMill : DomainModel
         foreach (var hub in _hubs)
         {
             hub.EngageAllBrakes();
+        }
+    }
+
+    /// <summary>Releases every gondola's safety restraints across the ride (offloading).</summary>
+    public void ReleaseAllRestraints()
+    {
+        foreach (var hub in _hubs)
+        {
+            hub.ReleaseAllRestraints();
+        }
+    }
+
+    /// <summary>Lets passengers leave every gondola across the ride.</summary>
+    public void Offload()
+    {
+        foreach (var hub in _hubs)
+        {
+            hub.Offload();
         }
     }
 

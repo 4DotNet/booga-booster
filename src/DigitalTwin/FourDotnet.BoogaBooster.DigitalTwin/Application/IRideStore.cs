@@ -33,9 +33,15 @@ public interface IRideStore
     /// <summary>Engages or releases a specific gondola's yaw brake.</summary>
     RideTelemetry SetGondolaBrake(int hubIndex, int gondolaIndex, GondolaBrakeState brake);
 
-    /// <summary>Starts the ride, if it is safe to do so.</summary>
+    /// <summary>
+    /// Requests an operator-triggered lifecycle transition to <paramref name="target"/>.
+    /// The domain state machine rejects an illegal or guard-failing transition.
+    /// </summary>
+    RideTelemetry RequestStateTransition(RideState target);
+
+    /// <summary>Starts the ride (transition to <see cref="RideState.Started"/>), if safe.</summary>
     RideTelemetry StartRide();
 
-    /// <summary>Begins a controlled ramp down to a stop.</summary>
+    /// <summary>Begins a controlled ramp down (transition to <see cref="RideState.Stopping"/>).</summary>
     RideTelemetry StopRide();
 }

@@ -32,7 +32,7 @@ export class FakeRideTelemetrySource implements RideTelemetrySource {
       case 'set-mill-power':
         this.telemetrySignal.set({
           ...current,
-          state: command.value > 0 ? 'running' : 'stopped',
+          state: command.value > 0 ? 'started' : 'idle',
           mill: { ...current.mill, power: clampPower(command.value) },
         });
         break;
@@ -57,6 +57,9 @@ export class FakeRideTelemetrySource implements RideTelemetrySource {
       case 'set-gondola-brake':
         this.telemetrySignal.set({ ...current, gondolaBrakeEngaged: command.engaged });
         break;
+      case 'request-state-transition':
+        this.telemetrySignal.set({ ...current, state: command.state });
+        break;
     }
   }
 
@@ -69,7 +72,8 @@ export class FakeRideTelemetrySource implements RideTelemetrySource {
 /** Build a telemetry snapshot, overriding any fields for a specific scenario. */
 export function createTelemetry(overrides: Partial<RideTelemetry> = {}): RideTelemetry {
   return {
-    state: 'stopped',
+    state: 'idle',
+    availableTransitions: [],
     mill: { power: 0, direction: 'forward', speedRpm: 0 },
     hubs: Array.from({ length: HUB_COUNT }, (_, i) => ({
       id: i + 1,

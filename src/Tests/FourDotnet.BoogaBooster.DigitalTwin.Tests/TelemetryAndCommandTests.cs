@@ -1,10 +1,12 @@
 using System.Threading;
 using System.Threading.Tasks;
+using FourDotnet.BoogaBooster.Core;
 using FourDotnet.BoogaBooster.DigitalTwin.Abstractions;
 using FourDotnet.BoogaBooster.DigitalTwin.Application;
 using FourDotnet.BoogaBooster.DigitalTwin.Domain;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.BoardPassenger;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.GetRideTelemetry;
+using FourDotnet.BoogaBooster.DigitalTwin.Features.RequestRideStateTransition;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.SetGondolaBrake;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.SetHubEnginePower;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.SetMainEnginePower;
@@ -27,6 +29,7 @@ public sealed class TelemetryAndCommandTests
         Assert.Equal(RideParameters.HubCount * RideParameters.GondolasPerHub, telemetry.Gondolas.Count);
         Assert.All(telemetry.Gondolas, g => Assert.Equal(RideParameters.SeatsPerGondola, g.Seats.Count));
         Assert.Equal(RideState.Idle, telemetry.State);
+        Assert.Equal(new[] { RideState.Loading }, telemetry.AvailableTransitions);
     }
 
     [Fact]
@@ -73,20 +76,47 @@ public sealed class TelemetryAndCommandTests
 
         var query = await new GetRideTelemetryQueryHandler(store).HandleAsync(new GetRideTelemetryQuery(), token);
         Assert.Equal(RideParameters.MillMaxPowerWatts * 0.8d, query.Mill.PowerWatts, 6);
-        Assert.Equal(RideState.Boarding, query.State);
+        Assert.Equal(RideState.Loading, query.State);
     }
 
     [Fact]
-    public async Task Start_and_stop_handlers_move_an_empty_ride_through_its_states()
+    public async Task Start_and_stop_handlers_move_a_safe_ride_through_its_states()
     {
         var store = NewStore();
         var token = CancellationToken.None;
 
-        // An empty ride is safe to start.
+        // Walk the empty (and therefore safe) ride up to Safe through the state machine.
+        var transitions = new RequestRideStateTransitionCommandHandler(store);
+        await transitions.HandleAsync(new RequestRideStateTransitionCommand(RideState.Loading), token);
+        await transitions.HandleAsync(new RequestRideStateTransitionCommand(RideState.Safe), token);
+
         await new StartRideCommandHandler(store).HandleAsync(new StartRideCommand(), token);
-        Assert.Equal(RideState.Running, store.GetTelemetry().State);
+        Assert.Equal(RideState.Started, store.GetTelemetry().State);
 
         await new StopRideCommandHandler(store).HandleAsync(new StopRideCommand(), token);
         Assert.Equal(RideState.Stopping, store.GetTelemetry().State);
+    }
+
+    [Fact]
+    public async Task Request_state_transition_handler_accepts_a_legal_transition()
+    {
+        var store = NewStore();
+        var handler = new RequestRideStateTransitionCommandHandler(store);
+
+        await handler.HandleAsync(new RequestRideStateTransitionCommand(RideState.Loading), CancellationToken.None);
+
+        Assert.Equal(RideState.Loading, store.GetTelemetry().State);
+    }
+
+    [Fact]
+    public async Task Request_state_transition_handler_rejects_an_illegal_transition_and_leaves_state_unchanged()
+    {
+        var store = NewStore();
+        var handler = new RequestRideStateTransitionCommandHandler(store);
+
+        await Assert.ThrowsAsync<DomainValidationException>(() =>
+            handler.HandleAsync(new RequestRideStateTransitionCommand(RideState.Started), CancellationToken.None));
+
+        Assert.Equal(RideState.Idle, store.GetTelemetry().State);
     }
 }

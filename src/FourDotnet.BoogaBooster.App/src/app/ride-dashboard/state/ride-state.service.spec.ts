@@ -61,9 +61,9 @@ describe('RideStateService', () => {
   });
 
   it('reflects ride state from the telemetry source', () => {
-    expect(service.state()).toBe('stopped');
+    expect(service.state()).toBe('idle');
     service.setMillPower(60);
-    expect(service.state()).toBe('running');
+    expect(service.state()).toBe('started');
   });
 
   it('computes occupied seats and secured security state', () => {
