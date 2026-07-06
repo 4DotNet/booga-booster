@@ -8,11 +8,12 @@ namespace FourDotnet.BoogaBooster.DigitalTwin.Application;
 /// Produces the ride's telemetry broadcast: a stream of full <see cref="RideTelemetry"/>
 /// snapshots sampled from the store at the fixed telemetry rate
 /// (<see cref="RideParameters.TelemetryInterval"/>), decoupled from the physics
-/// timestep. Frames are emitted only while the ride is running; while it is at rest
-/// the loop keeps ticking (holding the connection open) but yields nothing. Timing
-/// runs off an injected <see cref="TimeProvider"/> so the loop is deterministic under
-/// a fake clock in tests. Each connection samples independently; there is no shared
-/// broadcaster state.
+/// timestep. Frames are emitted whenever the ride is active (any state except
+/// <see cref="RideState.Idle"/>), so boarding and loading are observable and not only
+/// the running ride; while the ride is idle the loop keeps ticking (holding the
+/// connection open) but yields nothing. Timing runs off an injected
+/// <see cref="TimeProvider"/> so the loop is deterministic under a fake clock in
+/// tests. Each connection samples independently; there is no shared broadcaster state.
 /// </summary>
 public sealed class RideTelemetryStream
 {
@@ -28,14 +29,15 @@ public sealed class RideTelemetryStream
     /// <summary>
     /// Streams telemetry frames until the client disconnects (the token is cancelled).
     /// Emits one snapshot per <see cref="RideParameters.TelemetryInterval"/> while the
-    /// ride is running; stays quiet (but alive) otherwise.
+    /// ride is active (any state except <see cref="RideState.Idle"/>); stays quiet (but
+    /// alive) while the ride is idle.
     /// </summary>
     public async IAsyncEnumerable<RideTelemetry> Stream(
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         while (!cancellationToken.IsCancellationRequested)
         {
-            if (_store.IsRunning)
+            if (_store.IsActive)
             {
                 yield return _store.GetTelemetry();
             }
