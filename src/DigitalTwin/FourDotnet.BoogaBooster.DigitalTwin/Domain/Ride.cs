@@ -83,11 +83,27 @@ public sealed class Ride : DomainModel
 
     /// <summary>
     /// <c>true</c> while the ride is in motion — running, or braking to a stop. This is
-    /// exactly the set of states in which <see cref="Advance"/> steps the physics, and
-    /// the condition that gates the live telemetry broadcast.
+    /// exactly the set of states in which <see cref="Advance"/> steps the physics.
     /// </summary>
     public bool IsRunning =>
         _state is RideState.Started or RideState.Stopping or RideState.EmergencyStop;
+
+    /// <summary>
+    /// <c>true</c> while the ride is doing anything an observer would want to watch —
+    /// every lifecycle state except <see cref="RideState.Idle"/>. This gates the live
+    /// telemetry broadcast, so boarding, accumulating load and securing restraints are
+    /// streamed as they happen and not only once the ride is running.
+    /// </summary>
+    public bool IsActive => _state is not RideState.Idle;
+
+    /// <summary>
+    /// The number of completely empty gondolas — the ride's spare boarding capacity.
+    /// A group of <c>N</c> needs <c>ceil(N / 2)</c> of these to board.
+    /// </summary>
+    public int EmptyGondolaCount => _mill.EmptyGondolaCount;
+
+    /// <summary>The free seats a boarding group can take — two per empty gondola.</summary>
+    public int FreeSeats => _mill.EmptyGondolaCount * RideParameters.SeatsPerGondola;
 
     /// <summary><c>true</c> when the ride is at rest and safe to be loaded/started.</summary>
     public bool IsSafeToStart =>
@@ -144,6 +160,25 @@ public sealed class Ride : DomainModel
         return changed;
     }
 
+    /// <summary>Sets the main (mill) engine rotation direction.</summary>
+    public bool SetMainEngineDirection(MotorDirection direction)
+    {
+        var changed = _mill.SetDirection(direction);
+        MarkChanged(changed);
+        return changed;
+    }
+
+    /// <summary>
+    /// Sets the hub engine rotation direction. All four hubs receive the same
+    /// direction; their speeds still differ because their loads differ.
+    /// </summary>
+    public bool SetHubEngineDirection(MotorDirection direction)
+    {
+        var changed = _mill.SetAllHubDirection(direction);
+        MarkChanged(changed);
+        return changed;
+    }
+
     /// <summary>Boards a passenger into a specific seat, with a natural restraint-close delay.</summary>
     public void BoardPassenger(
         int hubIndex,
@@ -165,15 +200,90 @@ public sealed class Ride : DomainModel
     }
 
     /// <summary>
-    /// Applies the brakes to the drive engines: cuts power to the mill and every hub
-    /// so the ride coasts down under its own friction. In this model braking is the
-    /// removal of drive power (there is no separate brake-torque actuator); the
-    /// lifecycle state is left unchanged, so an operator can ease the ride off while
-    /// it stays <see cref="RideState.Started"/>.
+    /// Boards a whole group as a unit while the ride is idle or loading, seating its
+    /// members two per gondola into empty gondolas and letting an odd final member
+    /// ride alone — members of a group are never split across a boarding, and a
+    /// group never shares a gondola with anyone else. The group boards only when the
+    /// ride has enough spare capacity for all of them (<c>ceil(N / 2)</c> empty
+    /// gondolas); otherwise nobody is seated. Each seated member's natural
+    /// restraint-close delay is drawn from <paramref name="restraintCloseDelay"/>.
+    /// Boarding moves the ride into <see cref="RideState.Loading"/>.
     /// </summary>
-    public void BrakeEngines()
+    /// <param name="selectGondolas">
+    /// Chooses which of the empty gondolas the group takes: given the number of empty
+    /// gondolas and the number required, it returns that many distinct indices into
+    /// the empty-gondola list. In production a random selection is supplied so a
+    /// passenger grabs a random gondola; when omitted the empty gondolas are filled in
+    /// their natural order (the deterministic default used by tests).
+    /// </param>
+    /// <exception cref="DomainValidationException">
+    /// The group is empty, the ride is not idle or loading, or the ride does not
+    /// have <c>ceil(N / 2)</c> empty gondolas to seat every member.
+    /// </exception>
+    public void BoardGroup(
+        IReadOnlyList<PassengerWeight> members,
+        Func<TimeSpan> restraintCloseDelay,
+        Func<int, int, IReadOnlyList<int>>? selectGondolas = null)
     {
-        _mill.CutAllPower();
+        ArgumentNullException.ThrowIfNull(members);
+        ArgumentNullException.ThrowIfNull(restraintCloseDelay);
+
+        if (members.Count == 0)
+        {
+            throw new DomainValidationException("A boarding group must have at least one member.");
+        }
+
+        if (_state is not (RideState.Idle or RideState.Loading))
+        {
+            throw new DomainValidationException($"Groups can only board while the ride is idle or loading (state: {_state}).");
+        }
+
+        var requiredGondolas = (members.Count + 1) / 2;
+        if (requiredGondolas > _mill.EmptyGondolaCount)
+        {
+            throw new DomainValidationException(
+                $"The group of {members.Count} needs {requiredGondolas} empty gondola(s) but only {_mill.EmptyGondolaCount} are free.");
+        }
+
+        var empty = _mill.EmptyGondolas().ToArray();
+        var picks = selectGondolas is null
+            ? Enumerable.Range(0, requiredGondolas)
+            : selectGondolas(empty.Length, requiredGondolas);
+
+        var member = 0;
+        foreach (var index in picks)
+        {
+            var gondola = empty[index];
+            gondola.Board(SeatPosition.Left, new Passenger(members[member++]), restraintCloseDelay());
+            if (member < members.Count)
+            {
+                gondola.Board(SeatPosition.Right, new Passenger(members[member++]), restraintCloseDelay());
+            }
+        }
+
+        _state = RideState.Loading;
+        MarkChanged();
+    }
+
+    /// <summary>
+    /// Engages or releases the engine brake on the mill and every hub. Engaging cuts
+    /// drive power to zero and applies a strong braking torque, bringing a moving
+    /// ride to a complete stop within a couple of seconds; releasing lets the ride be
+    /// driven again (power stays at zero until commanded). The lifecycle state is left
+    /// unchanged, so an operator can brake the ride while it stays
+    /// <see cref="RideState.Started"/>.
+    /// </summary>
+    public void SetEngineBrakes(bool engaged)
+    {
+        if (engaged)
+        {
+            _mill.EngageBrakes();
+        }
+        else
+        {
+            _mill.ReleaseBrakes();
+        }
+
         MarkChanged();
     }
 
@@ -316,6 +426,8 @@ public sealed class Ride : DomainModel
             isSafeToStart,
             reason,
             AvailableTransitions,
+            _mill.BoardedPassengerCount,
+            _mill.BrakesEngaged,
             _mill.ToTelemetry(),
             hubs,
             gondolas);
@@ -342,25 +454,33 @@ public sealed class Ride : DomainModel
         }
     }
 
-    /// <summary>Locks the safety constraints and releases the gondola brakes so the pods swing.</summary>
-    private void EnterStarted() => _mill.ReleaseAllGondolaBrakes();
+    /// <summary>Locks the safety constraints, releases the engine brake, and releases the gondola brakes so the pods swing.</summary>
+    private void EnterStarted()
+    {
+        _mill.ReleaseBrakes();
+        _mill.ReleaseAllGondolaBrakes();
+    }
 
-    /// <summary>Cuts power and applies the brakes for a controlled ramp-down.</summary>
+    /// <summary>Cuts power and engages the engine brake for a fast, controlled ramp-down.</summary>
     private void EnterStopping()
     {
-        _mill.CutAllPower();
+        _mill.EngageBrakes();
         _mill.EngageAllGondolaBrakes();
     }
 
-    /// <summary>Immediately cuts power and applies the brakes from an active state.</summary>
+    /// <summary>Immediately cuts power and engages the engine brake from an active state.</summary>
     private void EnterEmergencyStop()
     {
-        _mill.CutAllPower();
+        _mill.EngageBrakes();
         _mill.EngageAllGondolaBrakes();
     }
 
-    /// <summary>The ride is at rest: releases the safety constraints so passengers can leave.</summary>
-    private void EnterOffloading() => _mill.ReleaseAllRestraints();
+    /// <summary>The ride is at rest: releases the engine brake and the safety constraints so passengers can leave.</summary>
+    private void EnterOffloading()
+    {
+        _mill.ReleaseBrakes();
+        _mill.ReleaseAllRestraints();
+    }
 
     private RideSafetyReason EvaluateSafety()
     {
