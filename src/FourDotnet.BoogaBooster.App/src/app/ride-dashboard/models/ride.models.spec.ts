@@ -11,9 +11,9 @@ import {
   mapRideTelemetry,
 } from './ride.models';
 
-/** A hub DTO with the given index and no load. */
+/** A hub DTO with the given index and no load, always forward. */
 function hubDto(index: number, powerWatts: number, rpm: number): RideTelemetryHubStreamDto {
-  return { index, powerWatts, rpm, loadKg: 0 };
+  return { index, powerWatts, rpm, direction: 0, loadKg: 0 };
 }
 
 /** A gondola DTO with two seats at the given hub/index, brake state and seat data. */
@@ -33,8 +33,8 @@ function gondolaDto(
     loadKg: 0,
     isSafeToDispatch: true,
     seats: [
-      { position: 0, occupiedKg: 0, restraint: 0 },
-      { position: 1, occupiedKg: 0, restraint: 0 },
+      { position: 0, occupiedKg: 0, restraint: 0, isOccupied: false, isSecured: false },
+      { position: 1, occupiedKg: 0, restraint: 0, isOccupied: false, isSecured: false },
     ],
     ...overrides,
   };
@@ -55,6 +55,7 @@ function buildDto(overrides: Partial<RideTelemetryStreamDto> = {}): RideTelemetr
     mill: {
       powerWatts: 0,
       rpm: 0,
+      direction: 0,
       loadKg: 0,
       passengerLoadKg: 0,
       imbalanceMillimeters: 0,
@@ -63,6 +64,7 @@ function buildDto(overrides: Partial<RideTelemetryStreamDto> = {}): RideTelemetr
     },
     hubs,
     gondolas,
+    boardedPassengerCount: 0,
     ...overrides,
   };
 }
@@ -135,14 +137,28 @@ describe('mapRideTelemetry', () => {
     const gondolas = dto.gondolas.slice();
     gondolas[0] = gondolaDto(0, 0, {
       seats: [
-        { position: 0, occupiedKg: 0, restraint: 0 }, // empty regardless of restraint
-        { position: 1, occupiedKg: 65, restraint: 1 }, // occupied, Closed -> unsecured
+        // Not occupied regardless of restraint.
+        { position: 0, occupiedKg: 0, restraint: 0, isOccupied: false, isSecured: false },
+        // Occupied, Closed -> unsecured.
+        { position: 1, occupiedKg: 65, restraint: 1, isOccupied: true, isSecured: false },
       ],
     });
     gondolas[1] = gondolaDto(0, 1, {
       seats: [
-        { position: 'Left', occupiedKg: 80, restraint: 'Secured' },
-        { position: 'Right', occupiedKg: 0, restraint: 'Open' },
+        {
+          position: 'Left',
+          occupiedKg: 80,
+          restraint: 'Secured',
+          isOccupied: true,
+          isSecured: true,
+        },
+        {
+          position: 'Right',
+          occupiedKg: 0,
+          restraint: 'Open',
+          isOccupied: false,
+          isSecured: false,
+        },
       ],
     });
 
@@ -163,8 +179,8 @@ describe('mapRideTelemetry', () => {
     const gondolas = dto.gondolas.slice();
     gondolas[0] = gondolaDto(0, 0, {
       seats: [
-        { position: 0, occupiedKg: 65.6, restraint: 2 },
-        { position: 1, occupiedKg: 0, restraint: 0 },
+        { position: 0, occupiedKg: 65.6, restraint: 2, isOccupied: true, isSecured: true },
+        { position: 1, occupiedKg: 0, restraint: 0, isOccupied: false, isSecured: false },
       ],
     });
 
@@ -196,6 +212,23 @@ describe('mapRideTelemetry', () => {
 
     const model = mapRideTelemetry({ ...dto, gondolas });
     expect(model.gondolaBrakeEngaged).toBe(true);
+  });
+
+  it('maps brakesEngaged true from the wire field', () => {
+    const model = mapRideTelemetry(buildDto({ brakesEngaged: true }));
+    expect(model.brakesEngaged).toBe(true);
+  });
+
+  it('maps brakesEngaged false from the wire field', () => {
+    const model = mapRideTelemetry(buildDto({ brakesEngaged: false }));
+    expect(model.brakesEngaged).toBe(false);
+  });
+
+  it('defaults brakesEngaged to false when the wire field is absent', () => {
+    const dto = buildDto();
+    // `buildDto` doesn't set `brakesEngaged`, simulating an older frame.
+    const model = mapRideTelemetry(dto);
+    expect(model.brakesEngaged).toBe(false);
   });
 
   it('preserves the gondola and seat counts', () => {
