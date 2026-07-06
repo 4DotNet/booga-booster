@@ -35,4 +35,29 @@ public sealed class RandomRideEventSampler : IRideEventSampler
         var seconds = min + (_random.NextDouble() * (max - min));
         return TimeSpan.FromSeconds(seconds);
     }
+
+    public IReadOnlyList<int> NextGondolaSelection(int total, int count)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(count);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(count, total);
+
+        // Partial Fisher–Yates: shuffle only the first `count` positions out of `total`,
+        // which yields `count` distinct, uniformly-chosen indices without allocating a
+        // full shuffle beyond what we need.
+        var indices = new int[total];
+        for (var i = 0; i < total; i++)
+        {
+            indices[i] = i;
+        }
+
+        for (var i = 0; i < count; i++)
+        {
+            var j = i + _random.Next(total - i);
+            (indices[i], indices[j]) = (indices[j], indices[i]);
+        }
+
+        var selection = new int[count];
+        Array.Copy(indices, selection, count);
+        return selection;
+    }
 }
