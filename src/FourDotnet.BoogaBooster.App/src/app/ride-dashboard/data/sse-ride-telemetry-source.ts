@@ -6,6 +6,7 @@ import {
   GONDOLA_COUNT,
   Gondola,
   HUB_COUNT,
+  MotorDirection,
   RideCommand,
   RideTelemetry,
   RideTelemetryStreamDto,
@@ -21,6 +22,8 @@ import { RideTelemetrySource } from './ride-telemetry-source';
 const TELEMETRY_STREAM_URL = '/api/ride/telemetry/stream';
 const MAIN_POWER_URL = '/api/ride/main-power';
 const HUB_POWER_URL = '/api/ride/hub-power';
+const MAIN_DIRECTION_URL = '/api/ride/main-direction';
+const HUB_DIRECTION_URL = '/api/ride/hub-direction';
 const BRAKE_URL = '/api/ride/brake';
 const STATE_URL = '/api/ride/state';
 const ENGINE_BRAKE_URL = '/api/ride/engine-brake';
@@ -50,10 +53,9 @@ export const EVENT_SOURCE_FACTORY = new InjectionToken<(url: string) => EventSou
 
 /**
  * The ride's at-rest telemetry snapshot: idle, every motor stopped, every
- * gondola brake engaged, every seat empty. Used both to seed
- * {@link SseRideTelemetrySource} before its first frame arrives (SSE frames
- * only flow while the ride is running) and by specs that need the same
- * baseline.
+ * gondola brake engaged, every seat empty, no passengers boarded. Used both
+ * to seed {@link SseRideTelemetrySource} before its first frame arrives and
+ * by specs that need the same baseline.
  */
 export function atRestTelemetry(): RideTelemetry {
   const emptySeats = (): Seat[] =>
@@ -82,19 +84,22 @@ export function atRestTelemetry(): RideTelemetry {
     })),
     gondolas,
     gondolaBrakeEngaged: true,
+    brakesEngaged: false,
+    boardedPassengerCount: 0,
   };
 }
 
 /**
  * {@link RideTelemetrySource} backed by the backend's SSE telemetry feed.
  *
- * Frames only arrive from the server while the ride is actually running
- * (Started/Stopping/EmergencyStop); while idle/loading/safe/offloading the
- * connection stays open but silent. To keep the operator controls responsive
- * at rest — where a plain "post and wait for the next frame" would leave the
- * sliders snapped back to their last-known value — every command is also
- * applied optimistically to the local `telemetry` signal. A subsequent real
- * frame (once the ride is running) simply overwrites the optimistic value.
+ * Frames arrive from the server throughout `Loading`/`Safe`/`Started`/
+ * `Stopping`/`Offloading`/`EmergencyStop` — i.e. whenever passengers may be
+ * boarding, riding, or disembarking — but stay silent while `Idle`. To keep
+ * the operator controls responsive at rest — where a plain "post and wait
+ * for the next frame" would leave the sliders snapped back to their
+ * last-known value — every command is also applied optimistically to the
+ * local `telemetry` signal. A subsequent real frame simply overwrites the
+ * optimistic value.
  */
 @Injectable({ providedIn: 'root' })
 export class SseRideTelemetrySource implements RideTelemetrySource {
@@ -127,22 +132,10 @@ export class SseRideTelemetrySource implements RideTelemetrySource {
         this.setHubPower(clampPower(command.value));
         break;
       case 'set-mill-direction':
-        // The backend does not model a reverse motor direction (the mill
-        // always spins one way) and exposes no endpoint for it, so no HTTP
-        // call is made. The direction is still echoed locally — matching the
-        // power/brake optimism above — so the toggle stays responsive at
-        // rest; the next real frame always reports 'forward' again.
-        this.telemetrySignal.update((current) => ({
-          ...current,
-          mill: { ...current.mill, direction: command.direction },
-        }));
+        this.setMillDirection(command.direction);
         break;
       case 'set-hub-direction':
-        // See `set-mill-direction`: hubs are not reversible either.
-        this.telemetrySignal.update((current) => ({
-          ...current,
-          hubs: current.hubs.map((hub) => ({ ...hub, direction: command.direction })),
-        }));
+        this.setHubDirection(command.direction);
         break;
       case 'set-gondola-brake':
         this.setGondolaBrake(command.engaged);
@@ -151,7 +144,7 @@ export class SseRideTelemetrySource implements RideTelemetrySource {
         this.http.post(STATE_URL, { state: toRideStateName(command.state) }).subscribe();
         break;
       case 'brake-engines':
-        this.brakeEngines();
+        this.brakeEngines(command.engaged);
         break;
     }
   }
@@ -174,6 +167,24 @@ export class SseRideTelemetrySource implements RideTelemetrySource {
     }));
   }
 
+  private setMillDirection(direction: MotorDirection): void {
+    this.http.post(MAIN_DIRECTION_URL, { direction }).subscribe();
+    // Optimistic echo: reflects the commanded direction immediately so the
+    // toggle stays responsive while the ride is idle and no frames arrive.
+    this.telemetrySignal.update((current) => ({
+      ...current,
+      mill: { ...current.mill, direction },
+    }));
+  }
+
+  private setHubDirection(direction: MotorDirection): void {
+    this.http.post(HUB_DIRECTION_URL, { direction }).subscribe();
+    this.telemetrySignal.update((current) => ({
+      ...current,
+      hubs: current.hubs.map((hub) => ({ ...hub, direction })),
+    }));
+  }
+
   private setGondolaBrake(engaged: boolean): void {
     // There is no global brake endpoint: the backend engages/releases one
     // gondola at a time, so every one of the 4 hubs x 4 gondolas is posted
@@ -188,14 +199,18 @@ export class SseRideTelemetrySource implements RideTelemetrySource {
     this.telemetrySignal.update((current) => ({ ...current, gondolaBrakeEngaged: engaged }));
   }
 
-  private brakeEngines(): void {
-    this.http.post(ENGINE_BRAKE_URL, {}).subscribe();
-    // Optimistic echo: mill and hub power drop to 0 immediately so the
-    // controls reflect the coast-down before the next real frame confirms it.
+  private brakeEngines(engaged: boolean): void {
+    this.http.post(ENGINE_BRAKE_URL, { engaged }).subscribe();
+    // Optimistic echo: reflects the commanded brake state immediately so the
+    // toggle and sliders don't wait for the next real frame to confirm it.
+    // Mill and hub power are only zeroed while engaging — releasing the
+    // brake leaves the commanded power at zero without restoring it (the
+    // operator must command power again), matching the backend contract.
     this.telemetrySignal.update((current) => ({
       ...current,
-      mill: { ...current.mill, power: 0 },
-      hubs: current.hubs.map((hub) => ({ ...hub, power: 0 })),
+      brakesEngaged: engaged,
+      mill: engaged ? { ...current.mill, power: 0 } : current.mill,
+      hubs: engaged ? current.hubs.map((hub) => ({ ...hub, power: 0 })) : current.hubs,
     }));
   }
 
