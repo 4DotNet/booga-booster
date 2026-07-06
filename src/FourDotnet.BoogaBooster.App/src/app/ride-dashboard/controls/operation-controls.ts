@@ -120,9 +120,10 @@ import { RideStateService } from '../state/ride-state.service';
             type="button"
             class="apply-brakes"
             [disabled]="!isStarted()"
-            (click)="applyBrakes()"
+            [attr.aria-pressed]="brakesEngaged()"
+            (click)="toggleEngineBrakes()"
           >
-            Apply brakes
+            {{ engineBrakeLabel() }}
           </button>
         </div>
       </div>
@@ -217,6 +218,10 @@ import { RideStateService } from '../state/ride-state.service';
       outline: 2px solid var(--bb-focus);
       outline-offset: 2px;
     }
+    .apply-brakes[aria-pressed='true'] {
+      background: var(--bb-alert);
+      color: var(--bb-accent-contrast);
+    }
     .toggle:disabled,
     .apply-brakes:disabled,
     input[type='range']:disabled {
@@ -244,6 +249,7 @@ export class OperationControls {
   protected readonly millDirection = computed(() => this.rideState.mill().direction);
   protected readonly hubDirection = this.rideState.hubDirection;
   protected readonly gondolaBrakeEngaged = this.rideState.gondolaBrakeEngaged;
+  protected readonly brakesEngaged = this.rideState.brakesEngaged;
 
   protected readonly form = this.fb.nonNullable.group({
     millPower: this.rideState.mill().power,
@@ -277,9 +283,11 @@ export class OperationControls {
     // `enable()`/`disable()` (rather than a `[disabled]` binding on the
     // `formControlName` inputs) is what actually reaches the native element
     // and avoids Angular's "disabled attribute with a reactive form
-    // directive" warning.
+    // directive" warning. The sliders stay disabled while the engine brake
+    // is engaged, even though the "Apply brakes" toggle itself stays enabled
+    // so the operator can release it again.
     effect(() => {
-      if (this.isStarted()) {
+      if (this.isStarted() && !this.brakesEngaged()) {
         this.form.enable({ emitEvent: false });
       } else {
         this.form.disable({ emitEvent: false });
@@ -315,8 +323,13 @@ export class OperationControls {
     this.rideState.setGondolaBrake(!this.gondolaBrakeEngaged());
   }
 
-  /** Cut mill and hub power so the ride coasts down. */
-  protected applyBrakes(): void {
-    this.rideState.brakeEngines();
+  /** Visible label mirroring the engine brake's reported pressed state. */
+  protected engineBrakeLabel(): string {
+    return this.brakesEngaged() ? 'Release brakes' : 'Apply brakes';
+  }
+
+  /** Toggle the engine brake to the opposite of its currently reported state. */
+  protected toggleEngineBrakes(): void {
+    this.rideState.setEngineBrakes(!this.brakesEngaged());
   }
 }
