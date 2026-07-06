@@ -18,7 +18,9 @@ namespace FourDotnet.BoogaBooster.Queue.Tests;
 /// </summary>
 public sealed class RideQueueFillerServiceTests
 {
-    private static (RideQueueFillerService filler, IRideQueueStore store, Mock<IIntegrationEventPublisher> publisher) Create(QueueModuleOptions options)
+    private static (RideQueueFillerService filler, IRideQueueStore store, Mock<IIntegrationEventPublisher> publisher) Create(
+        QueueModuleOptions options,
+        IWeatherInfluence? weatherInfluence = null)
     {
         var opts = Options.Create(options);
         var time = new FakeTimeProvider();
@@ -28,12 +30,23 @@ public sealed class RideQueueFillerServiceTests
             .Setup(p => p.PublishAsync(It.IsAny<GroupQueuedIntegrationEvent>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
+        // Default to the real state at its neutral pre-event value so weather-blind
+        // tests fill at the base rate.
+        weatherInfluence ??= new WeatherInfluence(opts);
+
         var queueService = new RideQueueService(
             store, QueueTestData.Generator(), publisher.Object, time, NullLogger<RideQueueService>.Instance);
         var filler = new RideQueueFillerService(
-            queueService, store, opts, time, NullLogger<RideQueueFillerService>.Instance);
+            queueService, store, weatherInfluence, opts, time, NullLogger<RideQueueFillerService>.Instance);
 
         return (filler, store, publisher);
+    }
+
+    private static IWeatherInfluence WeatherAt(double niceWeather)
+    {
+        var influence = new Mock<IWeatherInfluence>();
+        influence.SetupGet(i => i.Current).Returns(niceWeather);
+        return influence.Object;
     }
 
     private static QueueModuleOptions OptionsFor(Guid rideId, int min, int max, int maxQueue, int? seed = 123) => new()
@@ -139,5 +152,105 @@ public sealed class RideQueueFillerServiceTests
         var (filler, _, _) = Create(OptionsFor(Guid.NewGuid(), min: 4, max: 8, maxQueue: 500, seed: null));
 
         Assert.NotNull(filler);
+    }
+
+    [Fact]
+    public async Task FillCycle_BeforeAnyWeatherEvent_ScalesByNeutralDefault()
+    {
+        var rideId = Guid.NewGuid();
+        // No weather override: the real WeatherInfluence sits at its neutral default
+        // (1.0), and the default ceiling of 1.0 keeps the fill at the base rate.
+        var (filler, store, _) = Create(OptionsFor(rideId, min: 6, max: 6, maxQueue: 500));
+
+        await filler.RunFillCycleAsync(CancellationToken.None);
+
+        // Scaled by the neutral default, not zeroed or left undefined.
+        Assert.Equal(6, store.Find(rideId)!.PeopleWaiting);
+    }
+
+    [Fact]
+    public async Task FillCycle_NiceWeather_EnqueuesMoreThanBadWeather()
+    {
+        // Same fixed base headcount (min == max) and seed for both runs, so only the
+        // weather differs.
+        var niceRide = Guid.NewGuid();
+        var (niceFiller, niceStore, _) = Create(
+            OptionsFor(niceRide, min: 20, max: 20, maxQueue: 500), WeatherAt(0.9));
+
+        var badRide = Guid.NewGuid();
+        var (badFiller, badStore, _) = Create(
+            OptionsFor(badRide, min: 20, max: 20, maxQueue: 500), WeatherAt(0.2));
+
+        await niceFiller.RunFillCycleAsync(CancellationToken.None);
+        await badFiller.RunFillCycleAsync(CancellationToken.None);
+
+        Assert.True(
+            niceStore.Find(niceRide)!.PeopleWaiting > badStore.Find(badRide)!.PeopleWaiting,
+            "Nice weather should draw a larger crowd than bad weather.");
+    }
+
+    [Fact]
+    public async Task FillCycle_WorstWeather_EnqueuesNothing()
+    {
+        var rideId = Guid.NewGuid();
+        var (filler, store, publisher) = Create(
+            OptionsFor(rideId, min: 20, max: 20, maxQueue: 500), WeatherAt(0.0));
+
+        await filler.RunFillCycleAsync(CancellationToken.None);
+
+        // Scaled headcount floors to zero: the ride's queue is never even created.
+        Assert.Null(store.Find(rideId));
+        publisher.Verify(
+            p => p.PublishAsync(It.IsAny<GroupQueuedIntegrationEvent>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task FillCycle_ArrivalsRise_AsWeatherImproves()
+    {
+        // A fixed base of 20 and ceiling/exponent of 1.0 gives floor(20 * nice):
+        // 0.25 -> 5, 0.5 -> 10, 0.9 -> 18 — strictly increasing.
+        var counts = new List<int>();
+        foreach (var nice in new[] { 0.25, 0.5, 0.9 })
+        {
+            var rideId = Guid.NewGuid();
+            var (filler, store, _) = Create(
+                OptionsFor(rideId, min: 20, max: 20, maxQueue: 500), WeatherAt(nice));
+
+            await filler.RunFillCycleAsync(CancellationToken.None);
+            counts.Add(store.Find(rideId)!.PeopleWaiting);
+        }
+
+        Assert.True(counts[0] < counts[1] && counts[1] < counts[2], "Arrivals should rise as the weather improves.");
+    }
+
+    [Fact]
+    public async Task FillCycle_ScaledFill_StillFormsValidGroupsWithinBounds()
+    {
+        var rideId = Guid.NewGuid();
+        var (filler, store, _) = Create(
+            OptionsFor(rideId, min: 20, max: 20, maxQueue: 500), WeatherAt(0.9));
+
+        await filler.RunFillCycleAsync(CancellationToken.None);
+
+        var queue = store.Find(rideId)!;
+        var groups = queue.SnapshotGroups();
+        Assert.NotEmpty(groups);
+        Assert.All(groups, g => Assert.InRange(g.Size, 1, 5));
+        // floor(20 * 0.9) = 18 people, all partitioned into valid groups.
+        Assert.Equal(18, queue.PeopleWaiting);
+    }
+
+    [Fact]
+    public async Task FillCycle_ScaledFill_StillStopsAtMaxQueueLength()
+    {
+        var rideId = Guid.NewGuid();
+        // Nice weather would draw 20, but the queue caps at 5.
+        var (filler, store, _) = Create(
+            OptionsFor(rideId, min: 20, max: 20, maxQueue: 5), WeatherAt(1.0));
+
+        await filler.RunFillCycleAsync(CancellationToken.None);
+
+        Assert.True(store.Find(rideId)!.PeopleWaiting <= 5);
     }
 }

@@ -35,4 +35,29 @@ public sealed class QueueModuleOptions
     /// behaviour (tests); leave null to use a time-varying source in production.
     /// </summary>
     public int? RandomSeed { get; set; }
+
+    /// <summary>
+    /// The <c>NiceWeather</c> indicator (in <c>[0, 1]</c>) assumed before any
+    /// weather-update event has been received. Defaults to <c>1.0</c> so that,
+    /// together with the default <see cref="WeatherMultiplierCeiling"/> of
+    /// <c>1.0</c>, the pre-event fill rate matches the unscaled base rate — the
+    /// weather neither suppresses nor inflates arrivals until real weather arrives.
+    /// </summary>
+    public double NeutralWeatherDefault { get; set; } = 1.0;
+
+    /// <summary>
+    /// Exponent controlling how sharply low <c>NiceWeather</c> suppresses arrivals.
+    /// The multiplier is <c>Ceiling * NiceWeather^Exponent</c>, so values above
+    /// <c>1.0</c> bend the response down harder as the weather worsens while still
+    /// reaching the ceiling at <c>NiceWeather = 1</c>. Must be positive; defaults
+    /// to <c>1.0</c> (a linear response).
+    /// </summary>
+    public double WeatherSuppressionExponent { get; set; } = 1.0;
+
+    /// <summary>
+    /// The multiplier applied to the base arrival count at <c>NiceWeather = 1</c>.
+    /// Defaults to <c>1.0</c> (cap the fill at the base rate). Raise above
+    /// <c>1.0</c> to let very nice weather burst arrivals above the base rate.
+    /// </summary>
+    public double WeatherMultiplierCeiling { get; set; } = 1.0;
 }

@@ -17,6 +17,7 @@ internal sealed class RideQueueFillerService : BackgroundService
 {
     private readonly IRideQueueService _queueService;
     private readonly IRideQueueStore _store;
+    private readonly IWeatherInfluence _weatherInfluence;
     private readonly QueueModuleOptions _options;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<RideQueueFillerService> _logger;
@@ -25,12 +26,14 @@ internal sealed class RideQueueFillerService : BackgroundService
     public RideQueueFillerService(
         IRideQueueService queueService,
         IRideQueueStore store,
+        IWeatherInfluence weatherInfluence,
         IOptions<QueueModuleOptions> options,
         TimeProvider timeProvider,
         ILogger<RideQueueFillerService> logger)
     {
         _queueService = queueService;
         _store = store;
+        _weatherInfluence = weatherInfluence;
         _options = options.Value;
         _timeProvider = timeProvider;
         _logger = logger;
@@ -73,10 +76,18 @@ internal sealed class RideQueueFillerService : BackgroundService
 
     private async Task FillRideAsync(Guid rideId, CancellationToken cancellationToken)
     {
-        var totalPeople = ArrivalPlanner.PlanArrivalCount(
+        var baseCount = ArrivalPlanner.PlanArrivalCount(
             _options.MinArrivalsPerCycle,
             _options.MaxArrivalsPerCycle,
             _rng);
+
+        // Track the crowd to the weather: scale the planned headcount by the latest
+        // NiceWeather indicator before partitioning into groups. In the worst
+        // weather this floors to zero and nobody arrives this cycle.
+        var totalPeople = ArrivalPlanner.ScaleForWeather(
+            baseCount,
+            _weatherInfluence.Current,
+            _options);
 
         if (totalPeople == 0)
         {

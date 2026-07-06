@@ -27,6 +27,39 @@ public static class ArrivalPlanner
     }
 
     /// <summary>
+    /// Scales a base headcount by the weather multiplier derived from
+    /// <paramref name="niceWeather"/>: <c>Ceiling * NiceWeather^Exponent</c>,
+    /// floored to a non-negative integer. The mapping is monotonic in
+    /// <paramref name="niceWeather"/>, reaches the ceiling at <c>1</c>, and floors
+    /// to exactly <c>0</c> at <c>0</c> so the worst weather stops arrivals
+    /// entirely. Only the total headcount is scaled; group partitioning and the
+    /// queue cap are unaffected.
+    /// </summary>
+    public static int ScaleForWeather(int baseCount, double niceWeather, QueueModuleOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        if (baseCount <= 0)
+        {
+            return 0;
+        }
+
+        var nice = Math.Clamp(niceWeather, 0.0, 1.0);
+
+        // Worst weather stops arrivals outright, independent of the exponent.
+        if (nice <= 0.0)
+        {
+            return 0;
+        }
+
+        var multiplier = options.WeatherMultiplierCeiling
+            * Math.Pow(nice, options.WeatherSuppressionExponent);
+
+        var scaled = (int)Math.Floor(baseCount * multiplier);
+        return scaled < 0 ? 0 : scaled;
+    }
+
+    /// <summary>
     /// Splits <paramref name="totalPeople"/> into a sequence of group sizes, each
     /// within <c>[minGroupSize, maxGroupSize]</c> and together summing exactly to
     /// the total. Returns an empty list when the total is zero.

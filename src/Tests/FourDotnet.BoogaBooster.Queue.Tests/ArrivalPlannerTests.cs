@@ -86,4 +86,74 @@ public class ArrivalPlannerTests
 
         Assert.Equal(seqA, seqB);
     }
+
+    [Fact]
+    public void ScaleForWeather_WorstWeather_FloorsToZero()
+    {
+        var options = new QueueModuleOptions();
+
+        Assert.Equal(0, ArrivalPlanner.ScaleForWeather(baseCount: 8, niceWeather: 0.0, options));
+    }
+
+    [Fact]
+    public void ScaleForWeather_NeutralDefaults_PreserveTheBaseRate()
+    {
+        // Ceiling 1.0 and exponent 1.0 at NiceWeather 1.0 leave the count unchanged.
+        var options = new QueueModuleOptions();
+
+        Assert.Equal(8, ArrivalPlanner.ScaleForWeather(baseCount: 8, niceWeather: 1.0, options));
+    }
+
+    [Fact]
+    public void ScaleForWeather_IsMonotonic_InNiceWeather()
+    {
+        var options = new QueueModuleOptions();
+        var previous = -1;
+
+        foreach (var nice in new[] { 0.0, 0.1, 0.3, 0.5, 0.7, 0.9, 1.0 })
+        {
+            var scaled = ArrivalPlanner.ScaleForWeather(baseCount: 30, nice, options);
+            Assert.True(scaled >= previous, $"Scaled count should not decrease as weather improves (nice={nice}).");
+            previous = scaled;
+        }
+    }
+
+    [Fact]
+    public void ScaleForWeather_ClampsOutOfRangeNiceWeather()
+    {
+        var options = new QueueModuleOptions();
+
+        Assert.Equal(0, ArrivalPlanner.ScaleForWeather(baseCount: 8, niceWeather: -2.0, options));
+        Assert.Equal(8, ArrivalPlanner.ScaleForWeather(baseCount: 8, niceWeather: 2.0, options));
+    }
+
+    [Fact]
+    public void ScaleForWeather_Ceiling_CanBurstAboveTheBaseRate()
+    {
+        var options = new QueueModuleOptions { WeatherMultiplierCeiling = 1.5 };
+
+        // floor(10 * 1.5 * 1^1) = 15.
+        Assert.Equal(15, ArrivalPlanner.ScaleForWeather(baseCount: 10, niceWeather: 1.0, options));
+    }
+
+    [Fact]
+    public void ScaleForWeather_HigherExponent_SuppressesLowWeatherHarder()
+    {
+        var linear = new QueueModuleOptions { WeatherSuppressionExponent = 1.0 };
+        var steep = new QueueModuleOptions { WeatherSuppressionExponent = 2.0 };
+
+        var linearCount = ArrivalPlanner.ScaleForWeather(baseCount: 40, niceWeather: 0.5, linear);
+        var steepCount = ArrivalPlanner.ScaleForWeather(baseCount: 40, niceWeather: 0.5, steep);
+
+        // floor(40 * 0.5) = 20 vs floor(40 * 0.25) = 10.
+        Assert.True(steepCount < linearCount, "A larger exponent should suppress mid-range weather harder.");
+    }
+
+    [Fact]
+    public void ScaleForWeather_ZeroBaseCount_IsZero()
+    {
+        var options = new QueueModuleOptions();
+
+        Assert.Equal(0, ArrivalPlanner.ScaleForWeather(baseCount: 0, niceWeather: 1.0, options));
+    }
 }

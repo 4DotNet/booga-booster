@@ -20,6 +20,9 @@ public static class QueueEndpoints
         group.MapGet("/", Ok<QueueStatusDto> (Guid rideId, IRideQueueService queueService) =>
             TypedResults.Ok(queueService.GetStatus(rideId)));
 
+        // Subscribe to weather updates so the filler can track the crowd to the weather.
+        endpoints.MapWeatherSubscription();
+
         return endpoints;
     }
 }

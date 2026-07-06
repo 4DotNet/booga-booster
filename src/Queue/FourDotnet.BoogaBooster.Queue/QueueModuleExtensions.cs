@@ -32,6 +32,9 @@ public static class QueueModuleExtensions
         builder.Services.AddSingleton<IRideQueueStore, InMemoryRideQueueStore>();
         builder.Services.AddSingleton<IPersonGenerator, PersonGenerator>();
         builder.Services.AddSingleton<IRideQueueService, RideQueueService>();
+        // Shared, thread-safe weather state: the weather subscriber writes it, the
+        // filler reads it each cycle to scale arrivals to the weather.
+        builder.Services.AddSingleton<IWeatherInfluence, WeatherInfluence>();
         builder.Services.AddHostedService<RideQueueFillerService>();
 
         return builder;
