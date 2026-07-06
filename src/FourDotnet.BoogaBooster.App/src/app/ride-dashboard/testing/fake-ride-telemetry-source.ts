@@ -63,8 +63,9 @@ export class FakeRideTelemetrySource implements RideTelemetrySource {
       case 'brake-engines':
         this.telemetrySignal.set({
           ...current,
-          mill: { ...current.mill, power: 0 },
-          hubs: current.hubs.map((hub) => ({ ...hub, power: 0 })),
+          brakesEngaged: command.engaged,
+          mill: command.engaged ? { ...current.mill, power: 0 } : current.mill,
+          hubs: command.engaged ? current.hubs.map((hub) => ({ ...hub, power: 0 })) : current.hubs,
         });
         break;
     }
@@ -90,6 +91,7 @@ export function createTelemetry(overrides: Partial<RideTelemetry> = {}): RideTel
     })),
     gondolas: createGondolas(),
     gondolaBrakeEngaged: false,
+    brakesEngaged: false,
     ...overrides,
   };
 }
