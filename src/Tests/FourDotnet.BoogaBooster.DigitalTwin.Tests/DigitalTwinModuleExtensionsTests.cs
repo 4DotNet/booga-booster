@@ -6,7 +6,9 @@ using FourDotnet.BoogaBooster.DigitalTwin.Features.BrakeEngines;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.GetRideTelemetry;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.RequestRideStateTransition;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.SetGondolaBrake;
+using FourDotnet.BoogaBooster.DigitalTwin.Features.SetHubEngineDirection;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.SetHubEnginePower;
+using FourDotnet.BoogaBooster.DigitalTwin.Features.SetMainEngineDirection;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.SetMainEnginePower;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.StartRide;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.StopRide;
@@ -63,6 +65,8 @@ public sealed class DigitalTwinModuleExtensionsTests
         Assert.NotNull(sp.GetRequiredService<IQueryHandler<GetRideTelemetryQuery, RideTelemetry>>());
         Assert.NotNull(sp.GetRequiredService<ICommandHandler<SetMainEnginePowerCommand>>());
         Assert.NotNull(sp.GetRequiredService<ICommandHandler<SetHubEnginePowerCommand>>());
+        Assert.NotNull(sp.GetRequiredService<ICommandHandler<SetMainEngineDirectionCommand>>());
+        Assert.NotNull(sp.GetRequiredService<ICommandHandler<SetHubEngineDirectionCommand>>());
         Assert.NotNull(sp.GetRequiredService<ICommandHandler<BoardPassengerCommand>>());
         Assert.NotNull(sp.GetRequiredService<ICommandHandler<SetGondolaBrakeCommand>>());
         Assert.NotNull(sp.GetRequiredService<ICommandHandler<BrakeEnginesCommand>>());
