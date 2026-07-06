@@ -5,7 +5,12 @@ namespace FourDotnet.BoogaBooster.DigitalTwin.Abstractions;
 /// used to detect uneven loading across its four arms.
 /// </summary>
 /// <param name="PowerWatts">Electrical power the mill motor is consuming.</param>
-/// <param name="Rpm">Current rotation speed in revolutions per minute.</param>
+/// <param name="Rpm">
+/// Current rotation speed in revolutions per minute. Signed: positive while the
+/// mill physically turns forward, negative while it turns in reverse (including
+/// the transient while a reversing mill is still coasting the old way).
+/// </param>
+/// <param name="Direction">The commanded rotation direction (Forward or Reverse).</param>
 /// <param name="LoadKg">Total measured rotating load carried by the mill.</param>
 /// <param name="PassengerLoadKg">Combined weight of every seated passenger across the ride.</param>
 /// <param name="ImbalanceMillimeters">
@@ -23,6 +28,7 @@ namespace FourDotnet.BoogaBooster.DigitalTwin.Abstractions;
 public sealed record MillTelemetry(
     double PowerWatts,
     double Rpm,
+    MotorDirection Direction,
     double LoadKg,
     double PassengerLoadKg,
     double ImbalanceMillimeters,
