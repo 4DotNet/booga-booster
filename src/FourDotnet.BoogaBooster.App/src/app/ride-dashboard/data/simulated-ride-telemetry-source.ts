@@ -104,6 +104,10 @@ export class SimulatedRideTelemetrySource implements RideTelemetrySource {
         // `RideLifecycleService`); the simulator only tracks physics state,
         // so this is a no-op here.
         break;
+      case 'brake-engines':
+        this.commands.millPower = 0;
+        this.commands.hubPower = 0;
+        break;
     }
     // Echo the command immediately so controls and status reflect it at once.
     this.telemetrySignal.set(this.buildTelemetry());
@@ -192,6 +196,9 @@ export class SimulatedRideTelemetrySource implements RideTelemetrySource {
         id: g + 1,
         seats,
         gForce: { vertical: round(vertical, 1), lateral: round(lateral, 1) },
+        // Even angular spacing around the hub; not animated by the
+        // simulator, which only drives the 3D rig from motor speed.
+        angleDegrees: round((g % GONDOLAS_PER_HUB) * (360 / GONDOLAS_PER_HUB), 1),
       });
     }
     return gondolas;

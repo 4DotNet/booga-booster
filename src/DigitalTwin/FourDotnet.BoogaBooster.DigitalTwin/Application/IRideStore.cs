@@ -39,6 +39,9 @@ public interface IRideStore
     /// <summary>Engages or releases a specific gondola's yaw brake.</summary>
     RideTelemetry SetGondolaBrake(int hubIndex, int gondolaIndex, GondolaBrakeState brake);
 
+    /// <summary>Applies the brakes to the drive engines (cuts mill and hub power).</summary>
+    RideTelemetry BrakeEngines();
+
     /// <summary>
     /// Requests an operator-triggered lifecycle transition to <paramref name="target"/>.
     /// The domain state machine rejects an illegal or guard-failing transition.

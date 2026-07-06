@@ -26,25 +26,25 @@
 
 ## 5. Frontend: SSE telemetry source
 
-- [ ] 5.1 Add a backend→frontend mapping helper: `RideTelemetryDto` → the frontend `RideTelemetry` model (map `Mill`, `Hubs[].PowerWatts/Rpm`, `Gondolas[].Brake/AngleDegrees/Rpm/ForwardG/LateralG/LoadKg/Seats[]`; map watts→0–100 percent; derive/default direction; centralize any lossy mapping with comments).
-- [ ] 5.2 Extend the frontend `ride.models.ts` minimally where the visualization needs a field the model lacks (e.g. gondola `angleDegrees`).
-- [ ] 5.3 Create `ride-dashboard/data/sse-ride-telemetry-source.ts` implementing `RideTelemetrySource`: seed the `telemetry` signal with a defined at-rest snapshot; open `new EventSource('/api/ride/telemetry/stream')`; on `message`, parse + map + `set` the signal; close on `DestroyRef`. Rely on `EventSource` auto-reconnect.
-- [ ] 5.4 Implement `applyCommand` by POSTing to the existing HTTP command endpoints (`/api/ride/main-power`, `/hub-power`, brake, direction) via `HttpClient`; do not mutate local state directly (the effect returns on the next frame).
+- [x] 5.1 Add a backend→frontend mapping helper: `RideTelemetryDto` → the frontend `RideTelemetry` model (map `Mill`, `Hubs[].PowerWatts/Rpm`, `Gondolas[].Brake/AngleDegrees/Rpm/ForwardG/LateralG/LoadKg/Seats[]`; map watts→0–100 percent; derive/default direction; centralize any lossy mapping with comments).
+- [x] 5.2 Extend the frontend `ride.models.ts` minimally where the visualization needs a field the model lacks (e.g. gondola `angleDegrees`).
+- [x] 5.3 Create `ride-dashboard/data/sse-ride-telemetry-source.ts` implementing `RideTelemetrySource`: seed the `telemetry` signal with a defined at-rest snapshot; open `new EventSource('/api/ride/telemetry/stream')`; on `message`, parse + map + `set` the signal; close on `DestroyRef`. Rely on `EventSource` auto-reconnect.
+- [x] 5.4 Implement `applyCommand` by POSTing to the existing HTTP command endpoints (`/api/ride/main-power`, `/hub-power`, brake, direction) via `HttpClient`; do not mutate local state directly (the effect returns on the next frame).
 
 ## 6. Frontend: wire up and proxy
 
-- [ ] 6.1 Swap the provider in `app.config.ts`: `RIDE_TELEMETRY_SOURCE` → `SseRideTelemetrySource`; keep `SimulatedRideTelemetrySource`/`fake-ride-telemetry-source` for tests/offline.
-- [ ] 6.2 Verify/adjust the dev-server proxy so `/api/**` `text/event-stream` responses are forwarded unbuffered and uncompressed.
-- [ ] 6.3 Confirm `RideStateService` and all panels work unchanged against the swapped source (they only read `source.telemetry`).
+- [x] 6.1 Swap the provider in `app.config.ts`: `RIDE_TELEMETRY_SOURCE` → `SseRideTelemetrySource`; keep `SimulatedRideTelemetrySource`/`fake-ride-telemetry-source` for tests/offline.
+- [x] 6.2 Verify/adjust the dev-server proxy so `/api/**` `text/event-stream` responses are forwarded unbuffered and uncompressed.
+- [x] 6.3 Confirm `RideStateService` and all panels work unchanged against the swapped source (they only read `source.telemetry`).
 
 ## 7. Frontend tests
 
-- [ ] 7.1 Unit-test the mapping helper: a representative backend DTO maps to the expected frontend model (power percent, gondola/seat fields, angle).
-- [ ] 7.2 Spec the SSE source with a fake `EventSource`: an incoming frame updates the `telemetry` signal; the at-rest seed is exposed before any frame; `applyCommand` issues the expected POST.
-- [ ] 7.3 `npm test` (vitest) green; dashboard a11y specs still pass.
+- [x] 7.1 Unit-test the mapping helper: a representative backend DTO maps to the expected frontend model (power percent, gondola/seat fields, angle).
+- [x] 7.2 Spec the SSE source with a fake `EventSource`: an incoming frame updates the `telemetry` signal; the at-rest seed is exposed before any frame; `applyCommand` issues the expected POST.
+- [x] 7.3 `npm test` (vitest) green; dashboard a11y specs still pass.
 
 ## 8. Verify end-to-end
 
-- [ ] 8.1 Run the backend via Aspire and the Angular app; confirm the dashboard opens the SSE connection on load even while the ride is idle (no frames), then streams live frames once the ride is running, driving every panel.
-- [ ] 8.2 Change engine power / toggle a brake and confirm the command POSTs and the effect appears on subsequent streamed frames.
-- [ ] 8.3 Stop the ride and confirm frames cease while the connection stays open; drop the connection and confirm automatic reconnect resumes streaming on the next run.
+- [x] 8.1 Run the backend via Aspire and the Angular app; confirm the dashboard opens the SSE connection on load even while the ride is idle (no frames), then streams live frames once the ride is running, driving every panel.
+- [x] 8.2 Change engine power / toggle a brake and confirm the command POSTs and the effect appears on subsequent streamed frames.
+- [x] 8.3 Stop the ride and confirm frames cease while the connection stays open; drop the connection and confirm automatic reconnect resumes streaming on the next run.

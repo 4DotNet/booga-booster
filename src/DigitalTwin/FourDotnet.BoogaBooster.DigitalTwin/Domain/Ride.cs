@@ -164,6 +164,19 @@ public sealed class Ride : DomainModel
         MarkChanged();
     }
 
+    /// <summary>
+    /// Applies the brakes to the drive engines: cuts power to the mill and every hub
+    /// so the ride coasts down under its own friction. In this model braking is the
+    /// removal of drive power (there is no separate brake-torque actuator); the
+    /// lifecycle state is left unchanged, so an operator can ease the ride off while
+    /// it stays <see cref="RideState.Started"/>.
+    /// </summary>
+    public void BrakeEngines()
+    {
+        _mill.CutAllPower();
+        MarkChanged();
+    }
+
     /// <summary>Engages or releases a specific gondola's yaw brake.</summary>
     public void SetGondolaBrake(int hubIndex, int gondolaIndex, GondolaBrakeState brake)
     {

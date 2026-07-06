@@ -60,6 +60,13 @@ export class FakeRideTelemetrySource implements RideTelemetrySource {
       case 'request-state-transition':
         this.telemetrySignal.set({ ...current, state: command.state });
         break;
+      case 'brake-engines':
+        this.telemetrySignal.set({
+          ...current,
+          mill: { ...current.mill, power: 0 },
+          hubs: current.hubs.map((hub) => ({ ...hub, power: 0 })),
+        });
+        break;
     }
   }
 
@@ -101,6 +108,6 @@ export function createGondolas(occupiedGondolas = 0, unsecuredSeat = false): Gon
       }
       return { id: s + 1, state, occupiedKg: occupied ? FIXTURE_SEAT_KG : 0 };
     });
-    return { id: g + 1, seats, gForce: { vertical: 0, lateral: 0 } };
+    return { id: g + 1, seats, gForce: { vertical: 0, lateral: 0 }, angleDegrees: 0 };
   });
 }

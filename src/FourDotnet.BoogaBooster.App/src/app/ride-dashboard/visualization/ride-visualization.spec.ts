@@ -34,6 +34,12 @@ describe('RideVisualization', () => {
     expect(Math.abs(angularVelocity(0, 'reverse'))).toBe(0);
   });
 
+  it('coerces a non-finite rpm to 0 instead of corrupting the rotation', () => {
+    expect(angularVelocity(NaN, 'forward')).toBe(0);
+    expect(angularVelocity(Infinity, 'forward')).toBe(0);
+    expect(Math.abs(angularVelocity(-Infinity, 'reverse'))).toBe(0);
+  });
+
   it('locks the pods when braked and frees them when released', () => {
     expect(podMotionFor(true)).toEqual({ freedom: 0, swing: 0 });
     expect(podMotionFor(false)).toEqual({ freedom: 1, swing: 1 });

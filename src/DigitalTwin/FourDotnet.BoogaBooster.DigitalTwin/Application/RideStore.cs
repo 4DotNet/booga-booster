@@ -86,6 +86,15 @@ public sealed class RideStore : IRideStore, IRideTelemetryProvider
         }
     }
 
+    public RideTelemetry BrakeEngines()
+    {
+        lock (_gate)
+        {
+            _ride.BrakeEngines();
+            return _ride.ToTelemetry();
+        }
+    }
+
     public RideTelemetry RequestStateTransition(RideState target)
     {
         lock (_gate)

@@ -3,6 +3,7 @@ using FourDotnet.BoogaBooster.Core.Cqrs;
 using FourDotnet.BoogaBooster.DigitalTwin.Abstractions;
 using FourDotnet.BoogaBooster.DigitalTwin.Application;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.BoardPassenger;
+using FourDotnet.BoogaBooster.DigitalTwin.Features.BrakeEngines;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.GetRideTelemetry;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.RequestRideStateTransition;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.SetGondolaBrake;
@@ -106,6 +107,12 @@ public static class DigitalTwinEndpoints
                 cancellationToken));
         })
         .WithName("SetGondolaBrake");
+
+        group.MapPost("/engine-brake", (
+            ICommandHandler<BrakeEnginesCommand> handler,
+            CancellationToken cancellationToken) =>
+            DispatchAsync(() => handler.HandleAsync(new BrakeEnginesCommand(), cancellationToken)))
+        .WithName("BrakeEngines");
 
         // The lifecycle state machine is driven through /state. The /start and /stop
         // shortcuts are retained and delegate to the same machine (Started/Stopping).

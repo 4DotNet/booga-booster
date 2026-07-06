@@ -109,4 +109,9 @@ export class RideStateService {
   setGondolaBrake(engaged: boolean): void {
     this.source.applyCommand({ kind: 'set-gondola-brake', engaged });
   }
+
+  /** Cut mill and hub power so the ride coasts down. */
+  brakeEngines(): void {
+    this.source.applyCommand({ kind: 'brake-engines' });
+  }
 }

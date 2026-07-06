@@ -10,20 +10,33 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 
 import { MotorDirection } from '../models/ride.models';
+import { RideLifecycleService } from '../state/ride-lifecycle.service';
 import { RideStateService } from '../state/ride-state.service';
 
 /**
  * Left-rail operator controls. Power sliders and direction toggles drive the
  * central mill and hub motors through the ride-state service and stay in sync
  * with the service's current values.
+ *
+ * Every interactive control here only takes effect on the server while the
+ * ride is actually running, so all of them — including the "Apply brakes"
+ * action — are disabled unless the lifecycle state is `'started'`.
  */
 @Component({
   selector: 'bb-operation-controls',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [ReactiveFormsModule],
   template: `
-    <section class="controls" aria-labelledby="controls-heading">
+    <section
+      class="controls"
+      aria-labelledby="controls-heading"
+      [attr.aria-describedby]="isStarted() ? null : 'controls-hint'"
+    >
       <h2 id="controls-heading">Operation controls</h2>
+
+      @if (!isStarted()) {
+        <p id="controls-hint" class="hint">Controls become available once the ride is started.</p>
+      }
 
       <form [formGroup]="form">
         <div class="control">
@@ -45,6 +58,7 @@ import { RideStateService } from '../state/ride-state.service';
             <button
               type="button"
               class="toggle"
+              [disabled]="!isStarted()"
               [attr.aria-pressed]="millReverse()"
               aria-labelledby="mill-dir-label"
               (click)="toggleMillDirection()"
@@ -73,6 +87,7 @@ import { RideStateService } from '../state/ride-state.service';
             <button
               type="button"
               class="toggle"
+              [disabled]="!isStarted()"
               [attr.aria-pressed]="hubReverse()"
               aria-labelledby="hub-dir-label"
               (click)="toggleHubDirection()"
@@ -89,11 +104,25 @@ import { RideStateService } from '../state/ride-state.service';
           <button
             type="button"
             class="toggle brake"
+            [disabled]="!isStarted()"
             [attr.aria-pressed]="gondolaBrakeEngaged()"
             aria-labelledby="brake-label"
             (click)="toggleGondolaBrake()"
           >
             {{ brakeLabel() }}
+          </button>
+        </div>
+      </div>
+
+      <div class="control">
+        <div class="control-row">
+          <button
+            type="button"
+            class="apply-brakes"
+            [disabled]="!isStarted()"
+            (click)="applyBrakes()"
+          >
+            Apply brakes
           </button>
         </div>
       </div>
@@ -173,12 +202,42 @@ import { RideStateService } from '../state/ride-state.service';
     .toggle.brake {
       min-width: 9.5rem;
     }
+    .apply-brakes {
+      flex: 1 1 auto;
+      padding: 0.5rem 0.9rem;
+      border-radius: 0.5rem;
+      border: 1px solid var(--bb-alert);
+      background: transparent;
+      color: var(--bb-alert);
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .apply-brakes:focus-visible {
+      outline: 2px solid var(--bb-focus);
+      outline-offset: 2px;
+    }
+    .toggle:disabled,
+    .apply-brakes:disabled,
+    input[type='range']:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .hint {
+      margin: 0;
+      font-size: 0.85rem;
+      color: var(--bb-muted);
+    }
   `,
 })
 export class OperationControls {
   private readonly rideState = inject(RideStateService);
+  private readonly lifecycle = inject(RideLifecycleService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly fb = inject(FormBuilder);
+
+  /** Operator controls only take effect on the server while the ride runs. */
+  protected readonly isStarted = computed(() => this.lifecycle.state() === 'started');
 
   protected readonly millPower = computed(() => this.rideState.mill().power);
   protected readonly hubPower = this.rideState.hubPower;
@@ -213,6 +272,19 @@ export class OperationControls {
         this.form.controls.hubPower.setValue(power, { emitEvent: false });
       }
     });
+
+    // Reactive forms manage their own `disabled` DOM state: toggling it via
+    // `enable()`/`disable()` (rather than a `[disabled]` binding on the
+    // `formControlName` inputs) is what actually reaches the native element
+    // and avoids Angular's "disabled attribute with a reactive form
+    // directive" warning.
+    effect(() => {
+      if (this.isStarted()) {
+        this.form.enable({ emitEvent: false });
+      } else {
+        this.form.disable({ emitEvent: false });
+      }
+    });
   }
 
   protected millReverse(): boolean {
@@ -241,5 +313,10 @@ export class OperationControls {
 
   protected toggleGondolaBrake(): void {
     this.rideState.setGondolaBrake(!this.gondolaBrakeEngaged());
+  }
+
+  /** Cut mill and hub power so the ride coasts down. */
+  protected applyBrakes(): void {
+    this.rideState.brakeEngines();
   }
 }

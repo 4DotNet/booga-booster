@@ -2,6 +2,7 @@ using FourDotnet.BoogaBooster.Core.Cqrs;
 using FourDotnet.BoogaBooster.DigitalTwin.Abstractions;
 using FourDotnet.BoogaBooster.DigitalTwin.Application;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.BoardPassenger;
+using FourDotnet.BoogaBooster.DigitalTwin.Features.BrakeEngines;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.GetRideTelemetry;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.RequestRideStateTransition;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.SetGondolaBrake;
@@ -51,6 +52,7 @@ public static class DigitalTwinModuleExtensions
         services.AddScoped<ICommandHandler<SetHubEnginePowerCommand>, SetHubEnginePowerCommandHandler>();
         services.AddScoped<ICommandHandler<BoardPassengerCommand>, BoardPassengerCommandHandler>();
         services.AddScoped<ICommandHandler<SetGondolaBrakeCommand>, SetGondolaBrakeCommandHandler>();
+        services.AddScoped<ICommandHandler<BrakeEnginesCommand>, BrakeEnginesCommandHandler>();
         services.AddScoped<ICommandHandler<StartRideCommand>, StartRideCommandHandler>();
         services.AddScoped<ICommandHandler<StopRideCommand>, StopRideCommandHandler>();
         services.AddScoped<ICommandHandler<RequestRideStateTransitionCommand>, RequestRideStateTransitionCommandHandler>();

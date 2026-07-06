@@ -1,11 +1,35 @@
+import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 
 import { RIDE_TELEMETRY_SOURCE } from '../data/ride-telemetry-source';
+import { RideState } from '../models/ride.models';
+import { RideLifecycleService } from '../state/ride-lifecycle.service';
 import { FakeRideTelemetrySource } from '../testing/fake-ride-telemetry-source';
 import { OperationControls } from './operation-controls';
 
+/**
+ * Minimal stand-in for {@link RideLifecycleService} exposing just the
+ * settable `state` signal `OperationControls` reads, so specs can drive the
+ * lifecycle state synchronously without the real service's HTTP polling.
+ */
+class StubRideLifecycleService {
+  private readonly stateSignal = signal<RideState>('started');
+
+  readonly state = this.stateSignal.asReadonly();
+  readonly availableTransitions = signal<readonly RideState[]>([]).asReadonly();
+
+  setState(state: RideState): void {
+    this.stateSignal.set(state);
+  }
+
+  requestTransition(): void {
+    // Unused by OperationControls; present only to shape-match the real service.
+  }
+}
+
 describe('OperationControls', () => {
   let source: FakeRideTelemetrySource;
+  let lifecycle: StubRideLifecycleService;
 
   function render() {
     const fixture = TestBed.createComponent(OperationControls);
@@ -15,8 +39,12 @@ describe('OperationControls', () => {
 
   beforeEach(() => {
     source = new FakeRideTelemetrySource();
+    lifecycle = new StubRideLifecycleService();
     TestBed.configureTestingModule({
-      providers: [{ provide: RIDE_TELEMETRY_SOURCE, useValue: source }],
+      providers: [
+        { provide: RIDE_TELEMETRY_SOURCE, useValue: source },
+        { provide: RideLifecycleService, useValue: lifecycle },
+      ],
     });
   });
 
@@ -80,5 +108,52 @@ describe('OperationControls', () => {
     expect(source.commands).toContainEqual({ kind: 'set-gondola-brake', engaged: true });
     expect(brake.getAttribute('aria-pressed')).toBe('true');
     expect(brake.textContent?.trim()).toBe('Gondolas Break');
+  });
+
+  it('disables every control and shows the hint when the ride is not started', () => {
+    lifecycle.setState('idle');
+    const fixture = render();
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect((host.querySelector('#mill-power') as HTMLInputElement).disabled).toBe(true);
+    expect((host.querySelector('#hub-power') as HTMLInputElement).disabled).toBe(true);
+    expect(
+      (host.querySelector('.toggle[aria-labelledby="mill-dir-label"]') as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    expect(
+      (host.querySelector('.toggle[aria-labelledby="hub-dir-label"]') as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    expect((host.querySelector('.toggle.brake') as HTMLButtonElement).disabled).toBe(true);
+    expect((host.querySelector('.apply-brakes') as HTMLButtonElement).disabled).toBe(true);
+
+    const hint = host.querySelector('#controls-hint');
+    expect(hint).not.toBeNull();
+    expect(hint?.textContent).toContain('Controls become available once the ride is started.');
+    expect(host.querySelector('.controls')?.getAttribute('aria-describedby')).toBe('controls-hint');
+  });
+
+  it('enables every control and hides the hint once the ride is started', () => {
+    lifecycle.setState('started');
+    const fixture = render();
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect((host.querySelector('#mill-power') as HTMLInputElement).disabled).toBe(false);
+    expect((host.querySelector('#hub-power') as HTMLInputElement).disabled).toBe(false);
+    expect((host.querySelector('.toggle.brake') as HTMLButtonElement).disabled).toBe(false);
+    expect((host.querySelector('.apply-brakes') as HTMLButtonElement).disabled).toBe(false);
+    expect(host.querySelector('#controls-hint')).toBeNull();
+  });
+
+  it('applies engine brakes when the "Apply brakes" button is clicked while started', () => {
+    lifecycle.setState('started');
+    const fixture = render();
+    const button = fixture.nativeElement.querySelector('.apply-brakes') as HTMLButtonElement;
+
+    button.click();
+    fixture.detectChanges();
+
+    expect(source.commands).toContainEqual({ kind: 'brake-engines' });
   });
 });

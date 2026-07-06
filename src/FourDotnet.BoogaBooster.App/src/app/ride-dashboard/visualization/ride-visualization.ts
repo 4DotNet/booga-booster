@@ -46,9 +46,24 @@ export function rpmToRadPerSec(rpm: number): number {
   return (rpm / 60) * Math.PI * 2;
 }
 
-/** Signed angular velocity (rad/s) for a motor's sensed speed and direction. */
+/**
+ * Coerces a non-finite number (`NaN`/`±Infinity`) to `0`; otherwise returns it
+ * unchanged. A missing or corrupt telemetry frame must never inject a
+ * non-finite value into the scene graph — that silently blanks the whole
+ * rendered rig, since Three.js matrices built from `NaN` propagate to every
+ * descendant transform.
+ */
+function finiteOrZero(value: number): number {
+  return Number.isFinite(value) ? value : 0;
+}
+
+/**
+ * Signed angular velocity (rad/s) for a motor's sensed speed and direction.
+ * A non-finite `rpm` (e.g. an absent/malformed telemetry frame) is treated as
+ * stopped rather than corrupting the animation loop's accumulated rotation.
+ */
 export function angularVelocity(rpm: number, direction: MotorDirection): number {
-  return rpmToRadPerSec(rpm) * (direction === 'reverse' ? -1 : 1);
+  return rpmToRadPerSec(finiteOrZero(rpm)) * (direction === 'reverse' ? -1 : 1);
 }
 
 interface GondolaNode {
@@ -150,13 +165,16 @@ export class RideVisualization {
     let comboA = 0;
 
     renderer.setAnimationLoop(() => {
-      const dt = Math.min(clock.getDelta(), MAX_STEP_S);
+      const dt = finiteOrZero(Math.min(clock.getDelta(), MAX_STEP_S));
       if (!reducedMotion) {
         const wm = angularVelocity(this.millSpeedRpm(), this.millDirection());
         const wh = angularVelocity(this.hubSpeedRpm(), this.hubDirection());
-        mainA += wm * dt;
-        hubA += wh * dt;
-        comboA += (wm + wh) * dt;
+        // `angularVelocity` already guards `rpm`, but the accumulators are
+        // re-guarded here too so a bad frame can never leave `rotation.y`
+        // non-finite, however it might arise.
+        mainA = finiteOrZero(mainA + wm * dt);
+        hubA = finiteOrZero(hubA + wh * dt);
+        comboA = finiteOrZero(comboA + (wm + wh) * dt);
       }
 
       const pod = podMotionFor(this.gondolaBrakeEngaged());

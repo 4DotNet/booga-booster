@@ -60,6 +60,17 @@ describe('RideStateService', () => {
     expect(service.gondolaBrakeEngaged()).toBe(true);
   });
 
+  it('brakes the engines by dispatching a brake-engines command', () => {
+    service.setMillPower(60);
+    service.setHubPower(60);
+
+    service.brakeEngines();
+
+    expect(source.commands).toContainEqual({ kind: 'brake-engines' });
+    expect(service.mill().power).toBe(0);
+    expect(service.hubPower()).toBe(0);
+  });
+
   it('reflects ride state from the telemetry source', () => {
     expect(service.state()).toBe('idle');
     service.setMillPower(60);

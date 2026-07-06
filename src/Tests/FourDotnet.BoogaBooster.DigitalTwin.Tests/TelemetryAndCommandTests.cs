@@ -5,6 +5,7 @@ using FourDotnet.BoogaBooster.DigitalTwin.Abstractions;
 using FourDotnet.BoogaBooster.DigitalTwin.Application;
 using FourDotnet.BoogaBooster.DigitalTwin.Domain;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.BoardPassenger;
+using FourDotnet.BoogaBooster.DigitalTwin.Features.BrakeEngines;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.GetRideTelemetry;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.RequestRideStateTransition;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.SetGondolaBrake;
@@ -95,6 +96,30 @@ public sealed class TelemetryAndCommandTests
 
         await new StopRideCommandHandler(store).HandleAsync(new StopRideCommand(), token);
         Assert.Equal(RideState.Stopping, store.GetTelemetry().State);
+    }
+
+    [Fact]
+    public void Braking_the_engines_cuts_mill_and_hub_power()
+    {
+        var store = NewStore();
+        store.SetMainEnginePower(new EnginePower(80));
+        store.SetHubEnginePower(new EnginePower(60));
+
+        var telemetry = store.BrakeEngines();
+
+        Assert.Equal(0d, telemetry.Mill.PowerWatts);
+        Assert.All(telemetry.Hubs, h => Assert.Equal(0d, h.PowerWatts));
+    }
+
+    [Fact]
+    public async Task Brake_engines_handler_drives_the_store()
+    {
+        var store = NewStore();
+        store.SetMainEnginePower(new EnginePower(80));
+
+        await new BrakeEnginesCommandHandler(store).HandleAsync(new BrakeEnginesCommand(), CancellationToken.None);
+
+        Assert.Equal(0d, store.GetTelemetry().Mill.PowerWatts);
     }
 
     [Fact]
