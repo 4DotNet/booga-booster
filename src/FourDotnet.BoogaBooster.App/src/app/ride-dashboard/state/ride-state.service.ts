@@ -39,12 +39,19 @@ export class RideStateService {
   /** Every gondola with its seats and g-forces. */
   readonly gondolas: Signal<readonly Gondola[]> = computed(() => this.telemetry().gondolas);
 
-  /** Total number of occupied seats across all gondolas. */
-  readonly occupiedSeats: Signal<number> = computed(() =>
-    this.gondolas().reduce(
-      (total, gondola) => total + gondola.seats.filter((seat) => seat.state !== 'empty').length,
-      0,
-    ),
+  /**
+   * Total number of occupied seats across all gondolas. Prefers the
+   * backend-streamed `boardedPassengerCount`; falls back to counting
+   * non-empty seats when a frame doesn't carry that count (e.g. the at-rest
+   * snapshot or an older frame shape).
+   */
+  readonly occupiedSeats: Signal<number> = computed(
+    () =>
+      this.telemetry().boardedPassengerCount ??
+      this.gondolas().reduce(
+        (total, gondola) => total + gondola.seats.filter((seat) => seat.state !== 'empty').length,
+        0,
+      ),
   );
 
   /** Secured only when every occupied seat is secured. */
@@ -85,6 +92,12 @@ export class RideStateService {
     () => this.telemetry().gondolaBrakeEngaged,
   );
 
+  /**
+   * Whether the engine brake is engaged: drive power is cut and a strong
+   * brake torque is applied, bringing the ride to a fast, complete stop.
+   */
+  readonly brakesEngaged: Signal<boolean> = computed(() => this.telemetry().brakesEngaged);
+
   /** Set the central mill power; value is clamped to 0–100 before dispatch. */
   setMillPower(value: number): void {
     this.source.applyCommand({ kind: 'set-mill-power', value: clampPower(value) });
@@ -110,8 +123,12 @@ export class RideStateService {
     this.source.applyCommand({ kind: 'set-gondola-brake', engaged });
   }
 
-  /** Cut mill and hub power so the ride coasts down. */
-  brakeEngines(): void {
-    this.source.applyCommand({ kind: 'brake-engines' });
+  /**
+   * Engage or release the engine brake. Engaging cuts mill and hub power to
+   * zero and brings the ride to a fast, complete stop; releasing leaves
+   * power at zero until the operator commands power again.
+   */
+  setEngineBrakes(engaged: boolean): void {
+    this.source.applyCommand({ kind: 'brake-engines', engaged });
   }
 }
