@@ -13,6 +13,8 @@ public sealed class GreatMill : DomainModel
 {
     private readonly Hub[] _hubs;
     private EnginePower _power = EnginePower.Off;
+    private MotorDirection _direction = MotorDirection.Forward;
+    private bool _brakesEngaged;
     private double _angle;
     private double _omega;
 
@@ -28,6 +30,12 @@ public sealed class GreatMill : DomainModel
 
     /// <summary>The commanded motor power.</summary>
     public EnginePower Power => _power;
+
+    /// <summary>The commanded rotation direction (independent of power).</summary>
+    public MotorDirection Direction => _direction;
+
+    /// <summary><c>true</c> while the engine brake is engaged on the mill and every hub.</summary>
+    public bool BrakesEngaged => _brakesEngaged;
 
     /// <summary>Current rotation angle (rad).</summary>
     public double Angle => _angle;
@@ -162,6 +170,65 @@ public sealed class GreatMill : DomainModel
         }
     }
 
+    /// <summary>
+    /// How many gondolas across the ride are completely empty — the ride's spare
+    /// boarding capacity. Because a gondola seats two and members of different
+    /// groups are never paired in one gondola, each empty gondola offers two free
+    /// seats to a boarding group and a partly-filled gondola offers none.
+    /// </summary>
+    public int EmptyGondolaCount
+    {
+        get
+        {
+            var count = 0;
+            foreach (var hub in _hubs)
+            {
+                foreach (var gondola in hub.Gondolas)
+                {
+                    if (gondola.IsEmpty)
+                    {
+                        count++;
+                    }
+                }
+            }
+
+            return count;
+        }
+    }
+
+    /// <summary>How many passengers are seated across the whole ride (occupied seats).</summary>
+    public int BoardedPassengerCount
+    {
+        get
+        {
+            var count = 0;
+            foreach (var hub in _hubs)
+            {
+                foreach (var gondola in hub.Gondolas)
+                {
+                    count += gondola.OccupiedSeatCount;
+                }
+            }
+
+            return count;
+        }
+    }
+
+    /// <summary>The empty gondolas across the ride, hub by hub, in a stable order.</summary>
+    public IEnumerable<Gondola> EmptyGondolas()
+    {
+        foreach (var hub in _hubs)
+        {
+            foreach (var gondola in hub.Gondolas)
+            {
+                if (gondola.IsEmpty)
+                {
+                    yield return gondola;
+                }
+            }
+        }
+    }
+
     /// <summary>Returns the hub at <paramref name="index"/>.</summary>
     public Hub GetHub(int index)
     {
@@ -194,12 +261,40 @@ public sealed class GreatMill : DomainModel
         return changed;
     }
 
+    /// <summary>Sets the mill's commanded rotation direction.</summary>
+    public bool SetDirection(MotorDirection direction) => ApplyChange(ref _direction, direction);
+
+    /// <summary>Sets the same commanded direction on all four hub motors.</summary>
+    public bool SetAllHubDirection(MotorDirection direction)
+    {
+        var changed = false;
+        foreach (var hub in _hubs)
+        {
+            changed |= hub.SetDirection(direction);
+        }
+
+        return changed;
+    }
+
     /// <summary>Cuts power to the mill and every hub (the ramp-down source when stopping).</summary>
     public void CutAllPower()
     {
         SetPower(EnginePower.Off);
         SetAllHubPower(EnginePower.Off);
     }
+
+    /// <summary>
+    /// Engages the engine brake on the mill and every hub: cuts all drive power and
+    /// arms the braking torque so a moving ride decelerates hard to a complete stop.
+    /// </summary>
+    public void EngageBrakes()
+    {
+        CutAllPower();
+        _brakesEngaged = true;
+    }
+
+    /// <summary>Releases the engine brake; the ride can be driven again (power stays at zero until commanded).</summary>
+    public void ReleaseBrakes() => _brakesEngaged = false;
 
     /// <summary>Advances natural passenger behaviour across the whole ride.</summary>
     public void AdvanceNaturalBehavior(TimeSpan elapsed)
@@ -213,14 +308,17 @@ public sealed class GreatMill : DomainModel
     /// <summary>Advances the mill one physics step, then every hub (and its gondolas).</summary>
     public void AdvancePhysics(double dt)
     {
-        var drive = RotationalDynamics.MotorTorque(
+        var drive = _direction.Sign() * RotationalDynamics.MotorTorque(
             _power.Fraction, _omega, RideParameters.MillStallTorque, RideParameters.MillMaxPowerWatts);
+
+        var coulomb = RideParameters.MillCoulombFriction
+            + (_brakesEngaged ? RideParameters.MillBrakeTorque : 0d);
 
         var step = RotationalDynamics.Integrate(
             _omega,
             _angle,
             drive,
-            RideParameters.MillCoulombFriction,
+            coulomb,
             RideParameters.MillViscousFriction,
             RideParameters.MillAeroDrag,
             Inertia,
@@ -232,7 +330,7 @@ public sealed class GreatMill : DomainModel
 
         foreach (var hub in _hubs)
         {
-            hub.AdvancePhysics(_angle, _omega, dt);
+            hub.AdvancePhysics(_angle, _omega, _brakesEngaged, dt);
         }
     }
 
@@ -288,6 +386,7 @@ public sealed class GreatMill : DomainModel
     public MillTelemetry ToTelemetry() => new(
         ConsumedPowerWatts,
         RotationalDynamics.ToRpm(_omega),
+        _direction,
         LoadKg,
         PassengerLoadKg,
         ImbalanceMillimeters,
