@@ -106,6 +106,19 @@ export interface RideTelemetry {
   readonly gondolas: readonly Gondola[];
   /** Whether the gondola brakes are engaged (pods held) or released (pods swing free). */
   readonly gondolaBrakeEngaged: boolean;
+  /**
+   * Whether the engine brake is engaged: drive power is cut and a strong
+   * brake torque is applied to the mill and hubs, bringing the ride to a
+   * complete stop within a couple of seconds.
+   */
+  readonly brakesEngaged: boolean;
+  /**
+   * Total number of occupied seats across all gondolas, as streamed by the
+   * backend. Optional so older frames/fixtures without the field still type
+   * check; consumers should fall back to counting non-`'empty'` seats when
+   * it is absent (see `RideStateService.occupiedSeats`).
+   */
+  readonly boardedPassengerCount?: number;
 }
 
 /**
@@ -136,10 +149,16 @@ export const MILL_MAX_POWER_WATTS = 90000;
  */
 export const HUB_MAX_POWER_WATTS = 15000;
 
-/** Raw wire shape of the central mill within a `RideTelemetry` stream frame. */
+/**
+ * Raw wire shape of the central mill within a `RideTelemetry` stream frame.
+ * `direction` may arrive as a numeric enum index or a name (see
+ * `MotorDirection` on the backend), so both are accepted. `rpm` is signed:
+ * negative while the mill runs in reverse.
+ */
 export interface RideTelemetryMillStreamDto {
   readonly powerWatts: number;
   readonly rpm: number;
+  readonly direction: number | string;
   readonly loadKg: number;
   readonly passengerLoadKg: number;
   readonly imbalanceMillimeters: number;
@@ -147,11 +166,15 @@ export interface RideTelemetryMillStreamDto {
   readonly isOverloaded: boolean;
 }
 
-/** Raw wire shape of a single hub within a `RideTelemetry` stream frame. */
+/**
+ * Raw wire shape of a single hub within a `RideTelemetry` stream frame.
+ * `direction` may arrive as a numeric enum index or a name; `rpm` is signed.
+ */
 export interface RideTelemetryHubStreamDto {
   readonly index: number;
   readonly powerWatts: number;
   readonly rpm: number;
+  readonly direction: number | string;
   readonly loadKg: number;
 }
 
@@ -159,11 +182,15 @@ export interface RideTelemetryHubStreamDto {
  * Raw wire shape of a single seat within a `RideTelemetry` stream frame.
  * `position`/`restraint` may arrive as a numeric enum index or a name (see
  * `SeatPosition`/`RestraintState` on the backend), so both are accepted.
+ * `isOccupied`/`isSecured` are the explicit occupancy/security flags the
+ * backend now streams — see {@link seatState}.
  */
 export interface RideTelemetrySeatStreamDto {
   readonly position: number | string;
   readonly occupiedKg: number;
   readonly restraint: number | string;
+  readonly isOccupied: boolean;
+  readonly isSecured: boolean;
 }
 
 /**
@@ -190,7 +217,11 @@ export interface RideTelemetryGondolaStreamDto {
  * `state`/`availableTransitions` may arrive as numeric enum indices or as
  * PascalCase names (System.Text.Json default), so both are accepted — see
  * `toRideState`. `isSafeToStart`/`safetyReason`/`simulationTimeSeconds` are
- * not modelled on the frontend yet.
+ * not modelled on the frontend yet. `boardedPassengerCount` is the total
+ * number of occupied seats across all 16 gondolas, computed server-side.
+ * `brakesEngaged` is optional so older frames/fixtures without the field
+ * still type check; {@link mapRideTelemetry} defaults it to `false` (brake
+ * released) when absent.
  */
 export interface RideTelemetryStreamDto {
   readonly state: number | string;
@@ -201,6 +232,8 @@ export interface RideTelemetryStreamDto {
   readonly mill: RideTelemetryMillStreamDto;
   readonly hubs: readonly RideTelemetryHubStreamDto[];
   readonly gondolas: readonly RideTelemetryGondolaStreamDto[];
+  readonly boardedPassengerCount: number;
+  readonly brakesEngaged?: boolean;
 }
 
 /** The backend's `GondolaBrakeState` names in index order (`0=Engaged, 1=Released`). */
@@ -211,6 +244,9 @@ const RESTRAINT_NAMES = ['Open', 'Closed', 'Secured'] as const;
 
 /** The backend's `SeatPosition` names in index order (`0=Left, 1=Right`). */
 const SEAT_POSITION_NAMES = ['Left', 'Right'] as const;
+
+/** The backend's `MotorDirection` names in index order (`0=Forward, 1=Reverse`). */
+const MOTOR_DIRECTION_NAMES = ['Forward', 'Reverse'] as const;
 
 /**
  * Resolves a numeric-or-string wire enum value to its zero-based index, given
@@ -235,16 +271,33 @@ function seatPositionIndex(value: number | string): number {
   return enumIndexOf(value, SEAT_POSITION_NAMES);
 }
 
+/** The motor direction from the wire `MotorDirection` value (`0=Forward, 1=Reverse`). */
+function motorDirection(value: number | string): MotorDirection {
+  return enumIndexOf(value, MOTOR_DIRECTION_NAMES) === 1 ? 'reverse' : 'forward';
+}
+
 /**
- * A seat with no sensed weight is always `'empty'` regardless of restraint;
- * otherwise it is `'secured'` only when the wire `RestraintState` is
- * `Secured`, and `'occupied-unsecured'` for `Open`/`Closed`.
+ * A seat is `'empty'` only when it is not occupied; otherwise it is
+ * `'secured'` when the seat is secured (preferring the explicit `isSecured`
+ * flag, falling back to the wire `RestraintState` being `Secured`) and
+ * `'occupied-unsecured'` otherwise.
+ *
+ * Occupancy prefers the explicit `isOccupied` flag the backend now streams;
+ * when it is `undefined` (an older frame), this falls back to the previous
+ * `occupiedKg > 0` heuristic.
  */
-function seatState(occupiedKg: number, restraint: number | string): SeatState {
-  if (occupiedKg === 0) {
+function seatState(
+  occupiedKg: number,
+  restraint: number | string,
+  isOccupied?: boolean,
+  isSecured?: boolean,
+): SeatState {
+  const occupied = isOccupied ?? occupiedKg > 0;
+  if (!occupied) {
     return 'empty';
   }
-  return enumIndexOf(restraint, RESTRAINT_NAMES) === 2 ? 'secured' : 'occupied-unsecured';
+  const secured = isSecured ?? enumIndexOf(restraint, RESTRAINT_NAMES) === 2;
+  return secured ? 'secured' : 'occupied-unsecured';
 }
 
 /**
@@ -271,38 +324,50 @@ function round(value: number, decimals = 0): number {
  * g-force, while the backend reports absolute watts and named force axes.
  */
 export function mapRideTelemetry(dto: RideTelemetryStreamDto): RideTelemetry {
+  const gondolas = dto.gondolas.map((gondola) => ({
+    id: gondola.hubIndex * GONDOLAS_PER_HUB + gondola.index + 1,
+    angleDegrees: round(gondola.angleDegrees, 1),
+    // The backend's `forwardG`/`lateralG` map onto the frontend's
+    // `vertical`/`lateral` g-force axes respectively.
+    gForce: { vertical: round(gondola.forwardG, 1), lateral: round(gondola.lateralG, 1) },
+    seats: gondola.seats.map((seat) => ({
+      id: seatPositionIndex(seat.position) + 1,
+      occupiedKg: round(seat.occupiedKg),
+      state: seatState(seat.occupiedKg, seat.restraint, seat.isOccupied, seat.isSecured),
+    })),
+  }));
+
+  // Prefer the backend's own tally; fall back to counting non-empty seats
+  // for an older frame that doesn't carry `boardedPassengerCount`.
+  const boardedPassengerCount =
+    dto.boardedPassengerCount ??
+    gondolas.reduce(
+      (total, gondola) => total + gondola.seats.filter((seat) => seat.state !== 'empty').length,
+      0,
+    );
+
   return {
     state: toRideState(dto.state),
     availableTransitions: dto.availableTransitions.map(toRideState),
     mill: {
       power: fromWatts(dto.mill.powerWatts, MILL_MAX_POWER_WATTS),
-      // The backend does not model a reverse direction for the mill motor;
-      // it always spins one way, so this is always 'forward'.
-      direction: 'forward',
+      direction: motorDirection(dto.mill.direction),
+      // Signed: negative while the mill runs in reverse.
       speedRpm: round(dto.mill.rpm, 2),
     },
     hubs: dto.hubs.map((hub) => ({
       id: hub.index + 1,
       power: fromWatts(hub.powerWatts, HUB_MAX_POWER_WATTS),
-      // See the mill's direction above: hubs are not reversible either.
-      direction: 'forward',
+      direction: motorDirection(hub.direction),
       speedRpm: round(hub.rpm, 2),
     })),
-    gondolas: dto.gondolas.map((gondola) => ({
-      id: gondola.hubIndex * GONDOLAS_PER_HUB + gondola.index + 1,
-      angleDegrees: round(gondola.angleDegrees, 1),
-      // The backend's `forwardG`/`lateralG` map onto the frontend's
-      // `vertical`/`lateral` g-force axes respectively.
-      gForce: { vertical: round(gondola.forwardG, 1), lateral: round(gondola.lateralG, 1) },
-      seats: gondola.seats.map((seat) => ({
-        id: seatPositionIndex(seat.position) + 1,
-        occupiedKg: round(seat.occupiedKg),
-        state: seatState(seat.occupiedKg, seat.restraint),
-      })),
-    })),
+    gondolas,
+    boardedPassengerCount,
     // The backend engages/releases all gondola brakes together; the frontend
     // models one flag, so it is true only when every gondola reports engaged.
     gondolaBrakeEngaged: dto.gondolas.every((gondola) => brakeEngaged(gondola.brake)),
+    // Defaults to released for an older frame that doesn't carry the field.
+    brakesEngaged: dto.brakesEngaged ?? false,
   };
 }
 
@@ -342,9 +407,14 @@ export interface RequestStateTransitionCommand {
   readonly state: RideState;
 }
 
-/** Cut mill and hub power so the ride coasts down. */
+/**
+ * Engage or release the engine brake. Engaging cuts mill and hub power to
+ * zero and applies a strong brake torque, bringing the ride to a fast,
+ * complete stop; releasing leaves power at zero until commanded again.
+ */
 export interface BrakeEnginesCommand {
   readonly kind: 'brake-engines';
+  readonly engaged: boolean;
 }
 
 /** Any operator command the ride-state service can dispatch. */
@@ -356,25 +426,6 @@ export type RideCommand =
   | SetGondolaBrakeCommand
   | RequestStateTransitionCommand
   | BrakeEnginesCommand;
-
-/** Pod motion values derived from the gondola brake state. */
-export interface PodMotion {
-  /** How much the pods hold against the combined rotation (0 = locked, 1 = free). */
-  readonly freedom: number;
-  /** How far the pods swing (0 = locked, 1 = full swing). */
-  readonly swing: number;
-}
-
-/** Pod motion when the brakes are released — pods swing freely. */
-export const POD_MOTION_RELEASED: PodMotion = { freedom: 1, swing: 1 };
-
-/** Pod motion when the brakes are engaged — pods are held still. */
-export const POD_MOTION_ENGAGED: PodMotion = { freedom: 0, swing: 0 };
-
-/** Derive pod motion values from the gondola brake state. */
-export function podMotionFor(brakeEngaged: boolean): PodMotion {
-  return brakeEngaged ? POD_MOTION_ENGAGED : POD_MOTION_RELEASED;
-}
 
 /** Clamp a numeric value into the inclusive [min, max] range. */
 export function clampPower(value: number, min = MIN_POWER, max = MAX_POWER): number {
