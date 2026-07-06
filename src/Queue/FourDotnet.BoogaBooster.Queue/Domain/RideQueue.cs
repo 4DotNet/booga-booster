@@ -104,6 +104,32 @@ public sealed class RideQueue : DomainModel
         }
     }
 
+    /// <summary>
+    /// Removes and returns the group identified by <paramref name="groupId"/> from
+    /// anywhere in the line, preserving the arrival order of the groups around it,
+    /// and marks the aggregate <see cref="DomainModelState.Modified"/>. Returns
+    /// <c>null</c> when no such group is waiting — for example it was already taken.
+    /// Removing by identity (rather than by position) keeps a caller that chose a
+    /// group from a stale snapshot race-safe against concurrent filling.
+    /// </summary>
+    public QueuedGroup? Remove(Guid groupId)
+    {
+        lock (_gate)
+        {
+            for (var node = _groups.First; node is not null; node = node.Next)
+            {
+                if (node.Value.GroupId == groupId)
+                {
+                    _groups.Remove(node);
+                    MarkChanged();
+                    return node.Value;
+                }
+            }
+
+            return null;
+        }
+    }
+
     /// <summary>Returns the groups currently waiting, in arrival order.</summary>
     public IReadOnlyList<QueuedGroup> SnapshotGroups()
     {
