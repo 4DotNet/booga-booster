@@ -7,7 +7,9 @@ using FourDotnet.BoogaBooster.DigitalTwin.Features.BrakeEngines;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.GetRideTelemetry;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.RequestRideStateTransition;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.SetGondolaBrake;
+using FourDotnet.BoogaBooster.DigitalTwin.Features.SetHubEngineDirection;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.SetHubEnginePower;
+using FourDotnet.BoogaBooster.DigitalTwin.Features.SetMainEngineDirection;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.SetMainEnginePower;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.StartRide;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.StopRide;
@@ -30,11 +32,19 @@ public static class DigitalTwinEndpoints
     /// <param name="Percent">The throttle setting (0–100).</param>
     public sealed record SetPowerRequest(double Percent);
 
+    /// <summary>The request body for setting an engine's rotation direction.</summary>
+    /// <param name="Direction">The direction name ("Forward" or "Reverse").</param>
+    public sealed record SetDirectionRequest(string? Direction);
+
     /// <summary>The request body for boarding a passenger.</summary>
     public sealed record BoardPassengerRequest(int HubIndex, int GondolaIndex, string? Seat, double? WeightKg);
 
     /// <summary>The request body for working a gondola brake.</summary>
     public sealed record SetBrakeRequest(int HubIndex, int GondolaIndex, string? Brake);
+
+    /// <summary>The request body for setting the engine brake.</summary>
+    /// <param name="Engaged"><c>true</c> to engage the brake (cut power, apply braking torque); <c>false</c> to release it.</param>
+    public sealed record SetEngineBrakeRequest(bool Engaged);
 
     /// <summary>The request body for requesting a ride lifecycle transition.</summary>
     /// <param name="State">The target state name (e.g. "Loading", "Started", "EmergencyStop").</param>
@@ -76,6 +86,34 @@ public static class DigitalTwinEndpoints
             DispatchAsync(() => handler.HandleAsync(new SetHubEnginePowerCommand(request.Percent), cancellationToken)))
         .WithName("SetHubEnginePower");
 
+        group.MapPost("/main-direction", (
+            SetDirectionRequest request,
+            ICommandHandler<SetMainEngineDirectionCommand> handler,
+            CancellationToken cancellationToken) =>
+        {
+            if (!TryParseDirection(request.Direction, out var direction))
+            {
+                return Task.FromResult(Results.BadRequest($"Unknown direction '{request.Direction}'. Expected Forward or Reverse."));
+            }
+
+            return DispatchAsync(() => handler.HandleAsync(new SetMainEngineDirectionCommand(direction), cancellationToken));
+        })
+        .WithName("SetMainEngineDirection");
+
+        group.MapPost("/hub-direction", (
+            SetDirectionRequest request,
+            ICommandHandler<SetHubEngineDirectionCommand> handler,
+            CancellationToken cancellationToken) =>
+        {
+            if (!TryParseDirection(request.Direction, out var direction))
+            {
+                return Task.FromResult(Results.BadRequest($"Unknown direction '{request.Direction}'. Expected Forward or Reverse."));
+            }
+
+            return DispatchAsync(() => handler.HandleAsync(new SetHubEngineDirectionCommand(direction), cancellationToken));
+        })
+        .WithName("SetHubEngineDirection");
+
         group.MapPost("/passengers", (
             BoardPassengerRequest request,
             ICommandHandler<BoardPassengerCommand> handler,
@@ -109,9 +147,10 @@ public static class DigitalTwinEndpoints
         .WithName("SetGondolaBrake");
 
         group.MapPost("/engine-brake", (
+            SetEngineBrakeRequest request,
             ICommandHandler<BrakeEnginesCommand> handler,
             CancellationToken cancellationToken) =>
-            DispatchAsync(() => handler.HandleAsync(new BrakeEnginesCommand(), cancellationToken)))
+            DispatchAsync(() => handler.HandleAsync(new BrakeEnginesCommand(request.Engaged), cancellationToken)))
         .WithName("BrakeEngines");
 
         // The lifecycle state machine is driven through /state. The /start and /stop
@@ -165,6 +204,9 @@ public static class DigitalTwinEndpoints
 
     private static bool TryParseBrake(string? value, out GondolaBrakeState brake)
         => Enum.TryParse(value, ignoreCase: true, out brake) && Enum.IsDefined(brake);
+
+    private static bool TryParseDirection(string? value, out MotorDirection direction)
+        => Enum.TryParse(value, ignoreCase: true, out direction) && Enum.IsDefined(direction);
 
     private static bool TryParseState(string? value, out RideState state)
         => Enum.TryParse(value, ignoreCase: true, out state) && Enum.IsDefined(state);
