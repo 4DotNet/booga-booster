@@ -15,6 +15,24 @@ import {
  * both come from the server (`RideLifecycleService`, via `ride-dashboard`),
  * and a click only emits — it never decides legality itself.
  */
+
+/** Base colour family driving a transition button's border/glow tint. */
+type TransitionColor = 'blue' | 'green' | 'orange' | 'red';
+
+/** Visual treatment of a transition button; see {@link StatusSummary.visualFor}. */
+type TransitionVisual = 'unlit' | 'lit' | 'blinking';
+
+/** Fixed base colour per lifecycle state, independent of availability. */
+const TRANSITION_COLOR_BY_STATE: Readonly<Record<RideState, TransitionColor>> = {
+  idle: 'blue',
+  loading: 'blue',
+  safe: 'green',
+  started: 'green',
+  stopping: 'orange',
+  offloading: 'blue',
+  'emergency-stop': 'red',
+};
+
 @Component({
   selector: 'bb-status-summary',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -50,14 +68,13 @@ import {
             <button
               type="button"
               class="transition-button"
+              [attr.data-color]="colorFor(candidate)"
+              [attr.data-visual]="visualFor(candidate)"
               [disabled]="!isAvailable(candidate)"
               [attr.aria-current]="isCurrent(candidate) ? 'true' : null"
               (click)="onTransitionClick(candidate)"
             >
               <span>{{ rideStateLabel(candidate) }}</span>
-              @if (isCurrent(candidate)) {
-                <span class="current-badge">(current)</span>
-              }
             </button>
           }
         </div>
@@ -130,6 +147,8 @@ import {
       gap: 0.5rem;
     }
     .transition-button {
+      --btn-color: var(--bb-border);
+      box-sizing: border-box;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -138,27 +157,77 @@ import {
       border-radius: 0.5rem;
       border: 1px solid var(--bb-border);
       background: var(--bb-surface-2);
-      color: inherit;
+      color: var(--bb-text);
       font: inherit;
       font-size: 0.85rem;
       cursor: pointer;
+      transition:
+        border-color 0.15s ease,
+        box-shadow 0.15s ease,
+        opacity 0.15s ease;
+    }
+    .transition-button[data-color='blue'] {
+      --btn-color: var(--bb-accent);
+    }
+    .transition-button[data-color='green'] {
+      --btn-color: var(--bb-ok);
+    }
+    .transition-button[data-color='orange'] {
+      --btn-color: var(--bb-alert);
+    }
+    .transition-button[data-color='red'] {
+      --btn-color: var(--bb-danger);
+    }
+    /* Unlit: not the current state and not a legal transition — dimmed, no glow. */
+    .transition-button[data-visual='unlit'] {
+      border-color: var(--bb-border);
+      box-shadow: none;
+    }
+    /* Lit: a legal transition, not current — full base colour plus a soft glow. */
+    .transition-button[data-visual='lit'] {
+      border-color: var(--btn-color);
+      box-shadow: 0 0 0.5rem 0 var(--btn-color);
+    }
+    /*
+     * Blinking: the ride's current state. A heavier, solid ring distinguishes
+     * it from "lit" without relying on colour or motion alone, and the pulse
+     * itself stays a slow, subtle opacity/box-shadow animation (see the
+     * prefers-reduced-motion query below) — never a hard flash.
+     */
+    .transition-button[data-visual='blinking'] {
+      border: 2px solid var(--btn-color);
+      box-shadow: 0 0 0.6rem 0.05rem var(--btn-color);
+      animation: transition-button-pulse 1.4s ease-in-out infinite;
     }
     .transition-button:disabled {
       cursor: not-allowed;
-      opacity: 0.5;
     }
-    .transition-button[aria-current='true'] {
-      border-color: var(--bb-accent);
-      font-weight: 700;
+    /* Dimming conveys "unlit"/disabled, but the current (blinking) state must
+       stay at full colour even when it is not also a legal transition. */
+    .transition-button:disabled:not([data-visual='blinking']) {
+      opacity: 0.5;
     }
     .transition-button:focus-visible {
       outline: 2px solid var(--bb-focus);
       outline-offset: 2px;
     }
-    .current-badge {
-      font-size: 0.7rem;
-      font-weight: 400;
-      color: var(--bb-muted);
+    @keyframes transition-button-pulse {
+      0%,
+      100% {
+        box-shadow: 0 0 0.35rem 0 var(--btn-color);
+        opacity: 0.85;
+      }
+      50% {
+        box-shadow: 0 0 0.9rem 0.15rem var(--btn-color);
+        opacity: 1;
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .transition-button[data-visual='blinking'] {
+        animation: none;
+        box-shadow: 0 0 0.6rem 0.05rem var(--btn-color);
+        opacity: 1;
+      }
     }
   `,
 })
@@ -196,6 +265,23 @@ export class StatusSummary {
   /** Whether `candidate` is the ride's current lifecycle state. */
   protected isCurrent(candidate: RideState): boolean {
     return this.state() === candidate;
+  }
+
+  /** Fixed base colour for a lifecycle state's transition button. */
+  protected colorFor(candidate: RideState): TransitionColor {
+    return TRANSITION_COLOR_BY_STATE[candidate];
+  }
+
+  /**
+   * Visual treatment for a transition button; current wins over available:
+   * `'blinking'` for the ride's current state (regardless of legality),
+   * `'lit'` for any other legal transition, `'unlit'` otherwise.
+   */
+  protected visualFor(candidate: RideState): TransitionVisual {
+    if (this.isCurrent(candidate)) {
+      return 'blinking';
+    }
+    return this.isAvailable(candidate) ? 'lit' : 'unlit';
   }
 
   /** Emit a transition request; only ever called for a legal, enabled button. */
