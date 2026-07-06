@@ -17,6 +17,9 @@
   <ItemGroup>
     <ProjectReference Include="..\FourDotnet.BoogaBooster.DigitalTwin.Abstractions\FourDotnet.BoogaBooster.DigitalTwin.Abstractions.csproj" />
     <ProjectReference Include="..\..\Shared\FourDotnet.BoogaBooster.Core\FourDotnet.BoogaBooster.Core.csproj" />
+    <!-- Abstractions-only reference (ADR-0004): the loading coordinator pulls groups
+         from the Queue module through its public contract, never its internals. -->
+    <ProjectReference Include="..\..\Queue\FourDotnet.BoogaBooster.Queue.Abstractions\FourDotnet.BoogaBooster.Queue.Abstractions.csproj" />
   </ItemGroup>
 
 </Project>
