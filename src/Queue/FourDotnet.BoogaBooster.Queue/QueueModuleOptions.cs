@@ -3,7 +3,8 @@ namespace FourDotnet.BoogaBooster.Queue;
 /// <summary>
 /// Configuration for the Queue module's background filler. Bound from
 /// configuration section <see cref="SectionName"/>; the defaults enqueue between
-/// four and eight people per minute in varied group sizes.
+/// four and eight people in varied group sizes every ten to thirty seconds, and
+/// every thirty to sixty seconds once the weather turns bad.
 /// </summary>
 public sealed class QueueModuleOptions
 {
@@ -12,8 +13,34 @@ public sealed class QueueModuleOptions
     /// <summary>The rides whose queues the background filler maintains.</summary>
     public IReadOnlyList<Guid> RideIds { get; set; } = [Guid.Parse("11111111-1111-1111-1111-111111111111")];
 
-    /// <summary>How often the filler runs a fill cycle. Defaults to one minute.</summary>
-    public TimeSpan FillInterval { get; set; } = TimeSpan.FromSeconds(30);
+    /// <summary>
+    /// Shortest wait between fill cycles in fair weather. Every cycle draws its own
+    /// wait uniformly from <c>[MinFillInterval, MaxFillInterval]</c>, so guests
+    /// arrive in irregular bursts rather than on a metronome. Defaults to ten seconds.
+    /// </summary>
+    public TimeSpan MinFillInterval { get; set; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>Longest wait between fill cycles in fair weather. Defaults to thirty seconds.</summary>
+    public TimeSpan MaxFillInterval { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Shortest wait between fill cycles once the weather counts as bad (see
+    /// <see cref="BadWeatherThreshold"/>) — guests trickle in rather than stream in.
+    /// Defaults to thirty seconds.
+    /// </summary>
+    public TimeSpan BadWeatherMinFillInterval { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>Longest wait between fill cycles in bad weather. Defaults to sixty seconds.</summary>
+    public TimeSpan BadWeatherMaxFillInterval { get; set; } = TimeSpan.FromSeconds(60);
+
+    /// <summary>
+    /// The <c>NiceWeather</c> indicator at or below which the weather counts as bad
+    /// and the filler switches to the bad-weather interval band. Defaults to
+    /// <c>0.4</c>. This gates the cycle interval only; the per-cycle headcount stays
+    /// on the continuous multiplier described by
+    /// <see cref="WeatherSuppressionExponent"/> and <see cref="WeatherMultiplierCeiling"/>.
+    /// </summary>
+    public double BadWeatherThreshold { get; set; } = 0.4;
 
     /// <summary>Minimum number of people to add across a single fill cycle.</summary>
     public int MinArrivalsPerCycle { get; set; } = 4;

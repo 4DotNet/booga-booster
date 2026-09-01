@@ -22,6 +22,14 @@ public sealed class RideQueueFillerServiceTests
         QueueModuleOptions options,
         IWeatherInfluence? weatherInfluence = null)
     {
+        var (filler, store, publisher, _) = CreateWithClock(options, weatherInfluence);
+        return (filler, store, publisher);
+    }
+
+    private static (RideQueueFillerService filler, IRideQueueStore store, Mock<IIntegrationEventPublisher> publisher, FakeTimeProvider time) CreateWithClock(
+        QueueModuleOptions options,
+        IWeatherInfluence? weatherInfluence = null)
+    {
         var opts = Options.Create(options);
         var time = new FakeTimeProvider();
         var store = new InMemoryRideQueueStore(opts);
@@ -39,7 +47,7 @@ public sealed class RideQueueFillerServiceTests
         var filler = new RideQueueFillerService(
             queueService, store, weatherInfluence, opts, time, NullLogger<RideQueueFillerService>.Instance);
 
-        return (filler, store, publisher);
+        return (filler, store, publisher, time);
     }
 
     private static IWeatherInfluence WeatherAt(double niceWeather)
@@ -52,7 +60,6 @@ public sealed class RideQueueFillerServiceTests
     private static QueueModuleOptions OptionsFor(Guid rideId, int min, int max, int maxQueue, int? seed = 123) => new()
     {
         RideIds = [rideId],
-        FillInterval = TimeSpan.FromMinutes(1),
         MinArrivalsPerCycle = min,
         MaxArrivalsPerCycle = max,
         MinGroupSize = 1,
@@ -252,5 +259,120 @@ public sealed class RideQueueFillerServiceTests
         await filler.RunFillCycleAsync(CancellationToken.None);
 
         Assert.True(store.Find(rideId)!.PeopleWaiting <= 5);
+    }
+
+    [Fact]
+    public void NextInterval_InFairWeather_StaysWithinTenToThirtySeconds()
+    {
+        var (filler, _, _) = Create(
+            OptionsFor(Guid.NewGuid(), min: 4, max: 8, maxQueue: 500), WeatherAt(0.9));
+
+        for (var i = 0; i < 50; i++)
+        {
+            Assert.InRange(filler.PlanNextInterval(), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(30));
+        }
+    }
+
+    [Fact]
+    public void NextInterval_InBadWeather_StaysWithinThirtyToSixtySeconds()
+    {
+        var (filler, _, _) = Create(
+            OptionsFor(Guid.NewGuid(), min: 4, max: 8, maxQueue: 500), WeatherAt(0.1));
+
+        for (var i = 0; i < 50; i++)
+        {
+            Assert.InRange(filler.PlanNextInterval(), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(60));
+        }
+    }
+
+    [Fact]
+    public void NextInterval_VariesAcrossCycles()
+    {
+        var (filler, _, _) = Create(
+            OptionsFor(Guid.NewGuid(), min: 4, max: 8, maxQueue: 500), WeatherAt(0.9));
+
+        var draws = Enumerable.Range(0, 20).Select(_ => filler.PlanNextInterval()).ToList();
+
+        Assert.True(draws.Distinct().Count() > 1, "The interval should be re-drawn, not fixed.");
+    }
+
+    [Fact]
+    public void NextInterval_FollowsTheLatestWeather()
+    {
+        var options = OptionsFor(Guid.NewGuid(), min: 4, max: 8, maxQueue: 500);
+        var influence = new WeatherInfluence(Options.Create(options));
+        var (filler, _, _) = Create(options, influence);
+
+        influence.Update(0.9f);
+        var fair = filler.PlanNextInterval();
+
+        influence.Update(0.1f);
+        var bad = filler.PlanNextInterval();
+
+        Assert.InRange(fair, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(30));
+        Assert.InRange(bad, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(60));
+    }
+
+    /// <summary>
+    /// Yields long enough for the hosted loop to reach its next <c>await</c> — the
+    /// timer registration on start, or the continuation after a tick fires. The
+    /// clock is fake, so this only bridges the thread-pool hand-off; it never waits
+    /// out a real fill interval.
+    /// </summary>
+    private static Task SettleAsync() => Task.Delay(250);
+
+    [Fact]
+    public async Task Filler_InBadWeather_HoldsBackUntilTheBadWeatherBandIsReached()
+    {
+        var rideId = Guid.NewGuid();
+        // A fixed base of 40 so the 0.1 weather multiplier still leaves four arrivals
+        // to observe — this test is about when the cycle fires, not how big it is.
+        var (filler, store, _, time) = CreateWithClock(
+            OptionsFor(rideId, min: 40, max: 40, maxQueue: 500), WeatherAt(0.1));
+
+        await filler.StartAsync(CancellationToken.None);
+        try
+        {
+            await SettleAsync();
+
+            // A fair-weather pace would have filled by now; bad weather holds the
+            // first cycle back until at least thirty seconds have passed.
+            time.Advance(TimeSpan.FromSeconds(29));
+            await SettleAsync();
+            Assert.Null(store.Find(rideId));
+
+            // Past the top of the bad-weather band the cycle does fire.
+            time.Advance(TimeSpan.FromSeconds(31));
+            await SettleAsync();
+            Assert.Equal(4, store.Find(rideId)!.PeopleWaiting);
+        }
+        finally
+        {
+            await filler.StopAsync(CancellationToken.None);
+        }
+    }
+
+    [Fact]
+    public async Task Filler_InFairWeather_RunsACycleWithinThirtySeconds()
+    {
+        var rideId = Guid.NewGuid();
+        var (filler, store, _, time) = CreateWithClock(
+            OptionsFor(rideId, min: 4, max: 8, maxQueue: 500), WeatherAt(0.9));
+
+        await filler.StartAsync(CancellationToken.None);
+        try
+        {
+            await SettleAsync();
+
+            // The top of the fair-weather band: a cycle must have fired by now.
+            time.Advance(TimeSpan.FromSeconds(30));
+            await SettleAsync();
+
+            Assert.InRange(store.Find(rideId)!.PeopleWaiting, 4, 8);
+        }
+        finally
+        {
+            await filler.StopAsync(CancellationToken.None);
+        }
     }
 }
