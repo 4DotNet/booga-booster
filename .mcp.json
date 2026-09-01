@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "4dotnet-csharp-style-guide": {
+      "type": "stdio",
+      "command": "4dotnet-csharp-style-guide",
+      "args": []
+    },
+    "primeng": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@primeng/mcp"]
+    },
+    "microsoft-learn": {
+      "type": "http",
+      "url": "https://learn.microsoft.com/api/mcp"
+    }
+  }
+}

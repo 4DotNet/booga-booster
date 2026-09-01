@@ -1,0 +1,14 @@
+{
+  "name": "booga-booster",
+  "owner": {
+    "name": "4DotNet"
+  },
+  "description": "Plugins for developing 4DotNet modular-monolith projects: agents, skills, and the C# style guide MCP server",
+  "plugins": [
+    {
+      "name": "4dotnet-boogabooster",
+      "source": "./plugins/4dotnet-boogabooster",
+      "description": "Angular architect and C# expert agents, DTO organization and test coverage skills, and the 4dotnet C# style guide MCP server"
+    }
+  ]
+}

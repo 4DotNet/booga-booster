@@ -59,3 +59,26 @@ npx vitest run path/to/file.spec.ts   # run a single test file
 ## Angular conventions
 
 Detailed frontend rules live in `src/FourDotnet.BoogaBooster.App/.claude/CLAUDE.md` and are authoritative when working in the Angular app. Key points: standalone components (do **not** set `standalone: true` — it is the v20+ default), signals for state (`signal`/`computed`/`update`/`set`, never `mutate`), `input()`/`output()` functions over decorators, `inject()` over constructor injection, `OnPush` change detection, native control flow (`@if`/`@for`/`@switch`), and host bindings in the `host` object rather than `@HostBinding`/`@HostListener`. Accessibility must pass AXE / WCAG AA.
+
+## AI tooling (Claude Code + GitHub Copilot CLI)
+
+This repo is set up so **Claude Code and GitHub Copilot CLI share the same MCP servers, agents and skills**. Copilot CLI natively reads Claude's directories, so `.claude/` is the single source of truth for almost everything:
+
+| Asset | Lives in | Claude Code | Copilot CLI |
+| --- | --- | --- | --- |
+| MCP servers | `.mcp.json` (repo root) | project scope | workspace scope |
+| Agents | `.claude/agents/*.md` | ✅ | ✅ |
+| Skills | `.claude/skills/<name>/SKILL.md` | ✅ | ✅ (also scans `.github/skills/`) |
+| Instructions | `CLAUDE.md` | ✅ | ✅ |
+| Slash commands | `.claude/commands/` **and** `.github/prompts/*.prompt.md` | `.claude/commands/` only | `.github/prompts/` only |
+
+**Rules when adding tooling:**
+
+- **MCP server** → add it to the root `.mcp.json`. Do not add it machine-locally (`claude mcp add`, `copilot mcp add`), or teammates won't get it.
+- **Agent or skill** → put it under `.claude/`. Both tools pick it up. If it is part of the distributable plugin, also sync it into `plugins/4dotnet-boogabooster/` and bump the plugin version.
+- **Slash command** → this is the only asset that must be written twice: `.claude/commands/<ns>/<name>.md` for Claude and `.github/prompts/<ns>-<name>.prompt.md` for Copilot. Keep the two in sync.
+- **Agent `tools:` lists** → the two tools use different tool vocabularies (`Read`/`Bash`/`mcp__server__tool` vs. `read`/`shell`/`server/*`). Unknown names are ignored by both, so list **both** vocabularies on the `tools:` line; otherwise the agent ends up with no tools in one of them.
+
+**First run of Copilot CLI in this repo:** start it interactively once and trust the folder. Workspace configuration (`.mcp.json`) is only loaded for trusted folders — until then `copilot mcp list` shows user-scoped servers only.
+
+The `plugins/4dotnet-boogabooster/` plugin is dual-format: `.claude-plugin/plugin.json` is read by both `claude plugin` and `copilot plugin`.

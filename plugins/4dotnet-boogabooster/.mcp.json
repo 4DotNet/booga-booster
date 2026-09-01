@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "4dotnet-csharp-style-guide": {
+      "type": "stdio",
+      "command": "4dotnet-csharp-style-guide",
+      "args": []
+    }
+  }
+}

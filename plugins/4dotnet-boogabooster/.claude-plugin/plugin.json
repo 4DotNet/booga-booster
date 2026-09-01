@@ -1,0 +1,26 @@
+{
+  "name": "4dotnet-boogabooster",
+  "displayName": "4DotNet BoogaBooster Toolkit",
+  "description": "Angular architect and C# expert agents, DTO organization and test coverage skills, and the 4dotnet C# style guide MCP server",
+  "version": "1.1.0",
+  "author": {
+    "name": "Eduard Keilholz"
+  },
+  "repository": "https://github.com/4dotnet/booga-booster",
+  "keywords": [
+    "angular",
+    "csharp",
+    "dotnet",
+    "aspire",
+    "modular-monolith"
+  ],
+  "agents": [
+    "./agents/angular-architect.md",
+    "./agents/csharp-expert.md"
+  ],
+  "skills": [
+    "./skills/dto-organization",
+    "./skills/test-coverage"
+  ],
+  "mcpServers": "./.mcp.json"
+}
