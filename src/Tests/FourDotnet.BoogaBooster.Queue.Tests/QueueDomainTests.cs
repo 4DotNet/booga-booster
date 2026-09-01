@@ -92,19 +92,19 @@ public class QueueDomainTests
     [Fact]
     public void RideQueue_WithEmptyRideId_Throws()
     {
-        Assert.Throws<DomainValidationException>(() => new RideQueue(Guid.Empty, maxPeople: 10));
+        Assert.Throws<DomainValidationException>(() => new RideQueue(Guid.Empty, maxPeople: 10, maxBoardableGroupSize: 32));
     }
 
     [Fact]
     public void RideQueue_WithNonPositiveMax_Throws()
     {
-        Assert.Throws<DomainValidationException>(() => new RideQueue(Guid.NewGuid(), maxPeople: 0));
+        Assert.Throws<DomainValidationException>(() => new RideQueue(Guid.NewGuid(), maxPeople: 0, maxBoardableGroupSize: 32));
     }
 
     [Fact]
     public void RideQueue_CanAccept_NonPositiveSize_IsFalse()
     {
-        var queue = new RideQueue(Guid.NewGuid(), maxPeople: 10);
+        var queue = new RideQueue(Guid.NewGuid(), maxPeople: 10, maxBoardableGroupSize: 32);
 
         Assert.False(queue.CanAccept(0));
         Assert.False(queue.CanAccept(-3));
@@ -113,7 +113,7 @@ public class QueueDomainTests
     [Fact]
     public void RideQueue_Enqueue_NullArrival_Throws()
     {
-        var queue = new RideQueue(Guid.NewGuid(), maxPeople: 10);
+        var queue = new RideQueue(Guid.NewGuid(), maxPeople: 10, maxBoardableGroupSize: 32);
 
         Assert.Throws<ArgumentNullException>(() => queue.Enqueue(null!));
     }

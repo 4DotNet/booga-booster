@@ -35,7 +35,7 @@ internal sealed class RideQueueService : IRideQueueService
         _logger = logger;
     }
 
-    public async Task<QueuedGroupDto> EnqueueGroupAsync(
+    public async Task<IReadOnlyList<QueuedGroupDto>> EnqueueGroupAsync(
         Guid rideId,
         int groupSize,
         CancellationToken cancellationToken)
@@ -43,25 +43,51 @@ internal sealed class RideQueueService : IRideQueueService
         ArgumentOutOfRangeException.ThrowIfLessThan(groupSize, 1);
 
         var queue = _store.GetOrCreate(rideId);
-        var group = queue.Enqueue(_personGenerator.CreateGroup(groupSize));
 
-        _logger.LogInformation(
-            "Group {GroupId} of {Size} ({Weight} kg) joined ride {RideId}; {PeopleWaiting} now waiting.",
-            group.GroupId,
-            group.Size,
-            group.TotalWeightInKilograms,
-            rideId,
-            queue.PeopleWaiting);
+        // A party too large to be seated in one boarding pass can never satisfy the
+        // fully-fits rule, so it joins the line as several adjacent boardable groups.
+        // Anything within capacity yields a single size and is never broken up.
+        var sizes = GroupArrival.PartitionSizes(groupSize, queue.MaxBoardableGroupSize);
+        if (sizes.Count > 1)
+        {
+            _logger.LogInformation(
+                "Arrival of {Size} exceeds ride {RideId}'s boardable group size of {MaxBoardableGroupSize}; " +
+                "splitting into {GroupCount} groups.",
+                groupSize,
+                rideId,
+                queue.MaxBoardableGroupSize,
+                sizes.Count);
+        }
 
-        var integrationEvent = new GroupQueuedIntegrationEvent(
-            RideId: rideId,
-            GroupId: group.GroupId,
-            PeopleCount: group.Size,
-            QueuedAt: _timeProvider.GetUtcNow());
+        // Admit the whole party in one step so a split arrival is never half-admitted
+        // when the line is nearly full.
+        var arrivals = sizes.Select(_personGenerator.CreateGroup).ToArray();
+        var groups = queue.EnqueueAll(arrivals);
 
-        await _publisher.PublishAsync(integrationEvent, cancellationToken);
+        var enqueued = new List<QueuedGroupDto>(groups.Count);
 
-        return ToDto(group);
+        foreach (var group in groups)
+        {
+            _logger.LogInformation(
+                "Group {GroupId} of {Size} ({Weight} kg) joined ride {RideId}; {PeopleWaiting} now waiting.",
+                group.GroupId,
+                group.Size,
+                group.TotalWeightInKilograms,
+                rideId,
+                queue.PeopleWaiting);
+
+            var integrationEvent = new GroupQueuedIntegrationEvent(
+                RideId: rideId,
+                GroupId: group.GroupId,
+                PeopleCount: group.Size,
+                QueuedAt: _timeProvider.GetUtcNow());
+
+            await _publisher.PublishAsync(integrationEvent, cancellationToken);
+
+            enqueued.Add(ToDto(group));
+        }
+
+        return enqueued;
     }
 
     public QueueStatusDto GetStatus(Guid rideId)

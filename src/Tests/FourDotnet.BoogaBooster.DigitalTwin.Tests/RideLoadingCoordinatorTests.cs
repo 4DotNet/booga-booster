@@ -283,7 +283,7 @@ public sealed class RideLoadingCoordinatorTests
             return group;
         }
 
-        public Task<QueuedGroupDto> EnqueueGroupAsync(Guid rideId, int groupSize, CancellationToken cancellationToken) =>
+        public Task<IReadOnlyList<QueuedGroupDto>> EnqueueGroupAsync(Guid rideId, int groupSize, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
         public QueueStatusDto GetStatus(Guid rideId) =>

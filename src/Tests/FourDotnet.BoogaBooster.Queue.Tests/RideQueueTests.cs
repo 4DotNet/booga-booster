@@ -6,7 +6,8 @@ namespace FourDotnet.BoogaBooster.Queue.Tests;
 
 public class RideQueueTests
 {
-    private static RideQueue NewQueue(int maxPeople = 100) => new(Guid.NewGuid(), maxPeople);
+    private static RideQueue NewQueue(int maxPeople = 100, int maxBoardableGroupSize = 32) =>
+        new(Guid.NewGuid(), maxPeople, maxBoardableGroupSize);
 
     [Fact]
     public void Enqueue_AppendsGroupsInArrivalOrder()

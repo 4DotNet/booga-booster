@@ -10,6 +10,7 @@ public sealed class ValueObjectTests
     [InlineData(30)]
     [InlineData(75)]
     [InlineData(130)]
+    [InlineData(150)]
     public void PassengerWeight_accepts_values_in_range(double kilograms)
     {
         var weight = new PassengerWeight(kilograms);
@@ -18,7 +19,7 @@ public sealed class ValueObjectTests
 
     [Theory]
     [InlineData(29.9)]
-    [InlineData(130.1)]
+    [InlineData(150.1)]
     [InlineData(0)]
     [InlineData(double.NaN)]
     [InlineData(double.PositiveInfinity)]

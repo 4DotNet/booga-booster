@@ -35,7 +35,7 @@ public class RideQueueServiceTests
         var (service, publisher, _) = CreateService();
         var rideId = Guid.NewGuid();
 
-        var result = await service.EnqueueGroupAsync(rideId, groupSize: 3, CancellationToken.None);
+        var result = (await service.EnqueueGroupAsync(rideId, groupSize: 3, CancellationToken.None)).Single();
 
         Assert.Equal(3, result.Size);
         publisher.Verify(
@@ -70,7 +70,7 @@ public class RideQueueServiceTests
     {
         var (service, _, _) = CreateService();
 
-        var result = await service.EnqueueGroupAsync(Guid.NewGuid(), groupSize: 4, CancellationToken.None);
+        var result = (await service.EnqueueGroupAsync(Guid.NewGuid(), groupSize: 4, CancellationToken.None)).Single();
 
         Assert.Equal(4, result.People.Count);
         Assert.Equal(4, result.People.Select(p => p.Number).Distinct().Count());
@@ -103,7 +103,7 @@ public class RideQueueServiceTests
         var (service, _, _) = CreateService();
         var rideId = Guid.NewGuid();
         await service.EnqueueGroupAsync(rideId, 2, CancellationToken.None);
-        var second = await service.EnqueueGroupAsync(rideId, 4, CancellationToken.None);
+        var second = (await service.EnqueueGroupAsync(rideId, 4, CancellationToken.None)).Single();
 
         var taken = await service.TakeGroupAsync(rideId, second.GroupId, CancellationToken.None);
 
@@ -122,7 +122,7 @@ public class RideQueueServiceTests
     {
         var (service, _, _) = CreateService();
         var rideId = Guid.NewGuid();
-        var group = await service.EnqueueGroupAsync(rideId, 3, CancellationToken.None);
+        var group = (await service.EnqueueGroupAsync(rideId, 3, CancellationToken.None)).Single();
 
         Assert.Null(await service.TakeGroupAsync(rideId, Guid.NewGuid(), CancellationToken.None));
 

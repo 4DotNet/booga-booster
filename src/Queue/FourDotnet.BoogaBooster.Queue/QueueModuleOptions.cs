@@ -13,7 +13,7 @@ public sealed class QueueModuleOptions
     public IReadOnlyList<Guid> RideIds { get; set; } = [Guid.Parse("11111111-1111-1111-1111-111111111111")];
 
     /// <summary>How often the filler runs a fill cycle. Defaults to one minute.</summary>
-    public TimeSpan FillInterval { get; set; } = TimeSpan.FromMinutes(1);
+    public TimeSpan FillInterval { get; set; } = TimeSpan.FromSeconds(30);
 
     /// <summary>Minimum number of people to add across a single fill cycle.</summary>
     public int MinArrivalsPerCycle { get; set; } = 4;
@@ -31,6 +31,15 @@ public sealed class QueueModuleOptions
     public int MaxQueueLength { get; set; } = 500;
 
     /// <summary>
+    /// The largest group that can ever be boarded in one pass, and therefore the
+    /// size above which an arriving group is split into smaller boardable groups.
+    /// Defaults to 32 — the ride's total seat capacity of 16 gondolas of 2 seats —
+    /// because a larger group could never satisfy the fully-fits boarding rule and
+    /// would wait in the line forever.
+    /// </summary>
+    public int MaxBoardableGroupSize { get; set; } = 32;
+
+    /// <summary>
     /// Optional fixed seed for the arrival randomness. Set for deterministic
     /// behaviour (tests); leave null to use a time-varying source in production.
     /// </summary>
@@ -40,7 +49,7 @@ public sealed class QueueModuleOptions
     /// The <c>NiceWeather</c> indicator (in <c>[0, 1]</c>) assumed before any
     /// weather-update event has been received. Defaults to <c>1.0</c> so that,
     /// together with the default <see cref="WeatherMultiplierCeiling"/> of
-    /// <c>1.0</c>, the pre-event fill rate matches the unscaled base rate — the
+    /// <c>1.0</c>, the pre-event fill rate matches the unscaled base rate â the
     /// weather neither suppresses nor inflates arrivals until real weather arrives.
     /// </summary>
     public double NeutralWeatherDefault { get; set; } = 1.0;
