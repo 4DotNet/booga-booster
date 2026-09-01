@@ -109,10 +109,10 @@ public static class RideParameters
 
     // --- Natural passenger behaviour ---
     /// <summary>Earliest a seated passenger pulls their restraint down.</summary>
-    public static readonly TimeSpan MinRestraintCloseDelay = TimeSpan.FromSeconds(10);
+    public static readonly TimeSpan MinRestraintCloseDelay = TimeSpan.FromSeconds(5);
 
     /// <summary>Latest a seated passenger pulls their restraint down.</summary>
-    public static readonly TimeSpan MaxRestraintCloseDelay = TimeSpan.FromSeconds(30);
+    public static readonly TimeSpan MaxRestraintCloseDelay = TimeSpan.FromSeconds(10);
 
     // --- Ride layout ---
     public const int HubCount = 4;

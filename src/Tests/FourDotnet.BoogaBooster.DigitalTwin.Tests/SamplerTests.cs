@@ -19,7 +19,7 @@ public sealed class SamplerTests
     }
 
     [Fact]
-    public void Sampled_restraint_delays_stay_within_10_to_30_seconds()
+    public void Sampled_restraint_delays_stay_within_5_to_10_seconds()
     {
         var sampler = new RandomRideEventSampler(seed: 7);
 
