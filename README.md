@@ -303,8 +303,11 @@ unimplemented** — good first pickups:
   teammates don't get it.
 - **Agent or skill** → `.claude/`. Both CLIs pick it up. If it belongs in the plugin,
   sync it into `plugins/4dotnet-boogabooster/` and bump the version.
-- **Slash command** → the one asset written twice: `.claude/commands/<ns>/<name>.md`
-  **and** `.github/prompts/<ns>-<name>.prompt.md`.
+- **Slash command** → written twice: `.claude/commands/<ns>/<name>.md` **and**
+  `.github/prompts/<ns>-<name>.prompt.md`.
+- **Repo-wide instructions** → also written twice: `CLAUDE.md` (canonical; read by
+  Claude Code *and* Copilot CLI) **and** `.github/copilot-instructions.md` (condensed
+  mirror, read by Copilot in the IDE, which does not see `CLAUDE.md`).
 - **Agent `tools:` lists** → list **both** vocabularies (`Read` / `Bash` /
   `mcp__server__tool` *and* `read` / `shell` / `server/*`). Unknown names are ignored;
   omitting one leaves the agent tool-less in that CLI.
