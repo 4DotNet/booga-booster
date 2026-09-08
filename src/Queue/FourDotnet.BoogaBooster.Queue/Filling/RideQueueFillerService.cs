@@ -1,5 +1,8 @@
+using System.Diagnostics;
+using FourDotnet.BoogaBooster.Core.Observability;
 using FourDotnet.BoogaBooster.Queue.Abstractions;
 using FourDotnet.BoogaBooster.Queue.Infrastructure;
+using FourDotnet.BoogaBooster.Queue.Observability;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -17,6 +20,8 @@ namespace FourDotnet.BoogaBooster.Queue.Filling;
 /// </summary>
 internal sealed class RideQueueFillerService : BackgroundService
 {
+    private const string FillOperationName = "FillRideQueue";
+
     private readonly IRideQueueService _queueService;
     private readonly IRideQueueStore _store;
     private readonly IWeatherInfluence _weatherInfluence;
@@ -90,47 +95,80 @@ internal sealed class RideQueueFillerService : BackgroundService
         }
     }
 
+    /// <summary>
+    /// Fills one ride's line. The pass acts every ten seconds at most, so it is worth
+    /// a span of its own (ADR-0009) — including the passes that add nobody, which is
+    /// the answer to "why is the line not growing".
+    /// </summary>
     private async Task FillRideAsync(Guid rideId, CancellationToken cancellationToken)
     {
-        var baseCount = ArrivalPlanner.PlanArrivalCount(
-            _options.MinArrivalsPerCycle,
-            _options.MaxArrivalsPerCycle,
-            _rng);
+        using var activity = BoogaBoosterTelemetry.ActivitySource.StartActivity(FillOperationName);
+        activity?.SetTag(QueueTelemetryAttributes.RideId, rideId);
 
-        // Track the crowd to the weather: scale the planned headcount by the latest
-        // NiceWeather indicator before partitioning into groups. In the worst
-        // weather this floors to zero and nobody arrives this cycle.
-        var totalPeople = ArrivalPlanner.ScaleForWeather(
-            baseCount,
-            _weatherInfluence.Current,
-            _options);
+        var groupsAdded = 0;
+        var peopleAdded = 0;
 
-        if (totalPeople == 0)
+        try
         {
-            return;
-        }
+            var baseCount = ArrivalPlanner.PlanArrivalCount(
+                _options.MinArrivalsPerCycle,
+                _options.MaxArrivalsPerCycle,
+                _rng);
 
-        var groupSizes = ArrivalPlanner.PlanGroupSizes(
-            totalPeople,
-            _options.MinGroupSize,
-            _options.MaxGroupSize,
-            _rng);
+            // Track the crowd to the weather: scale the planned headcount by the latest
+            // NiceWeather indicator before partitioning into groups. In the worst
+            // weather this floors to zero and nobody arrives this cycle.
+            var totalPeople = ArrivalPlanner.ScaleForWeather(
+                baseCount,
+                _weatherInfluence.Current,
+                _options);
 
-        var queue = _store.GetOrCreate(rideId);
-
-        foreach (var size in groupSizes)
-        {
-            if (!queue.CanAccept(size))
+            if (totalPeople == 0)
             {
-                _logger.LogDebug(
-                    "Ride {RideId} queue is full ({PeopleWaiting}/{Max}); skipping remaining arrivals.",
-                    rideId,
-                    queue.PeopleWaiting,
-                    queue.MaxPeople);
-                break;
+                return;
             }
 
-            await _queueService.EnqueueGroupAsync(rideId, size, cancellationToken);
+            var groupSizes = ArrivalPlanner.PlanGroupSizes(
+                totalPeople,
+                _options.MinGroupSize,
+                _options.MaxGroupSize,
+                _rng);
+
+            var queue = _store.GetOrCreate(rideId);
+
+            foreach (var size in groupSizes)
+            {
+                if (!queue.CanAccept(size))
+                {
+                    _logger.LogDebug(
+                        "Ride {RideId} queue is full ({PeopleWaiting}/{Max}); skipping remaining arrivals.",
+                        rideId,
+                        queue.PeopleWaiting,
+                        queue.MaxPeople);
+                    break;
+                }
+
+                var enqueued = await _queueService.EnqueueGroupAsync(rideId, size, cancellationToken);
+
+                // A party too large to board in one pass joins as several groups, so
+                // count what actually went into the line rather than what was planned.
+                groupsAdded += enqueued.Count;
+                peopleAdded += enqueued.Sum(group => group.Size);
+            }
+        }
+        catch (Exception exception)
+        {
+            activity?.AddException(exception);
+            activity?.SetStatus(ActivityStatusCode.Error, exception.Message);
+            throw;
+        }
+        finally
+        {
+            if (activity is not null)
+            {
+                activity.SetTag(QueueTelemetryAttributes.GroupsAdded, groupsAdded);
+                activity.SetTag(QueueTelemetryAttributes.PeopleAdded, peopleAdded);
+            }
         }
     }
 }

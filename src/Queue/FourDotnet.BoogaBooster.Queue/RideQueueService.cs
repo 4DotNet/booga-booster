@@ -1,3 +1,4 @@
+using FourDotnet.BoogaBooster.Core.Observability;
 using FourDotnet.BoogaBooster.IntegrationMessages;
 using FourDotnet.BoogaBooster.IntegrationMessages.Events.Queue;
 using FourDotnet.BoogaBooster.Queue.Abstractions;
@@ -77,6 +78,11 @@ internal sealed class RideQueueService : IRideQueueService
                 group.TotalWeightInKilograms,
                 rideId,
                 queue.PeopleWaiting);
+
+            // Untagged: ride id and group id are unbounded, and both are already on
+            // the span this runs under (design D6).
+            BoogaBoosterTelemetry.QueueGroupsQueued.Add(1);
+            BoogaBoosterTelemetry.QueuePeopleQueued.Add(group.Size);
 
             var integrationEvent = new GroupQueuedIntegrationEvent(
                 RideId: rideId,

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using FourDotnet.BoogaBooster.Core.Cqrs;
 using FourDotnet.BoogaBooster.Queue.Abstractions;
 using FourDotnet.BoogaBooster.Queue.Abstractions.DataTransferObjects.GetQueueStatus;
+using FourDotnet.BoogaBooster.Queue.Observability;
 
 namespace FourDotnet.BoogaBooster.Queue.Features.GetQueueStatus;
 
@@ -30,7 +31,7 @@ public sealed class GetQueueStatusQueryHandler : QueryHandler<GetQueueStatusQuer
 
     /// <summary>Records which ride was asked about.</summary>
     protected override void EnrichActivity(Activity activity, GetQueueStatusQuery query)
-        => activity.SetTag("queue.ride.id", query.RideId);
+        => activity.SetTag(QueueTelemetryAttributes.RideId, query.RideId);
 
     /// <summary>
     /// Records how long the line was — counts only, never the queued people
@@ -38,7 +39,7 @@ public sealed class GetQueueStatusQueryHandler : QueryHandler<GetQueueStatusQuer
     /// </summary>
     protected override void EnrichActivityWithResponse(Activity activity, GetQueueStatusResponse response)
     {
-        activity.SetTag("queue.group.count", response.GroupCount);
-        activity.SetTag("queue.people.waiting", response.PeopleWaiting);
+        activity.SetTag(QueueTelemetryAttributes.GroupCount, response.GroupCount);
+        activity.SetTag(QueueTelemetryAttributes.PeopleWaiting, response.PeopleWaiting);
     }
 }
