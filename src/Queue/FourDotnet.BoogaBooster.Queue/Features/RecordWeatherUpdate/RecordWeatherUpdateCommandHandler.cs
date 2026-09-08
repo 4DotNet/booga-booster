@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using FourDotnet.BoogaBooster.Core.Cqrs;
 using FourDotnet.BoogaBooster.Queue.Filling;
+using FourDotnet.BoogaBooster.Queue.Observability;
 
 namespace FourDotnet.BoogaBooster.Queue.Features.RecordWeatherUpdate;
 
@@ -33,7 +34,7 @@ public sealed class RecordWeatherUpdateCommandHandler : CommandHandler<RecordWea
     /// </summary>
     protected override void EnrichActivity(Activity activity, RecordWeatherUpdateCommand command)
     {
-        activity.SetTag("queue.weather.nice_weather.observed", command.NiceWeather);
-        activity.SetTag("queue.weather.nice_weather.previous", _weatherInfluence.Current);
+        activity.SetTag(QueueTelemetryAttributes.NiceWeatherObserved, command.NiceWeather);
+        activity.SetTag(QueueTelemetryAttributes.NiceWeatherPrevious, _weatherInfluence.Current);
     }
 }

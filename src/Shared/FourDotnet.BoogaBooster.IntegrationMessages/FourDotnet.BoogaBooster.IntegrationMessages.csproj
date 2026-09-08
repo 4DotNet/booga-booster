@@ -11,6 +11,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\FourDotnet.BoogaBooster.Core\FourDotnet.BoogaBooster.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <InternalsVisibleTo Include="FourDotnet.BoogaBooster.IntegrationMessages.Tests" />
   </ItemGroup>
 

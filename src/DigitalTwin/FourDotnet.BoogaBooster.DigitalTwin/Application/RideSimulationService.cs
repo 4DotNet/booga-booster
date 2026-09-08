@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using FourDotnet.BoogaBooster.Core.Observability;
 using FourDotnet.BoogaBooster.DigitalTwin.Domain;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -61,7 +63,27 @@ public sealed class RideSimulationService : BackgroundService
     /// Advances the simulation exactly one fixed step. Exposed for deterministic
     /// testing of the physics loop without driving the timer.
     /// </summary>
-    internal void Tick() => _store.Advance(RideParameters.TimeStep);
+    /// <remarks>
+    /// Measured, never spanned. At 120 Hz a span per tick would be 7,200 near-identical
+    /// spans a minute — enough to swamp a trace backend and bury the one tick worth
+    /// looking at, which the histogram surfaces instead (design D4).
+    /// <para>
+    /// Determinism is unaffected: the elapsed time is read <em>after</em> the advance
+    /// and only handed to the histogram, so no clock reading ever enters the tick. The
+    /// step stays exactly <see cref="RideParameters.TimeStep"/> — the pure function of
+    /// state at fixed <c>dt</c> that <c>docs/01 §1.1</c> requires.
+    /// </para>
+    /// </remarks>
+    internal void Tick()
+    {
+        var startedAt = Stopwatch.GetTimestamp();
+
+        _store.Advance(RideParameters.TimeStep);
+
+        BoogaBoosterTelemetry.SimulationTicks.Add(1);
+        BoogaBoosterTelemetry.SimulationTickDuration.Record(
+            Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+    }
 
     /// <summary>
     /// Advances one fixed step and then runs a loading pass. A failure in the loading

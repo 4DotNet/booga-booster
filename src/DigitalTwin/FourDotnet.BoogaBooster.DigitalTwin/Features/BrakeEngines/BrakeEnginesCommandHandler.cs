@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using FourDotnet.BoogaBooster.Core.Cqrs;
 using FourDotnet.BoogaBooster.DigitalTwin.Application;
+using FourDotnet.BoogaBooster.DigitalTwin.Observability;
 
 namespace FourDotnet.BoogaBooster.DigitalTwin.Features.BrakeEngines;
 
@@ -18,5 +20,16 @@ public sealed class BrakeEnginesCommandHandler : CommandHandler<BrakeEnginesComm
         ArgumentNullException.ThrowIfNull(command);
         _store.SetEngineBrakes(command.Engaged);
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Records the brake state asked for alongside the one already in effect, so a
+    /// command that changed nothing is visible as the no-op it was — the difference
+    /// between "the brake never engaged" and "the brake was engaged all along".
+    /// </summary>
+    protected override void EnrichActivity(Activity activity, BrakeEnginesCommand command)
+    {
+        activity.SetTag(RideTelemetryAttributes.BrakeEngaged, command.Engaged);
+        activity.SetTag(RideTelemetryAttributes.BrakeEngagedBefore, _store.GetTelemetry().BrakesEngaged);
     }
 }

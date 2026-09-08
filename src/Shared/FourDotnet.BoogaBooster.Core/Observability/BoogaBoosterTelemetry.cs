@@ -41,4 +41,70 @@ public static class BoogaBoosterTelemetry
         "boogabooster.handler.duration",
         unit: "ms",
         description: "Duration of command and query handler invocations.");
+
+    /// <summary>
+    /// Counts physics ticks the ride simulation loop executed. The loop runs at 120 Hz,
+    /// which is why it is counted rather than spanned — a span per tick would swamp the
+    /// trace backend and bury the one tick worth looking at.
+    /// </summary>
+    public static readonly Counter<long> SimulationTicks = Meter.CreateCounter<long>(
+        "boogabooster.ride.simulation.ticks",
+        unit: "{tick}",
+        description: "Number of fixed-step physics ticks the ride simulation executed.");
+
+    /// <summary>
+    /// How long a single physics tick took. Against the 8.33 ms budget of a 120 Hz step,
+    /// this is the instrument that shows the loop falling behind.
+    /// </summary>
+    public static readonly Histogram<double> SimulationTickDuration = Meter.CreateHistogram<double>(
+        "boogabooster.ride.simulation.tick.duration",
+        unit: "ms",
+        description: "Duration of a single ride-simulation physics tick.");
+
+    /// <summary>Counts passengers boarded, untagged by seat so the series stays single.</summary>
+    public static readonly Counter<long> PassengersBoarded = Meter.CreateCounter<long>(
+        "boogabooster.ride.passengers.boarded",
+        unit: "{passenger}",
+        description: "Number of passengers boarded onto a gondola seat.");
+
+    /// <summary>
+    /// Counts ride-state transition requests, tagged by outcome (<c>accepted</c> /
+    /// <c>rejected</c>) and by the requested target state — seven values, so a dashboard
+    /// can show which transition the lifecycle guard rejects most.
+    /// </summary>
+    public static readonly Counter<long> RideStateTransitions = Meter.CreateCounter<long>(
+        "boogabooster.ride.state.transitions",
+        unit: "{transition}",
+        description: "Number of ride lifecycle transition requests, by outcome and target state.");
+
+    /// <summary>Counts groups joining a ride queue.</summary>
+    public static readonly Counter<long> QueueGroupsQueued = Meter.CreateCounter<long>(
+        "boogabooster.queue.groups.queued",
+        unit: "{group}",
+        description: "Number of groups added to a ride queue.");
+
+    /// <summary>Counts the people in those groups — a group carries between one and eight.</summary>
+    public static readonly Counter<long> QueuePeopleQueued = Meter.CreateCounter<long>(
+        "boogabooster.queue.people.queued",
+        unit: "{person}",
+        description: "Number of people added to a ride queue.");
+
+    /// <summary>
+    /// Counts weather disturbances an operator raised, tagged by kind
+    /// (<c>precipitation</c> / <c>strong-wind</c>).
+    /// </summary>
+    public static readonly Counter<long> WeatherDisturbances = Meter.CreateCounter<long>(
+        "boogabooster.weather.disturbances",
+        unit: "{disturbance}",
+        description: "Number of weather disturbances raised, by kind.");
+
+    /// <summary>
+    /// Counts integration events handed to the transport, tagged by topic and outcome
+    /// (<c>ok</c> / <c>error</c>) — both bounded sets, so a topic that starts failing is
+    /// visible without a trace search.
+    /// </summary>
+    public static readonly Counter<long> IntegrationEventsPublished = Meter.CreateCounter<long>(
+        "boogabooster.messaging.events.published",
+        unit: "{event}",
+        description: "Number of integration events published, by topic and outcome.");
 }

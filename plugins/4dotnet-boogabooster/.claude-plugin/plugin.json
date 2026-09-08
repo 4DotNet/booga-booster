@@ -2,7 +2,7 @@
   "name": "4dotnet-boogabooster",
   "displayName": "4DotNet BoogaBooster Toolkit",
   "description": "Angular architect and C# expert agents, the 4dotnet C# style-guide skill set (solution structure, feature slices, minimal APIs, domain models, observability, Aspire, testing, DTO organization, coverage), and the 4dotnet C# style guide MCP server",
-  "version": "1.2.0",
+  "version": "1.3.1",
   "author": {
     "name": "Eduard Keilholz"
   },

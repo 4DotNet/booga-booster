@@ -1,4 +1,7 @@
+using System.Diagnostics;
+using FourDotnet.BoogaBooster.Core.Observability;
 using FourDotnet.BoogaBooster.Weather.Domain;
+using FourDotnet.BoogaBooster.Weather.Observability;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -12,6 +15,8 @@ namespace FourDotnet.BoogaBooster.Weather.Application;
 /// </summary>
 public sealed class WeatherSimulationService : BackgroundService
 {
+    private const string AdvanceOperationName = "AdvanceWeather";
+
     private readonly IWeatherStore _store;
     private readonly IWeatherUpdatePublisher _publisher;
     private readonly TimeProvider _timeProvider;
@@ -55,16 +60,41 @@ public sealed class WeatherSimulationService : BackgroundService
     /// the conditions actually changed. Exposed for deterministic testing of the
     /// publish gate without driving the timer.
     /// </summary>
+    /// <remarks>
+    /// The weather advances every few seconds, not every physics step, so each advance
+    /// is worth a span of its own (ADR-0009) rather than a counter — including the
+    /// advances that change nothing, which is itself the answer to "why is it still
+    /// raining".
+    /// </remarks>
     /// <returns><c>true</c> when an update was published.</returns>
     internal async Task<bool> TickAsync(CancellationToken cancellationToken)
     {
-        var result = _store.Advance(WeatherDefaults.TickInterval);
-        if (!result.Changed)
-        {
-            return false;
-        }
+        using var activity = BoogaBoosterTelemetry.ActivitySource.StartActivity(AdvanceOperationName);
 
-        await _publisher.PublishAsync(result.Snapshot, cancellationToken).ConfigureAwait(false);
-        return true;
+        try
+        {
+            var result = _store.Advance(WeatherDefaults.TickInterval);
+
+            if (activity is not null)
+            {
+                activity.SetTag(WeatherTelemetryAttributes.Regime, result.Snapshot.Regime.ToString());
+                activity.SetTag(WeatherTelemetryAttributes.NiceWeather, result.Snapshot.NiceWeather);
+                activity.SetTag(WeatherTelemetryAttributes.Changed, result.Changed);
+            }
+
+            if (!result.Changed)
+            {
+                return false;
+            }
+
+            await _publisher.PublishAsync(result.Snapshot, cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+        catch (Exception exception)
+        {
+            activity?.AddException(exception);
+            activity?.SetStatus(ActivityStatusCode.Error, exception.Message);
+            throw;
+        }
     }
 }

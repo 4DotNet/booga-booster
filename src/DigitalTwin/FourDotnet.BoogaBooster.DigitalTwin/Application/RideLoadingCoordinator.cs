@@ -1,5 +1,8 @@
+using System.Diagnostics;
+using FourDotnet.BoogaBooster.Core.Observability;
 using FourDotnet.BoogaBooster.DigitalTwin.Abstractions;
 using FourDotnet.BoogaBooster.DigitalTwin.Domain;
+using FourDotnet.BoogaBooster.DigitalTwin.Observability;
 using FourDotnet.BoogaBooster.Queue.Abstractions;
 using FourDotnet.BoogaBooster.Queue.Abstractions.DataTransferObjects;
 using Microsoft.Extensions.Logging;
@@ -25,6 +28,8 @@ public sealed class RideLoadingCoordinator
     /// <summary>How far past the front of the line a pass looks to backfill a fitting group.</summary>
     private const int LookAheadWindow = 3;
 
+    private const string LoadingPassOperationName = "RideLoadingPass";
+
     private readonly IRideStore _store;
     private readonly ILogger<RideLoadingCoordinator> _logger;
     private readonly IRideQueueService? _queueService;
@@ -43,6 +48,13 @@ public sealed class RideLoadingCoordinator
     /// Runs a single loading pass for <paramref name="rideId"/>. Does nothing unless
     /// the ride is <see cref="RideState.Loading"/> and the Queue module is wired up.
     /// </summary>
+    /// <remarks>
+    /// The pass instruments itself, so the 120 Hz caller needs neither a return value
+    /// to inspect nor any knowledge of what a pass did (design D5). It spans only the
+    /// passes worth a span — one that boarded somebody, or one that threw — because a
+    /// pass runs every simulation tick and almost all of them do nothing (design D4).
+    /// The activity is therefore started lazily and covers the rest of the pass.
+    /// </remarks>
     public async Task RunLoadingPassAsync(Guid rideId, CancellationToken cancellationToken)
     {
         if (_queueService is null || _store.CurrentState != RideState.Loading)
@@ -50,46 +62,84 @@ public sealed class RideLoadingCoordinator
             return;
         }
 
-        while (!cancellationToken.IsCancellationRequested)
+        Activity? activity = null;
+        var groupsBoarded = 0;
+        var passengersBoarded = 0;
+
+        try
         {
-            var emptyGondolas = _store.EmptyGondolaCount;
-            if (emptyGondolas <= 0)
+            while (!cancellationToken.IsCancellationRequested)
             {
-                return; // The ride is full — no empty gondola left to seat a fresh group.
+                var emptyGondolas = _store.EmptyGondolaCount;
+                if (emptyGondolas <= 0)
+                {
+                    return; // The ride is full — no empty gondola left to seat a fresh group.
+                }
+
+                var status = _queueService.GetStatus(rideId);
+                if (status.Groups.Count == 0)
+                {
+                    return; // Nobody waiting.
+                }
+
+                var chosen = FirstFittingGroup(status.Groups, emptyGondolas);
+                if (chosen is null)
+                {
+                    return; // None of the first three waiting groups fit — the ride is full.
+                }
+
+                var taken = await _queueService
+                    .TakeGroupAsync(rideId, chosen.GroupId, cancellationToken)
+                    .ConfigureAwait(false);
+                if (taken is null)
+                {
+                    continue; // The group was already gone; re-read the line and retry.
+                }
+
+                var members = taken.People
+                    .Select(person => new PassengerWeight(person.WeightInKilograms))
+                    .ToArray();
+                _store.BoardGroup(members);
+
+                activity ??= StartPassActivity(rideId);
+                groupsBoarded++;
+                passengersBoarded += members.Length;
+
+                BoogaBoosterTelemetry.PassengersBoarded.Add(members.Length);
+
+                _logger.LogInformation(
+                    "Boarded group {GroupId} of {Size} onto ride {RideId}; {EmptyGondolas} gondola(s) still free.",
+                    taken.GroupId,
+                    taken.Size,
+                    rideId,
+                    _store.EmptyGondolaCount);
             }
-
-            var status = _queueService.GetStatus(rideId);
-            if (status.Groups.Count == 0)
-            {
-                return; // Nobody waiting.
-            }
-
-            var chosen = FirstFittingGroup(status.Groups, emptyGondolas);
-            if (chosen is null)
-            {
-                return; // None of the first three waiting groups fit — the ride is full.
-            }
-
-            var taken = await _queueService
-                .TakeGroupAsync(rideId, chosen.GroupId, cancellationToken)
-                .ConfigureAwait(false);
-            if (taken is null)
-            {
-                continue; // The group was already gone; re-read the line and retry.
-            }
-
-            var members = taken.People
-                .Select(person => new PassengerWeight(person.WeightInKilograms))
-                .ToArray();
-            _store.BoardGroup(members);
-
-            _logger.LogInformation(
-                "Boarded group {GroupId} of {Size} onto ride {RideId}; {EmptyGondolas} gondola(s) still free.",
-                taken.GroupId,
-                taken.Size,
-                rideId,
-                _store.EmptyGondolaCount);
         }
+        catch (Exception exception)
+        {
+            // A pass that threw is worth a span even if it boarded nobody: the caller
+            // logs and continues, so without this the broken pass leaves no trace.
+            activity ??= StartPassActivity(rideId);
+            activity?.AddException(exception);
+            activity?.SetStatus(ActivityStatusCode.Error, exception.Message);
+            throw;
+        }
+        finally
+        {
+            if (activity is not null)
+            {
+                activity.SetTag(RideTelemetryAttributes.GroupsBoarded, groupsBoarded);
+                activity.SetTag(RideTelemetryAttributes.PassengersBoarded, passengersBoarded);
+                activity.Dispose();
+            }
+        }
+    }
+
+    private static Activity? StartPassActivity(Guid rideId)
+    {
+        var activity = BoogaBoosterTelemetry.ActivitySource.StartActivity(LoadingPassOperationName);
+        activity?.SetTag(RideTelemetryAttributes.RideId, rideId);
+        return activity;
     }
 
     /// <summary>
