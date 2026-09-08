@@ -427,3 +427,6 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Copilot CLI code-review scratch output (see .github/workflows/code-quality-check.yml)
+.code-review/
