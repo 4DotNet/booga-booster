@@ -14,6 +14,9 @@ internal static class WeatherTelemetryAttributes
     /// <summary>The nice-weather reading in [0, 1].</summary>
     internal const string NiceWeather = "weather.nice_weather";
 
+    /// <summary>Whether a simulation advance actually moved the conditions.</summary>
+    internal const string Changed = "weather.changed";
+
     /// <summary>The kind of precipitation a command requested or the store reported.</summary>
     internal const string PrecipitationType = "weather.precipitation.type";
 

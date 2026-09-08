@@ -112,8 +112,17 @@ module: `ride.`, `queue.`, `weather.`, `messaging.`. Metric names are prefixed
 Names are declared as `const string` in **one place per module** —
 `<Module>/Observability/<Module>TelemetryAttributes.cs` — never repeated as a
 literal at each call site, so a rename is a single edit and a test cannot be left
-asserting a dead string. Module vocabulary stays in the module; `Core` holds only
-the shared instruments and the `outcome` values.
+asserting a dead string.
+
+**This applies to every call site, not just handlers.** A background service, a
+coordinator or a publisher adds its names to the module's registry too; a local
+`private const` beside the code that uses it is the same defect as a literal —
+it is outside the registry a rename would touch.
+
+The genuinely shared names — the base-class span and metric tags, and the
+`outcome` key every success/failure instrument uses — live in
+`Core/Observability/TelemetryTags.cs`, with their values in `TelemetryOutcome`.
+Module vocabulary stays in the module: `Core` must not accumulate it.
 
 Follow the OpenTelemetry **messaging** semantic conventions where they apply
 (`messaging.system`, `messaging.destination.name`) — there is no semantic
@@ -191,8 +200,11 @@ Assert against the same name constants the production code writes.
 - A handler re-implementing the base-class plumbing (starting its own activity,
   timing itself, counting its own invocations) instead of overriding
   `EnrichActivity`.
-- Attribute names written as literals at the call site instead of referencing the
-  module's `<Module>TelemetryAttributes` constants.
+- Attribute or metric-tag names written as literals at the call site instead of
+  referencing the module's `<Module>TelemetryAttributes` constants — or declared
+  as a `private const` next to the code that uses them, which keeps them out of
+  the registry a rename would touch. Background services and publishers are held
+  to this as strictly as handlers.
 - `AddOpenTelemetry()` / exporter configuration inside a module or an API host
   instead of `ServiceDefaults`.
 - A project that does not call `AddServiceDefaults()`.

@@ -17,9 +17,6 @@ public sealed class WeatherSimulationService : BackgroundService
 {
     private const string AdvanceOperationName = "AdvanceWeather";
 
-    /// <summary>Whether the advance actually moved the conditions.</summary>
-    private const string WeatherChangedAttribute = "weather.changed";
-
     private readonly IWeatherStore _store;
     private readonly IWeatherUpdatePublisher _publisher;
     private readonly TimeProvider _timeProvider;
@@ -82,7 +79,7 @@ public sealed class WeatherSimulationService : BackgroundService
             {
                 activity.SetTag(WeatherTelemetryAttributes.Regime, result.Snapshot.Regime.ToString());
                 activity.SetTag(WeatherTelemetryAttributes.NiceWeather, result.Snapshot.NiceWeather);
-                activity.SetTag(WeatherChangedAttribute, result.Changed);
+                activity.SetTag(WeatherTelemetryAttributes.Changed, result.Changed);
             }
 
             if (!result.Changed)

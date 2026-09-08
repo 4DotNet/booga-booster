@@ -36,8 +36,8 @@ internal struct HandlerTelemetryScope
 
         if (activity is not null)
         {
-            activity.SetTag("boogabooster.operation", operation);
-            activity.SetTag("boogabooster.operation.kind", kind);
+            activity.SetTag(TelemetryTags.SpanOperation, operation);
+            activity.SetTag(TelemetryTags.SpanOperationKind, kind);
         }
 
         return new HandlerTelemetryScope(activity, operation, kind);
@@ -59,9 +59,9 @@ internal struct HandlerTelemetryScope
     {
         var tags = new TagList
         {
-            { "operation", _operation },
-            { "kind", _kind },
-            { "outcome", _outcome },
+            { TelemetryTags.Operation, _operation },
+            { TelemetryTags.Kind, _kind },
+            { TelemetryTags.Outcome, _outcome },
         };
 
         BoogaBoosterTelemetry.HandlerInvocations.Add(1, tags);

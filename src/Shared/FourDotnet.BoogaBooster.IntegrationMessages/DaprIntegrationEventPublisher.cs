@@ -72,7 +72,11 @@ internal sealed class DaprIntegrationEventPublisher : IIntegrationEventPublisher
             // Topic and outcome only: an event id would multiply the series per message.
             BoogaBoosterTelemetry.IntegrationEventsPublished.Add(
                 1,
-                new TagList { { "topic", topic }, { "outcome", outcome } });
+                new TagList
+                {
+                    { MessagingTelemetryAttributes.TopicTag, topic },
+                    { TelemetryTags.Outcome, outcome },
+                });
         }
     }
 }

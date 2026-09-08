@@ -13,6 +13,9 @@ namespace FourDotnet.BoogaBooster.DigitalTwin.Observability;
 /// </remarks>
 internal static class RideTelemetryAttributes
 {
+    /// <summary>The ride a background pass addressed.</summary>
+    internal const string RideId = "ride.id";
+
     /// <summary>The lifecycle state the operation found, or left the ride in.</summary>
     internal const string State = "ride.state";
 
@@ -52,6 +55,9 @@ internal static class RideTelemetryAttributes
 
     /// <summary>How many passengers are seated across all sixteen gondolas.</summary>
     internal const string PassengersBoarded = "ride.passengers.boarded";
+
+    /// <summary>How many groups a loading pass seated.</summary>
+    internal const string GroupsBoarded = "ride.groups.boarded";
 
     /// <summary>The mill's signed rotation speed in revolutions per minute.</summary>
     internal const string MillRpm = "ride.mill.rpm";

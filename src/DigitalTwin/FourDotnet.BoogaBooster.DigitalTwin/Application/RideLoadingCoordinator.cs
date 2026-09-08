@@ -30,12 +30,6 @@ public sealed class RideLoadingCoordinator
 
     private const string LoadingPassOperationName = "RideLoadingPass";
 
-    /// <summary>The ride whose line the pass drained — a span attribute, never a metric tag.</summary>
-    private const string RideIdAttribute = "ride.id";
-
-    /// <summary>How many groups the pass seated.</summary>
-    private const string GroupsBoardedAttribute = "ride.groups.boarded";
-
     private readonly IRideStore _store;
     private readonly ILogger<RideLoadingCoordinator> _logger;
     private readonly IRideQueueService? _queueService;
@@ -134,7 +128,7 @@ public sealed class RideLoadingCoordinator
         {
             if (activity is not null)
             {
-                activity.SetTag(GroupsBoardedAttribute, groupsBoarded);
+                activity.SetTag(RideTelemetryAttributes.GroupsBoarded, groupsBoarded);
                 activity.SetTag(RideTelemetryAttributes.PassengersBoarded, passengersBoarded);
                 activity.Dispose();
             }
@@ -144,7 +138,7 @@ public sealed class RideLoadingCoordinator
     private static Activity? StartPassActivity(Guid rideId)
     {
         var activity = BoogaBoosterTelemetry.ActivitySource.StartActivity(LoadingPassOperationName);
-        activity?.SetTag(RideIdAttribute, rideId);
+        activity?.SetTag(RideTelemetryAttributes.RideId, rideId);
         return activity;
     }
 

@@ -62,6 +62,6 @@ public sealed class RequestRideStateTransitionCommandHandler : CommandHandler<Re
             new TagList
             {
                 { RideTelemetryAttributes.StateRequested, target.ToString() },
-                { "outcome", outcome },
+                { TelemetryTags.Outcome, outcome },
             });
 }

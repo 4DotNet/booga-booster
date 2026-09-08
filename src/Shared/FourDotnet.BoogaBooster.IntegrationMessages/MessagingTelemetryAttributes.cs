@@ -21,6 +21,12 @@ internal static class MessagingTelemetryAttributes
     /// <summary>The runtime type name of the published event.</summary>
     internal const string EventType = "messaging.event.type";
 
+    /// <summary>
+    /// Metric tag: the topic published to. A bounded set — one value per declared
+    /// integration event — so it is safe as a tag, unlike an event id.
+    /// </summary>
+    internal const string TopicTag = "topic";
+
     /// <summary>The value <see cref="System"/> always takes.</summary>
     internal const string DaprSystem = "dapr";
 }
