@@ -95,6 +95,16 @@ or query and dispatch it to an injected `ICommandHandler<T>` / `IQueryHandler<T,
 **Never add endpoint mappings to `Api/Program.cs`.** Add them to the owning module's
 `Endpoints/` class and let `Program.cs` call the module's map method.
 
+**Handlers implement `ExecuteAsync`, not `HandleAsync`.** The `CommandHandler<T>` /
+`QueryHandler<T,R>` base classes own the observability plumbing ADR-0009 requires —
+they start the activity on the shared `ActivitySource`, time the invocation and record
+the outcome counter and duration histogram — and call the handler's
+`protected override ExecuteAsync`. A handler adds only its own span tags by overriding
+`EnrichActivity` (and `EnrichActivityWithResponse` on a query), and its own domain
+metrics through `BoogaBoosterTelemetry.Meter`. The shared `ActivitySource`/`Meter` live
+in `Shared/Core/Observability/BoogaBoosterTelemetry.cs` and are registered once, in
+`ServiceDefaults`; never configure OTEL in a module or in the API host.
+
 ### Messaging
 
 Cross-module coupling that should stay async goes over Dapr pub/sub on RabbitMQ:
