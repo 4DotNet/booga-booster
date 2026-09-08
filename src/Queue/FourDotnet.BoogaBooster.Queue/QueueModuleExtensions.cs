@@ -1,4 +1,8 @@
+using FourDotnet.BoogaBooster.Core.Cqrs;
 using FourDotnet.BoogaBooster.Queue.Abstractions;
+using FourDotnet.BoogaBooster.Queue.Abstractions.DataTransferObjects.GetQueueStatus;
+using FourDotnet.BoogaBooster.Queue.Features.GetQueueStatus;
+using FourDotnet.BoogaBooster.Queue.Features.RecordWeatherUpdate;
 using FourDotnet.BoogaBooster.Queue.Filling;
 using FourDotnet.BoogaBooster.Queue.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
@@ -17,8 +21,9 @@ namespace FourDotnet.BoogaBooster.Queue;
 public static class QueueModuleExtensions
 {
     /// <summary>
-    /// Registers the Queue module's options, in-memory store, queue service and
-    /// the background filler that keeps each ride's line populated.
+    /// Registers the Queue module's options, in-memory store, queue service, the
+    /// feature handlers, and the background filler that keeps each ride's line
+    /// populated.
     /// </summary>
     public static IHostApplicationBuilder AddQueueModule(this IHostApplicationBuilder builder)
     {
@@ -36,6 +41,10 @@ public static class QueueModuleExtensions
         // filler reads it each cycle to scale arrivals to the weather.
         builder.Services.AddSingleton<IWeatherInfluence, WeatherInfluence>();
         builder.Services.AddHostedService<RideQueueFillerService>();
+
+        // Feature handlers (CQRS — ADR-0005/0006).
+        builder.Services.AddScoped<IQueryHandler<GetQueueStatusQuery, GetQueueStatusResponse>, GetQueueStatusQueryHandler>();
+        builder.Services.AddScoped<ICommandHandler<RecordWeatherUpdateCommand>, RecordWeatherUpdateCommandHandler>();
 
         return builder;
     }
