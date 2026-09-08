@@ -11,9 +11,6 @@ namespace FourDotnet.BoogaBooster.Core.Observability;
 /// </summary>
 internal struct HandlerTelemetryScope
 {
-    private const string OkOutcome = "ok";
-    private const string ErrorOutcome = "error";
-
     private readonly Activity? _activity;
     private readonly long _startedAt;
     private readonly string _operation;
@@ -25,7 +22,7 @@ internal struct HandlerTelemetryScope
         _activity = activity;
         _operation = operation;
         _kind = kind;
-        _outcome = OkOutcome;
+        _outcome = TelemetryOutcome.Ok;
         _startedAt = Stopwatch.GetTimestamp();
     }
 
@@ -52,7 +49,7 @@ internal struct HandlerTelemetryScope
     /// </summary>
     internal void Failed(Exception exception)
     {
-        _outcome = ErrorOutcome;
+        _outcome = TelemetryOutcome.Error;
         _activity?.AddException(exception);
         _activity?.SetStatus(ActivityStatusCode.Error, exception.Message);
     }
