@@ -1,6 +1,7 @@
+using FourDotnet.BoogaBooster.Core.Cqrs;
 using FourDotnet.BoogaBooster.IntegrationMessages;
 using FourDotnet.BoogaBooster.IntegrationMessages.Events.Weather;
-using FourDotnet.BoogaBooster.Queue.Filling;
+using FourDotnet.BoogaBooster.Queue.Features.RecordWeatherUpdate;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -30,17 +31,19 @@ internal static class WeatherSubscriptionEndpoints
     }
 
     /// <summary>
-    /// Records the latest weather into the shared <see cref="IWeatherInfluence"/>
-    /// state and acknowledges the message. Kept free of queue-domain logic — the
-    /// filler applies the value on its own schedule.
+    /// Maps the integration event to a <see cref="RecordWeatherUpdateCommand"/>,
+    /// dispatches it to the injected handler and acknowledges the message. Like
+    /// every endpoint in the module it holds no logic of its own (ADR-0005).
     /// </summary>
-    internal static Ok HandleWeatherUpdate(
+    internal static async Task<Ok> HandleWeatherUpdate(
         WeatherUpdateIntegrationEvent @event,
-        IWeatherInfluence weatherInfluence)
+        ICommandHandler<RecordWeatherUpdateCommand> handler,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(@event);
+        ArgumentNullException.ThrowIfNull(handler);
 
-        weatherInfluence.Update(@event.NiceWeather);
+        await handler.HandleAsync(new RecordWeatherUpdateCommand(@event.NiceWeather), cancellationToken);
         return TypedResults.Ok();
     }
 }
