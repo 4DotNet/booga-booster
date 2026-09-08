@@ -1,5 +1,9 @@
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using FourDotnet.BoogaBooster.Core.Cqrs;
+using FourDotnet.BoogaBooster.Core.Observability;
 using FourDotnet.BoogaBooster.Weather.Application;
+using FourDotnet.BoogaBooster.Weather.Observability;
 
 namespace FourDotnet.BoogaBooster.Weather.Features.StartPrecipitation;
 
@@ -23,6 +27,27 @@ public sealed class StartPrecipitationCommandHandler : CommandHandler<StartPreci
         ArgumentNullException.ThrowIfNull(command);
 
         var result = _store.StartPrecipitation(command.Type);
+
+        BoogaBoosterTelemetry.WeatherDisturbances.Add(
+            1,
+            new TagList
+            {
+                {
+                    WeatherTelemetryAttributes.DisturbanceKind,
+                    WeatherTelemetryAttributes.PrecipitationDisturbance
+                },
+            });
+
         await _publisher.PublishAsync(result.Snapshot, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Records the precipitation asked for and the regime the command found, so a span
+    /// shows both the request and what it interrupted.
+    /// </summary>
+    protected override void EnrichActivity(Activity activity, StartPrecipitationCommand command)
+    {
+        activity.SetTag(WeatherTelemetryAttributes.PrecipitationType, command.Type.ToString());
+        activity.SetTag(WeatherTelemetryAttributes.Regime, _store.GetSnapshot().Regime.ToString());
     }
 }
