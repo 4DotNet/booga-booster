@@ -1,6 +1,7 @@
 using FourDotnet.BoogaBooster.DigitalTwin.Abstractions;
 using FourDotnet.BoogaBooster.DigitalTwin.Domain;
 using FourDotnet.BoogaBooster.Queue.Abstractions;
+using FourDotnet.BoogaBooster.Queue.Abstractions.DataTransferObjects;
 using Microsoft.Extensions.Logging;
 
 namespace FourDotnet.BoogaBooster.DigitalTwin.Application;
