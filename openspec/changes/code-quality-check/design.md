@@ -242,13 +242,81 @@ An unpinned global install means the gate's behaviour can change between two run
 
 `--model` is pinned for the same reason rather than left to the CLI default (`auto` lets Copilot choose, which is the opposite of what a gate wants) — with the added wrinkle that model availability depends on Copilot org policy, so the README records which model the pin assumes and the workflow fails with a clear message if it is unavailable.
 
+### D13 — Two models review independently, in a matrix
+
+One reviewer is one opinion. The `review` job is therefore a matrix with one leg per model — `claude-sonnet-5` and `gpt-5.6-terra` — and the legs are **isolated by construction**: each gets the same byte-identical `diff.patch` from the `prepare` job, neither can see the other's findings, and neither knows another review is happening. Agreement between them is then evidence rather than an artefact of one model having read the other's output.
+
+`fail-fast: false`, because both reviews must complete: if one model fails, the job fails, `compare` never runs and nothing is published. A comparison of one review must never be mistaken for a comparison of two.
+
+The guards and the diff computation moved into a separate `prepare` job for a mundane but real reason: **outputs of a matrix job are ambiguous** — GitHub keeps whichever leg finished last — and `skipped` / `empty` gate three downstream jobs. Computing them once also guarantees both reviewers see the same input, which the fairness of the comparison depends on.
+
+The roster lives in exactly one place, the matrix. Artifacts are named `code-review-<model>`, and both the comparison and the publisher derive the reviewer list from those artifact names, so adding a third model is a two-line matrix edit and nothing else.
+
+### D14 — Compare mechanically first, then narrate; the narrative cannot move the gate
+
+The comparison has two halves, deliberately separated:
+
+- **`compare-reviews.mjs` — deterministic and unit-tested.** It pairs findings that describe the same problem (same file, within five lines, and either the same `category` or a title-token overlap of 0.5+), and reports per-reviewer counts, what more than one reviewer found, what only one found, the severity disagreements, and an agreement rate. Every pairing records *how* it matched (`exact`, `same-category`, `similar-title`) so a loose pairing is visible as one. A cluster holds at most one finding per model, because each reviewer already deduplicates its own list.
+- **A third Copilot session — judgement.** It reads the deterministic comparison, both raw findings files and the diff, and writes `comparison.md`: which single-reviewer findings are real, plausible or likely false positives, who graded a disagreement correctly, and which review was more useful. This is the half a script cannot do — two findings can describe the same defect in words that share no tokens at all.
+
+**The narrative is commentary.** It is rendered into the review body and nothing else: it cannot change a severity, add or remove a finding, or affect the exit code. That separation is what keeps a third model's opinion from quietly becoming the gate — and D16 is what enforces it, because saying so in a prompt does not.
+
+Two consequences worth stating. First, the narrating model is one of the two reviewers (`COMPARE_MODEL`), so it reads its own output alongside a rival's; `compare-prompt.md` tells it not to try to identify or favour either, and the published body names who wrote the narrative so a reader can discount it. Second, the `compare` job checks out the **base branch**, not the PR head: the standards a judgement rests on are then the versions this pull request cannot have edited, and the change reaches the model only as `diff.patch`.
+
+The narrative is also the one place this workflow tolerates a failure. If that session fails, a warning is emitted and publication continues with the figures alone — both reviews are already complete at that point, and losing a valid review over a missing prose section would be the wrong trade. It is expressed as `if ! copilot …` in the step rather than `continue-on-error:`, which would swallow the working-tree assertion too.
+
+### D15 — The gate is the union of the reviewers, not their consensus
+
+A merged finding inherits the **worst** severity any reviewer gave it. One model catching a blocking violation the other missed still fails the check.
+
+The alternative — gate only on findings both models flagged `blocking` — was considered and rejected. `blocking` is already narrow and enumerated (D10): an explicit MUST violation, a contradicted published spec, or a demonstrable failure. A rule that a MUST violation only counts when two models independently notice it weakens the gate rather than making it more precise, and `CLAUDE.md` warns against weakening this configuration casually. False positives are addressed where they belong — the `blocking` bar, and the visible attribution that marks a lone finding as one — not by raising the bar to unanimity.
+
+### D16 — The narrative cannot reach what the gate is computed from
+
+D14 says the narrative is commentary. That was a statement of intent, and intent is not a
+control: the narrative session runs with `--allow-all-tools` (required for `-p` mode, see
+D5) and therefore *can* write files, and the D9 working-tree assertion deliberately ignores
+everything under `.code-review/` — which is where the reviewers' findings and the merged
+document the publisher gates on live. A prompt-injected narrative session could have
+rewritten `findings.merged.json` to drop a blocking finding, and both assertions would have
+passed. The reviewers' findings files are attacker-influenced input (a pull request can put
+text in any file a reviewer reads), so this is not a hypothetical.
+
+Two controls, neither of which depends on a Copilot CLI flag behaving as documented:
+
+1. **The gate's input is not in the tree.** `compare-reviews.mjs` writes
+   `findings.merged.json` outside the working directory, and the workflow copies it in only
+   after the narrative session has exited and been verified. The narrating model never sees
+   it and cannot address it. It does not need it: it reads `comparison.json` and the raw
+   findings files.
+2. **Everything it can reach is fingerprinted and verified.** Every file under
+   `.code-review/` is hashed before the session and checked after. Any modification or
+   deletion fails the check, and the only new files tolerated afterwards are the narrative
+   itself and the two the workflow redirects (`transcript-compare.jsonl`,
+   `usage-compare.json`). Anything else fails too.
+
+The publisher then corroborates what it is given: the merged document and the comparison
+report are written from the same clusters, so their counts must agree, and a mismatch fails
+the check rather than gating on a document nothing confirms.
+
+The review legs need no equivalent, and it is worth being precise about why rather than adding ceremony: a reviewer's `findings.json` **is** its own output, and its leg uploads exactly three named files, so a reviewer cannot corrupt the diff or another reviewer's findings for anything downstream — the comparison job takes `diff.patch` from the `prepare` artifact, not from a reviewer. The asymmetry is real: the comparison is the only session that runs in a directory holding output it did not produce.
+
+A `--deny-tool 'write(<path>)'` rule was considered as a third layer and deliberately left
+out for now: the path-pattern semantics of that kind are unverified against 1.0.83, and an
+unverified deny rule that silently fails to match is worse than none — it invites exactly
+the reasoning that D9 exists to avoid. Task 8.19 verifies the semantics; the layer can be
+added once they are known, and it will remain a layer rather than the guarantee.
+
 ## Risks / Trade-offs
 
 - **Copilot CLI's flag surface is the least stable part of this design — demonstrably so.** Three of this document's original claims about it were false (D4, D5, D6), and one of them would have shipped an invocation that could not run non-interactively at all. A renamed flag or a silently-ignored deny rule degrades the security model with no error. → The D9 working-tree assertion depends on no claim about the CLI and catches the consequence; the design now uses only the four documented permission *kinds* rather than internal tool identifiers, which is the more stable vocabulary; D12 pins the version and makes a bump re-run the probe PR (task 7.2). The general lesson is recorded rather than smoothed over: verify this CLI's surface, do not reason about it from analogy with other agentic CLIs.
 - **The reviewer authenticates as a human with a Copilot seat.** A personal PAT carries that person's full repo access into CI, and its rotation or departure silently breaks the gate. → D2 recommends a dedicated machine account with a repo-scoped fine-grained PAT; D3 ensures the PAT-holding job has no write permission and never touches the GitHub API; publishing runs under the Actions token so nothing is attributed to the seat owner; `--secret-env-vars` keeps the token out of transcripts and logs.
 - **AI-credit consumption is a shared budget.** A busy PR day draws down the seat's allowance, and if it is a person's seat that is their working capacity. → `--max-ai-credits` imposes a hard per-session cap, which is a real bound rather than a proxy for one; `--usage-output-file` makes each run's usage visible in the job summary, so drift is noticed in the run rather than on a bill; a dedicated seat makes the budget legible (D2); concurrency cancellation, the draft skip, `paths-ignore` and the job timeout bound how often the CLI starts at all. If the allowance is exhausted the CLI fails and the check fails — noisily, not silently.
 - **False-positive `blocking` findings block merges and erode trust.** → The `blocking` bar in D10 is narrow and enumerated; the prompt is explicit that a clean review is a good outcome; `event: COMMENT` keeps GitHub itself from blocking the PR; a maintainer can re-run or merge past a not-yet-required check. Treat the first weeks as calibration and tighten the prompt from real output *before* making the check required.
+- **Prompt injection reaching the comparison, which runs on another model’s output.** The narrative session reads two findings files written by models that were themselves reading attacker-influenced files, and it runs with file-writing tools in a directory holding the document the gate is computed from. → D16: that document is not in the directory while the model runs, and everything that is gets hashed before and verified after, so tampering fails the check instead of changing it. The publisher additionally refuses a merged document whose finding count the comparison does not corroborate. Residual risk is the same as for a review: a misled narrative produces misleading prose, which is why it is labelled as commentary and attributed to its model in the published body.
 - **Prompt injection from PR content.** A PR can add text to any file the reviewer reads — a source file, `CLAUDE.md`, a skill file — instructing it to pass everything. → `--no-custom-instructions` (D5) stops repo files from shaping the system prompt, so injected text arrives as file content the prompt has framed as data rather than as instructions the CLI itself loaded. The `review` job holds no write permission, no shell, no network and no GitHub tools (D3, D5), so the worst outcome is a useless review, not a compromised repo. The prompt additionally requires any diff touching its own review configuration (`.github/code-review/`, `.github/workflows/`, `CLAUDE.md`, `.claude/`) to be reported at `major` or higher, so such a diff is surfaced even when the reviewer has been talked into silence elsewhere. Residual risk is accepted: a reviewer that has been successfully misled produces a clean review, and only a human reading the diff will notice.
+- **Three Copilot sessions per run instead of one.** Two reviews plus the narrative roughly triples the AI-credit draw of a run, and `--max-ai-credits` is a *per-session* cap, so the workflow ceiling is three times what the number suggests. → Concurrency cancellation matters more than it did with one reviewer and is unchanged; the job summary now reports usage per session, so the real cost is visible per run rather than inferred; the second reviewer and the narrative are each one matrix or `env:` edit away from being removed if the budget does not justify them.
+- **Pairing findings mechanically can merge two different problems, or split one.** Two unrelated findings on neighbouring lines with the same category will be merged; the same defect described in different words five lines apart will not. → The window is narrow (five lines) and a same-category match is required unless titles genuinely overlap; every pairing records how loose it was, and `compare-prompt.md` explicitly asks the narrating model to call out a pairing that looks wrong. A mis-pairing costs a confusing comment, never a lost finding: both reviewers’ details are carried into the merged finding, and the severity is the worst of the two.
 - **Non-determinism: the same diff can yield different findings.** → Accepted, and inherent to the approach. It is why the gate is narrow, why the check is re-runnable, and why this workflow is not a substitute for `dotnet test`. Pinning the CLI and the model (D12) removes the avoidable share of the variance.
 - **A missing secret, a revoked seat, or a policy-blocked model fails the check on every PR.** → The first substantive step asserts the secret is present and fails with a message naming `COPILOT_GITHUB_TOKEN` and pointing at the README; entitlement and model-policy failures are surfaced with the CLI's own error rather than swallowed, and the README lists both as the first things to check.
 - **The review API's diff-position rules are fiddly and version-sensitive.** → All position computation lives in one small, unit-testable Node module, and unanchorable findings degrade into the review body (D8) instead of 422-ing the entire review away. One bad line number must not suppress the other twelve findings.

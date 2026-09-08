@@ -109,17 +109,30 @@ grounded in this repository's own checked-in standards. The workflow is
 
 ### What it does
 
-1. Computes the PR's changed files and unified diff from the merge base, onto disk.
-2. Runs `copilot -p` with `.github/code-review/review-prompt.md`, which tells it to
-   review only the changed lines and to ground every finding in a specific rule file
-   (`CLAUDE.md`, a `.claude/skills/*` rule, an `openspec/specs/` requirement, `docs/`).
-3. The reviewer writes `.code-review/findings.json` — path, line, severity, category,
+1. Computes the PR's changed files and unified diff from the merge base, onto disk. Once,
+   in a `prepare` job, so every reviewer judges byte-identical input.
+2. Runs `copilot -p` with `.github/code-review/review-prompt.md` **once per model**, as
+   separate matrix legs — currently `claude-sonnet-5` and `gpt-5.6-terra`. The prompt
+   tells each to review only the changed lines and to ground every finding in a specific
+   rule file (`CLAUDE.md`, a `.claude/skills/*` rule, an `openspec/specs/` requirement,
+   `docs/`). Neither reviewer can see the other's output.
+3. Each reviewer writes `.code-review/findings.json` — path, line, severity, category,
    rationale and the standard cited.
-4. `.github/code-review/publish-review.mjs` posts them as **inline review comments** on
-   the changed lines, plus a summary. Findings that cannot be anchored to a diff line go
-   in the summary rather than being dropped.
-5. The check **fails only on `blocking` findings**. `major`, `minor` and `nit` are
-   advisory.
+4. `.github/code-review/compare-reviews.mjs` pairs the reviews: findings on the same file
+   within a few lines, with the same category or an overlapping title, become one problem.
+   It reports per-reviewer counts, what they agreed on, what each found alone, where they
+   graded the same problem differently, and an agreement rate.
+5. A **third Copilot session** (`.github/code-review/compare-prompt.md`) reads that report,
+   both raw findings files and the diff, and writes the narrative: which single-reviewer
+   findings are real, who graded a disagreement correctly, which review was more useful.
+   It is commentary — it cannot change a severity or the check result.
+6. `.github/code-review/publish-review.mjs` posts the merged findings as **inline review
+   comments** on the changed lines, each naming the reviewers that reported it, plus a
+   summary carrying the comparison. Findings that cannot be anchored to a diff line go in
+   the summary rather than being dropped.
+7. The check **fails only on `blocking` findings**, taking the **union** of the reviewers:
+   a problem inherits the worst severity any model gave it, so one model catching a MUST
+   violation alone still fails the check. `major`, `minor` and `nit` are advisory.
 
 Drafts and pull requests **from forks are skipped** with a passing check — the
 `pull_request` event grants forks no secrets, so the review cannot run for them.
@@ -153,9 +166,14 @@ Also required:
 
 Reviews draw **AI credits** from the seat's allowance, not metered API tokens.
 
-- `MAX_AI_CREDITS` in the workflow is a **hard per-session cap** (`--max-ai-credits`).
-- Each run's actual usage appears in the **Actions job summary**, read from the CLI's
-  `--usage-output-file`.
+- A run starts **three sessions** — two reviews and the comparison — so it costs roughly
+  three times a single-reviewer run.
+- `MAX_AI_CREDITS` in the workflow is a **hard per-session cap** (`--max-ai-credits`), so
+  the ceiling for a whole run is three times that number.
+- Dropping the second reviewer is a one-line matrix edit; dropping the narrative is one
+  step. Both are in `.github/workflows/code-quality-check.yml`.
+- Each run's actual usage appears in the **Actions job summary**, per session, read from
+  the CLI's `--usage-output-file`.
 - Consumption is bounded further by per-PR concurrency cancellation (a new push cancels
   the superseded run), the draft skip, `paths-ignore` for image assets, and a job timeout.
 
@@ -165,14 +183,23 @@ The workflow is split into two jobs on purpose:
 
 | Job | Credential | Permissions | Runs the model |
 | --- | --- | --- | :-: |
-| `review` | `COPILOT_GITHUB_TOKEN` (user PAT) | `contents: read` | ✅ |
+| `prepare` | — | `contents: read` | — |
+| `review` (one leg per model) | `COPILOT_GITHUB_TOKEN` (user PAT) | `contents: read` | ✅ |
+| `compare` | `COPILOT_GITHUB_TOKEN` (user PAT) | `contents: read` | ✅ |
 | `publish` | Actions `GITHUB_TOKEN` | `contents: read`, `pull-requests: write` | — |
 
-So the job holding a user PAT cannot write to the PR, and the job that can write to the
-PR never runs the model. Comments are attributed to the Actions bot, not to the seat
+So no job holding a user PAT can write to the PR, and the job that can write to the PR
+never runs a model. `compare` checks out the **base branch** rather than the PR head, so
+the standards its judgement rests on are versions the pull request cannot have edited. Comments are attributed to the Actions bot, not to the seat
 owner. Neither job gets `contents: write`.
 
-The reviewer runs with the `shell` and `url` tool kinds **denied**, built-in MCP servers
+The comparison session is constrained further, because it reads two other models’ output:
+the document the check is computed from is kept **outside the working directory** while it
+runs, and every file it *can* reach is hashed before and verified after, so it cannot
+quietly rewrite a reviewer’s findings to change the outcome. The publisher also refuses a
+merged findings document whose finding count the comparison does not corroborate.
+
+Each reviewer runs with the `shell` and `url` tool kinds **denied**, built-in MCP servers
 disabled, repo instruction auto-loading off, and file access confined to the checkout —
 so no `git`, `gh`, `dotnet`, `npm`, no network, no GitHub API. After it exits, the job
 asserts the working tree is unchanged apart from `.code-review/`; that assertion is the
@@ -185,13 +212,17 @@ documented.
 | --- | --- |
 | What counts as `blocking` | the severity section of `.github/code-review/review-prompt.md` |
 | Which standards are consulted | the standards section of the same file |
-| The credit cap, model or CLI version | the `env:` block of `.github/workflows/code-quality-check.yml` |
-| Whether findings gate the merge | the exit condition in `.github/code-review/publish-review.mjs` |
+| Which models review | the `strategy.matrix.model` list in `.github/workflows/code-quality-check.yml` — the only place the roster is written |
+| Which model narrates the comparison | `COMPARE_MODEL` in that workflow's `env:` block |
+| How findings are paired across reviewers | the window and threshold constants at the top of `.github/code-review/compare-reviews.mjs` |
+| What the comparison judges | `.github/code-review/compare-prompt.md` |
+| The credit cap or CLI version | the `env:` block of `.github/workflows/code-quality-check.yml` |
+| Whether findings gate the merge, and whether the gate stays a union | the exit condition in `.github/code-review/publish-review.mjs` (see design D15 before relaxing it to consensus) |
 
 Run the publisher's tests with:
 
 ```bash
-node --test .github/code-review/publish-review.test.mjs
+node --test .github/code-review/publish-review.test.mjs .github/code-review/compare-reviews.test.mjs
 ```
 
 **Bumping the pinned CLI version is a behavioural change, not a chore.** Three of this
@@ -212,6 +243,12 @@ The check failed but you see no review comments — in likely order:
 6. **The findings file was missing or malformed.** This deliberately fails rather than
    reporting a clean review — a review that did not happen must never look like a review
    that found nothing.
+7. **One reviewer failed and the other did not.** The `compare` job never starts and
+   nothing is published: a comparison of one review must not look like a comparison of
+   two. Check both matrix legs, and whether the second model is permitted by policy.
+8. **The review published but the comparison narrative is missing.** That one degrades
+   rather than fails: look for the warning in the `compare` job. The reviewers' findings
+   and the deterministic comparison are unaffected.
 
 Making `code-quality-check` a **required** check on `main` is a deliberate follow-up.
 Calibrate the prompt against real pull requests first: an AI gate that fires on taste

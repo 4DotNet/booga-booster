@@ -142,16 +142,31 @@ doc before changing anything in `DigitalTwin/Domain`.
 
 `.github/workflows/code-quality-check.yml` runs **GitHub Copilot CLI headless**
 (`copilot -p`) on every pull request into `main`, reviewing the diff against `CLAUDE.md`,
-`.claude/skills/*`, `openspec/specs/` and `docs/`. It posts inline review comments and
-**fails the check only on `blocking` findings**; `major` and below are advisory.
+`.claude/skills/*`, `openspec/specs/` and `docs/`. **Two models review every pull request
+independently** (a matrix — currently `claude-sonnet-5` and `gpt-5.6-terra`), their reviews
+are compared, and one review is posted in which every comment names the reviewers that
+reported it. It **fails the check only on `blocking` findings**, taking the union of the
+reviewers — one model catching a MUST violation alone still fails; `major` and below are
+advisory.
 
 - Review instruction: `.github/code-review/review-prompt.md` — a checked-in, reviewable
   file. It is **not** a slash command; it must not move into `.github/prompts/` or
   `.github/skills/`, which are discovery paths.
-- Publisher: `.github/code-review/publish-review.mjs`
-  (test with `node --test .github/code-review/publish-review.test.mjs`).
-- The reviewer runs with no shell, no network, no GitHub tools and no MCP servers; the job
-  then asserts it left the working tree untouched.
+- Comparison: `.github/code-review/compare-reviews.mjs` pairs the two reviews
+  deterministically; `.github/code-review/compare-prompt.md` drives a third Copilot session
+  that narrates it. **The narrative is commentary — it cannot change a severity or the
+  check result.**
+- Publisher: `.github/code-review/publish-review.mjs`. Test both scripts with
+  `node --test .github/code-review/publish-review.test.mjs .github/code-review/compare-reviews.test.mjs`.
+- Every model run — both reviews and the comparison — has no shell, no network, no GitHub
+  tools, no MCP servers and no write permission; each job then asserts the model left the
+  working tree untouched.
+- **The comparison cannot reach what the gate is computed from** (design D16):
+  `findings.merged.json` lives outside the working tree until the narrative session has
+  exited, and every file that session can reach is hashed before and verified after. Do not
+  weaken either control.
+- The reviewing models are listed in the workflow’s `strategy.matrix.model` and nowhere
+  else; the comparison and the publisher derive the roster from the per-model artifacts.
 - Requires the `COPILOT_GITHUB_TOKEN` secret (a PAT for an identity with a Copilot seat —
   the Actions `GITHUB_TOKEN` cannot drive the CLI). See the README for setup and cost.
 - A green check is **not** a green build: this workflow does not compile or test anything.

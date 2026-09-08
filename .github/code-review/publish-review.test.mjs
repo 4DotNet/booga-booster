@@ -16,6 +16,7 @@ import {
   countBySeverity,
   renderReviewBody,
   renderInlineComment,
+  comparisonMismatch,
 } from './publish-review.mjs';
 
 // ---------------------------------------------------------------------------
@@ -321,4 +322,186 @@ test('the body records the CLI version and model, and that nothing was built', (
   assert.match(body, /1\.0\.83/);
   assert.match(body, /test-model/);
   assert.match(body, /does not build or test/);
+});
+
+// ---------------------------------------------------------------------------
+// Reviewer attribution and the comparison section (design D13, D14)
+// ---------------------------------------------------------------------------
+
+const COMPARISON = {
+  models: ['model-a', 'model-b'],
+  perModel: {
+    'model-a': { total: 2, bySeverity: { blocking: 1, major: 1, minor: 0, nit: 0 } },
+    'model-b': { total: 1, bySeverity: { blocking: 1, major: 0, minor: 0, nit: 0 } },
+  },
+  totals: { clusters: 2, shared: 1, unanimous: 1, uniqueByModel: { 'model-a': 1, 'model-b': 0 } },
+  agreementRate: 0.5,
+  severityDisagreements: [
+    {
+      path: 'src/Ride.cs',
+      title: 'A title',
+      severities: { 'model-a': 'blocking', 'model-b': 'minor' },
+      merged: 'blocking',
+    },
+  ],
+};
+
+const multiMeta = {
+  cliVersion: '1.0.83',
+  models: ['model-a', 'model-b'],
+  compareModel: 'model-a',
+};
+
+test('validateFindings carries reviewer attribution through', () => {
+  const { findings } = validateFindings(
+    doc([finding({ models: ['model-a', 'model-b'], severities: { 'model-a': 'major', 'model-b': 'minor' } })]),
+  );
+  assert.deepEqual(findings[0].models, ['model-a', 'model-b']);
+  assert.deepEqual(findings[0].severities, { 'model-a': 'major', 'model-b': 'minor' });
+});
+
+test('validateFindings tolerates a document with no attribution', () => {
+  const { findings } = validateFindings(doc([finding()]));
+  assert.deepEqual(findings[0].models, []);
+  assert.deepEqual(findings[0].severities, {});
+});
+
+test('validateFindings rejects malformed attribution rather than ignoring it', () => {
+  assert.throws(() => validateFindings(doc([finding({ models: 'model-a' })])), /models must be an array/);
+  assert.throws(() => validateFindings(doc([finding({ models: [''] })])), /models\[0\]/);
+  assert.throws(
+    () => validateFindings(doc([finding({ severities: { 'model-a': 'catastrophic' } })])),
+    /severities\.model-a/,
+  );
+});
+
+test('a comment found by every reviewer says so', () => {
+  const body = renderInlineComment(
+    finding({ models: ['model-a', 'model-b'] }),
+    ['model-a', 'model-b'],
+  );
+  assert.match(body, /Reported by all 2 reviewers/);
+  assert.match(body, /`model-a`, `model-b`/);
+});
+
+test('a comment only one reviewer found names the one that missed it', () => {
+  const body = renderInlineComment(finding({ models: ['model-a'] }), ['model-a', 'model-b']);
+  assert.match(body, /Reported by `model-a` only/);
+  assert.match(body, /not flagged by `model-b`/);
+});
+
+test('a comment on which the reviewers disagreed shows both grades', () => {
+  const body = renderInlineComment(
+    finding({
+      severity: 'blocking',
+      models: ['model-a', 'model-b'],
+      severities: { 'model-a': 'blocking', 'model-b': 'minor' },
+    }),
+    ['model-a', 'model-b'],
+  );
+  assert.match(body, /graded blocking by `model-a`, minor by `model-b`/);
+  assert.match(body, /published as blocking/);
+});
+
+test('a single-reviewer document renders no attribution at all', () => {
+  const body = renderInlineComment(finding());
+  assert.doesNotMatch(body, /Reported by/);
+});
+
+test('the body carries the comparison table, agreement and disagreements', () => {
+  const body = renderReviewBody({
+    summary: 'Summary.',
+    findings: [finding()],
+    unanchorable: [],
+    blockingCount: 0,
+    truncatedInline: 0,
+    meta: multiMeta,
+    comparison: COMPARISON,
+    narrative: 'The two reviews mostly agreed.',
+  });
+
+  assert.match(body, /### Reviewer comparison/);
+  assert.match(body, /\| `model-a` \| 1 \| 1 \| 0 \| 0 \| 2 \|/);
+  assert.match(body, /\*\*1 of 2\*\* distinct problems/);
+  assert.match(body, /agreement 0\.5/);
+  assert.match(body, /`model-a` alone: 1/);
+  assert.match(body, /blocking per `model-a`, minor per `model-b`/);
+  assert.match(body, /The two reviews mostly agreed\./);
+  assert.match(body, /reviewing independently/);
+  assert.match(body, /narrative was written by `model-a`/);
+});
+
+test('a missing narrative degrades to the figures instead of failing', () => {
+  const body = renderReviewBody({
+    summary: 'Summary.',
+    findings: [],
+    unanchorable: [],
+    blockingCount: 0,
+    truncatedInline: 0,
+    meta: multiMeta,
+    comparison: COMPARISON,
+    narrative: null,
+  });
+
+  assert.match(body, /### Reviewer comparison/);
+  assert.match(body, /narrative comparison was not produced/);
+});
+
+test('an over-long narrative is truncated with a pointer to the artifact', () => {
+  const body = renderReviewBody({
+    summary: 'Summary.',
+    findings: [],
+    unanchorable: [],
+    blockingCount: 0,
+    truncatedInline: 0,
+    meta: multiMeta,
+    comparison: COMPARISON,
+    narrative: 'x'.repeat(20000),
+  });
+
+  assert.match(body, /truncated; the full comparison is in the workflow artifact/);
+  assert.ok(body.length < 20000, 'the review body must stay well inside the API limit');
+});
+
+test('no comparison section when only one reviewer ran', () => {
+  const body = renderReviewBody({
+    summary: 'Summary.',
+    findings: [],
+    unanchorable: [],
+    blockingCount: 0,
+    truncatedInline: 0,
+    meta,
+    comparison: { models: ['model-a'], perModel: {}, totals: {} },
+    narrative: null,
+  });
+
+  assert.doesNotMatch(body, /Reviewer comparison/);
+  assert.match(body, /model `test-model`/);
+});
+
+// ---------------------------------------------------------------------------
+// The merged document must be corroborated by the comparison (design D16)
+// ---------------------------------------------------------------------------
+
+test('a merged document matching the comparison passes corroboration', () => {
+  assert.equal(comparisonMismatch([finding(), finding()], { totals: { clusters: 2 } }), null);
+});
+
+test('a finding removed after the comparison ran is caught', () => {
+  const message = comparisonMismatch([finding()], { totals: { clusters: 2 } });
+  assert.match(message, /lists 1 finding\(s\) but the comparison reports 2/);
+  assert.match(message, /has been altered since/);
+});
+
+test('a finding added after the comparison ran is caught', () => {
+  assert.match(
+    comparisonMismatch([finding(), finding(), finding()], { totals: { clusters: 2 } }),
+    /lists 3 finding\(s\) but the comparison reports 2/,
+  );
+});
+
+test('nothing to corroborate is not a mismatch', () => {
+  assert.equal(comparisonMismatch([finding()], null), null);
+  assert.equal(comparisonMismatch([finding()], {}), null);
+  assert.equal(comparisonMismatch([finding()], { totals: {} }), null);
 });

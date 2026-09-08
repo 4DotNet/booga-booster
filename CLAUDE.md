@@ -261,16 +261,33 @@ This repo is set up so **Claude Code and GitHub Copilot CLI share the same MCP s
 
 `.github/workflows/code-quality-check.yml` runs **GitHub Copilot CLI headless** (`copilot -p`)
 on every pull request into `main`, reviewing the diff against the standards in this file,
-`.claude/skills/*`, `openspec/specs/` and `docs/`. It posts inline review comments and
-**fails the check only on `blocking` findings**.
+`.claude/skills/*`, `openspec/specs/` and `docs/`. **Two models review every pull request
+independently** (a matrix — currently `claude-sonnet-5` and `gpt-5.6-terra`), their reviews
+are compared, and one review is posted in which every comment names the reviewers that
+reported it. It **fails the check only on `blocking` findings**, taking the union of the
+reviewers: one model catching a MUST violation alone still fails the check.
 
 - The review instruction is `.github/code-review/review-prompt.md` — a checked-in,
   reviewable file. It is *not* a slash command and must not move into `.github/prompts/`
   or `.claude/skills/`, which are discovery paths.
-- Findings are published by `.github/code-review/publish-review.mjs`
-  (`node --test .github/code-review/publish-review.test.mjs` to test it).
-- The reviewer runs with no shell, no network, no GitHub tools and no MCP servers, and the
-  job asserts it left the working tree untouched.
+- The two reviews are paired by `.github/code-review/compare-reviews.mjs` (deterministic:
+  same file, close line, same category or overlapping title) and then narrated by a third
+  Copilot session driven by `.github/code-review/compare-prompt.md`. **That narrative is
+  commentary — it cannot change a severity, add a finding, or move the gate.**
+- Findings are published by `.github/code-review/publish-review.mjs`. Test both scripts with
+  `node --test .github/code-review/publish-review.test.mjs .github/code-review/compare-reviews.test.mjs`.
+- Every model run — both reviews and the comparison — has no shell, no network, no GitHub
+  tools, no MCP servers and no write permission, and each job asserts the model left the
+  working tree untouched.
+- **The comparison cannot reach what the gate is computed from.** `findings.merged.json` is
+  written outside the working tree and placed only after the narrative session has exited,
+  and every file that session *can* reach is hashed before and verified after. Do not move
+  that file into the scratch directory before the model runs, and do not remove the
+  fingerprint check: without them, an injected narrative could rewrite the findings the
+  check gates on (design D16).
+- Adding or removing a reviewing model is an edit to the workflow’s `strategy.matrix.model`
+  list and nowhere else: the comparison and the publisher derive the roster from the
+  per-model artifacts.
 - Requires the `COPILOT_GITHUB_TOKEN` secret; see the README for setup and cost.
 - **Do not weaken the review configuration casually.** The prompt requires any PR touching
   `.github/workflows/`, `.github/code-review/`, `CLAUDE.md` or `.claude/` to be flagged at

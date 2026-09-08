@@ -142,3 +142,95 @@ The publisher SHALL write the summary, the finding counts by severity, the pinne
 
 - **WHEN** the review was skipped because the pull request is a draft, comes from a fork, or changed no reviewable files
 - **THEN** the job summary states which condition caused the skip
+
+### Requirement: Every published finding says which reviewers reported it
+
+The publisher SHALL publish the merged findings document, and each comment SHALL state
+the models that reported that finding. Where a finding was reported by fewer than all
+reviewers, the comment SHALL name the reviewers that did not report it. Where reviewers
+graded the same finding differently, the comment SHALL state each grade and the grade
+that was published.
+
+#### Scenario: A finding both reviewers reported
+
+- **WHEN** every reviewer reported the same problem
+- **THEN** the inline comment says so and lists them, and carries each reviewer's own reasoning rather than only the first one's
+
+#### Scenario: A finding only one reviewer reported
+
+- **WHEN** one reviewer reported a problem the others did not
+- **THEN** the inline comment names the reviewer that found it and the reviewers that did not, so a reader knows a lone finding when they see one
+
+#### Scenario: The reviewers disagreed on severity
+
+- **WHEN** two reviewers graded the same problem differently
+- **THEN** the comment shows both grades and states which one was published
+
+### Requirement: The gate is the union of the reviewers' blocking findings
+
+The publisher SHALL treat a merged finding's severity as the worst severity any reviewer
+assigned it, and SHALL exit non-zero if and only if at least one merged finding is
+`blocking`.
+
+#### Scenario: Only one reviewer called it blocking
+
+- **WHEN** one reviewer grades a finding `blocking` and another grades the same finding `minor`
+- **THEN** the finding is published as `blocking` and the check fails
+
+#### Scenario: A blocking finding no other reviewer reported
+
+- **WHEN** a single reviewer reports a `blocking` finding the others missed entirely
+- **THEN** the check fails on it, because consensus is not a condition of the gate
+
+### Requirement: The review body carries the reviewer comparison
+
+The review body SHALL include the per-reviewer severity counts, how many distinct
+problems more than one reviewer reported, what each reviewer found alone, and the
+severity disagreements. Where a narrative comparison exists it SHALL be included and
+attributed to the model that wrote it; where it does not, the body SHALL say so.
+
+#### Scenario: A reader compares the two reviews at a glance
+
+- **WHEN** the review is published
+- **THEN** the body shows a table of each reviewer's findings by severity, the agreement figure, and the problems unique to each reviewer
+
+#### Scenario: The narrative is marked as commentary
+
+- **WHEN** the narrative comparison is included
+- **THEN** it is attributed to the model that wrote it and stated to be commentary that cannot change a severity or the check result
+
+#### Scenario: The narrative is missing
+
+- **WHEN** no narrative was produced
+- **THEN** the body presents the deterministic figures and states that the narrative was not produced, rather than implying the reviewers were not compared
+
+#### Scenario: An over-long narrative
+
+- **WHEN** the narrative would push the review body past the API's size limit
+- **THEN** it is truncated with a pointer to the workflow artifact, and the reviewers' own findings are never truncated to make room for it
+
+#### Scenario: Only one reviewer ran
+
+- **WHEN** the findings document carries no reviewer attribution
+- **THEN** the publisher omits the comparison section and publishes exactly as it would for a single-model review
+
+### Requirement: The publisher refuses a merged document the comparison does not corroborate
+
+The publisher SHALL check the merged findings document against the comparison report and
+SHALL fail the check when they disagree on how many distinct problems there were, rather
+than gating on a document nothing confirms.
+
+#### Scenario: A finding was removed after the comparison ran
+
+- **WHEN** the merged document lists fewer findings than the comparison reports distinct problems
+- **THEN** the publisher fails with a diagnosable message and posts no review
+
+#### Scenario: A finding was added after the comparison ran
+
+- **WHEN** the merged document lists more findings than the comparison reports
+- **THEN** the publisher fails in the same way
+
+#### Scenario: A single-reviewer document
+
+- **WHEN** no comparison report is supplied, as for a one-model review
+- **THEN** there is nothing to corroborate and the publisher proceeds normally

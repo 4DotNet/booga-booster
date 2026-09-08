@@ -4,6 +4,24 @@
 # Setup: see the "Automated code review" section of README.md.
 #
 # ---------------------------------------------------------------------------------------
+# Topology -- four jobs, two of them holding the Copilot credential
+# ---------------------------------------------------------------------------------------
+#   prepare  no credential, no write. Guards (draft/fork), diff scope, and the review
+#            configuration -- both prompts, the comparison script and the publisher --
+#            taken from the BASE branch (design D6b) and published as an artifact, so no
+#            later job runs a version of them this pull request could have edited. Runs
+#            once, so its outputs are unambiguous -- which is why the guards do not live
+#            in the matrix job below.
+#   review   MATRIX: one leg per reviewing model (design D13). Each leg holds the Copilot
+#            PAT and no write permission. Neither leg can see the other's findings, so
+#            agreement between them means something.
+#   compare  Holds the Copilot PAT, no write permission. Pairs the two reviews
+#            deterministically (compare-reviews.mjs) and then has a model write the
+#            narrative comparison (design D14). Commentary only: severities, and so the
+#            gate, come from the reviewers.
+#   publish  Holds pull-requests:write and NO Copilot credential (design D3).
+#
+# ---------------------------------------------------------------------------------------
 # Copilot CLI 1.0.83 reconnaissance (openspec task 1.4) -- READ BEFORE CHANGING FLAGS
 # ---------------------------------------------------------------------------------------
 # Verified against 1.0.83 via `copilot --help` and the `permissions` / `environment`
@@ -29,7 +47,7 @@
 #     (MCP config comes from ~/.copilot/mcp-config.json / --additional-mcp-config).
 #
 # The guarantee that does NOT depend on any of the above is the working-tree assertion
-# after the run (design D9). Keep it.
+# after each model run (design D9). Keep it, in every job that runs a model.
 #
 # Fork PRs: `pull_request` gives them no secrets, so they are skipped. `pull_request_target`
 # is deliberately NOT used -- it would combine untrusted code, a user PAT and write
@@ -54,7 +72,8 @@ on:
       - "**/*.ico"
       - "LICENSE"
 
-# Stop burning AI credits on superseded commits.
+# Stop burning AI credits on superseded commits. One run now costs three Copilot
+# sessions, so cancelling early matters more than it did with a single reviewer.
 concurrency:
   group: code-quality-check-${{ github.event.pull_request.number }}
   cancel-in-progress: true
@@ -65,27 +84,30 @@ permissions:
 
 env:
   COPILOT_CLI_VERSION: 1.0.83
-  # Pinned rather than `auto`: a gate must not let the CLI pick a different model between
-  # two runs of the same commit. Availability depends on Copilot org policy (see README).
-  COPILOT_MODEL_PINNED: claude-sonnet-5
-  # Hard per-session spend cap. Raise deliberately; see README for observed usage.
+  # The model that writes the narrative comparison. It is one of the two reviewers, which
+  # means it is reading its own output alongside a rival's -- compare-prompt.md tells it
+  # not to favour either and the published body says who wrote it (design D14).
+  COMPARE_MODEL: claude-sonnet-5
+  # Hard per-session spend cap. Applies to each Copilot session separately, and a run now
+  # starts three of them. Raise deliberately; see README for observed usage.
   MAX_AI_CREDITS: "100"
   REVIEW_DIR: .code-review
 
 jobs:
   # =====================================================================================
-  # review -- holds the Copilot credential, has NO write permission (design D3)
+  # prepare -- guards and diff scope. No credential, no write, runs exactly once.
   # =====================================================================================
-  review:
-    name: Review diff with Copilot CLI
+  prepare:
+    name: Prepare diff scope
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     permissions:
       contents: read
     outputs:
       skipped: ${{ steps.guards.outputs.skipped }}
       reason: ${{ steps.guards.outputs.reason }}
       empty: ${{ steps.diff.outputs.empty }}
+      base_sha: ${{ steps.diff.outputs.base_sha }}
 
     steps:
       - name: Evaluate guards (draft / fork)
@@ -119,6 +141,7 @@ jobs:
           fi
 
       # The secret check comes before checkout and install: fail fast, spend nothing.
+      # Both the review matrix and the comparison need it, so it is asserted once here.
       - name: Verify COPILOT_GITHUB_TOKEN secret is present
         if: steps.guards.outputs.skipped != 'true'
         env:
@@ -138,30 +161,16 @@ jobs:
         uses: actions/checkout@v7
         with:
           # The PR head, not the synthetic refs/pull/N/merge commit this event checks out
-          # by default: the reviewer should see exactly what was pushed, and the publisher
+          # by default: the reviewers should see exactly what was pushed, and the publisher
           # anchors its inline comments to this same SHA.
           ref: ${{ github.event.pull_request.head.sha }}
           # Full history so the merge base with the base branch is reachable.
           fetch-depth: 0
 
-      - name: Set up Node
-        if: steps.guards.outputs.skipped != 'true'
-        uses: actions/setup-node@v4
-        with:
-          # Pinned explicitly: @github/copilot declares no `engines` constraint, so
-          # nothing would otherwise stop the runner default from drifting under us.
-          node-version: "22"
-
-      - name: Install Copilot CLI (pinned)
-        if: steps.guards.outputs.skipped != 'true'
-        run: |
-          set -euo pipefail
-          npm install -g "@github/copilot@${COPILOT_CLI_VERSION}"
-          copilot --version
-
       # ---------------------------------------------------------------------------------
-      # Diff scope (design D7). Computed here, on disk, so the reviewer needs no shell
-      # and no GitHub access to know what changed.
+      # Diff scope (design D7). Computed once, on disk, so no reviewer needs a shell or
+      # any GitHub access to know what changed -- and both reviewers see byte-identical
+      # input, which is what makes comparing them fair.
       # ---------------------------------------------------------------------------------
       - name: Compute diff scope
         id: diff
@@ -171,30 +180,35 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          mkdir -p "$REVIEW_DIR"
+          mkdir -p "$REVIEW_DIR" "${RUNNER_TEMP}/config"
 
           git fetch --no-tags origin "$BASE_REF"
           base_sha="$(git merge-base "origin/${BASE_REF}" "$HEAD_SHA")"
           echo "Merge base: $base_sha"
           echo "base_sha=$base_sha" >> "$GITHUB_OUTPUT"
 
-          # Take the review prompt from the BASE branch, never from the PR head. The
-          # checkout above is the PR's code -- if we also used the PR's prompt, a pull
-          # request could rewrite the rules it is judged by, and the self-configuration
-          # rule would be deleted along with everything else that would have flagged it.
-          # Written outside the working tree so it cannot trip the D9 assertion.
-          prompt_src=".github/code-review/review-prompt.md"
-          if git cat-file -e "${base_sha}:${prompt_src}" 2>/dev/null; then
-            git show "${base_sha}:${prompt_src}" > "${RUNNER_TEMP}/review-prompt.md"
-            echo "Using the review prompt from the base branch (${base_sha})."
-          else
-            # Bootstrapping: the base branch predates this workflow, so there is no base
-            # version to trust. Fall back to the PR's copy and say so loudly.
-            cp "$prompt_src" "${RUNNER_TEMP}/review-prompt.md"
-            echo "::warning::The base branch has no ${prompt_src}; falling back to this pull request's copy. Review the prompt itself by hand."
-          fi
+          # Take the review configuration -- both prompts, the comparison script and the
+          # publisher -- from the BASE branch, never from the PR head (design D6b). The
+          # checkout above is the PR's code: if we used the PR's copies, a pull request
+          # could rewrite the rules it is judged by and the gate that judges it, and the
+          # self-configuration rule would be deleted along with everything else that
+          # would have flagged it. Written outside the working tree so these files cannot
+          # trip the D9 assertion, and side by side because compare-reviews.mjs imports
+          # publish-review.mjs relatively.
+          for asset in review-prompt.md compare-prompt.md compare-reviews.mjs publish-review.mjs; do
+            src=".github/code-review/${asset}"
+            if git cat-file -e "${base_sha}:${src}" 2>/dev/null; then
+              git show "${base_sha}:${src}" > "${RUNNER_TEMP}/config/${asset}"
+              echo "Using ${asset} from the base branch (${base_sha})."
+            else
+              # Bootstrapping: the base branch predates this file, so there is no base
+              # version to trust. Fall back to the PR's copy and say so loudly.
+              cp "$src" "${RUNNER_TEMP}/config/${asset}"
+              echo "::warning::The base branch has no ${src}; falling back to this pull request's copy. Review it by hand."
+            fi
+          done
 
-          # name-status keeps A/M/D/R distinguishable for the reviewer.
+          # name-status keeps A/M/D/R distinguishable for the reviewers.
           git diff --name-status "$base_sha" "$HEAD_SHA" > "$REVIEW_DIR/changed-files.txt"
           git diff --unified=3 "$base_sha" "$HEAD_SHA" > "$REVIEW_DIR/diff.patch"
 
@@ -211,23 +225,106 @@ jobs:
             cat "$REVIEW_DIR/changed-files.txt"
           fi
 
+      - name: Upload diff scope
+        if: steps.guards.outputs.skipped != 'true' && steps.diff.outputs.empty != 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: review-inputs
+          path: ${{ env.REVIEW_DIR }}/
+          # $REVIEW_DIR is dot-prefixed, and upload-artifact filters hidden paths out
+          # by default -- without this the upload finds no files at all.
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Upload the review configuration taken from the base branch
+        if: steps.guards.outputs.skipped != 'true' && steps.diff.outputs.empty != 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: review-config
+          path: ${{ runner.temp }}/config/
+          retention-days: 7
+          if-no-files-found: error
+
+  # =====================================================================================
+  # review -- one leg per model. Holds the Copilot credential, NO write permission (D3).
+  # =====================================================================================
+  review:
+    name: Review with ${{ matrix.model }}
+    needs: prepare
+    if: needs.prepare.outputs.skipped != 'true' && needs.prepare.outputs.empty != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    strategy:
+      # Both legs must run to completion. If one model fails, this job fails, `compare`
+      # never starts, and nothing is published -- a comparison of one review must never
+      # be mistaken for a comparison of two.
+      fail-fast: false
+      matrix:
+        # The reviewer roster. Adding or removing a model is an edit here and nowhere
+        # else: the comparison and the publisher both derive the roster from the
+        # artifacts this matrix produces.
+        model:
+          - claude-sonnet-5
+          - gpt-5.6-terra
+
+    steps:
+      - name: Checkout pull request head
+        uses: actions/checkout@v7
+        with:
+          # Same commit the diff was computed against. Shallow is enough: the diff comes
+          # from the artifact, and the reviewer has no shell to run git with anyway.
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          # Pinned explicitly: @github/copilot declares no `engines` constraint, so
+          # nothing would otherwise stop the runner default from drifting under us.
+          node-version: "24"
+
+      - name: Install Copilot CLI (pinned)
+        run: |
+          set -euo pipefail
+          npm install -g "@github/copilot@${COPILOT_CLI_VERSION}"
+          copilot --version
+
+      - name: Download diff scope
+        uses: actions/download-artifact@v8
+        with:
+          name: review-inputs
+          path: ${{ env.REVIEW_DIR }}
+
+      - name: Download the review configuration
+        uses: actions/download-artifact@v8
+        with:
+          name: review-config
+          # Outside the working tree, so these files cannot trip the D9 assertion.
+          path: ${{ runner.temp }}/config
+
       # ---------------------------------------------------------------------------------
       # The review itself. Every flag here is justified in design D5 and in the header
       # comment above. Do not relax one without reading both.
       # ---------------------------------------------------------------------------------
       - name: Run Copilot CLI review
-        if: steps.guards.outputs.skipped != 'true' && steps.diff.outputs.empty != 'true'
         env:
           # The credential is scoped to THIS STEP only -- never job- or workflow-level.
           # COPILOT_GITHUB_TOKEN takes precedence over GH_TOKEN and GITHUB_TOKEN in the
           # CLI, which matters because Actions puts GITHUB_TOKEN in the environment.
           COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          # Pinned per matrix leg rather than `auto`: a gate must not let the CLI pick a
+          # different model between two runs of the same commit. Availability depends on
+          # Copilot org policy (see README).
+          REVIEW_MODEL: ${{ matrix.model }}
         run: |
           set -euo pipefail
 
-          # Prompt comes from the base branch (see the diff-scope step), not the PR head.
-          copilot -p "$(cat "${RUNNER_TEMP}/review-prompt.md")" \
-            --model "$COPILOT_MODEL_PINNED" \
+          # Prompt comes from the base branch (see the prepare job), not the PR head.
+          copilot -p "$(cat "${RUNNER_TEMP}/config/review-prompt.md")" \
+            --model "$REVIEW_MODEL" \
             --allow-all-tools \
             --deny-tool 'shell' \
             --deny-tool 'url' \
@@ -250,7 +347,6 @@ jobs:
       # design D9 -- the one control that depends on no claim about the CLI.
       # ---------------------------------------------------------------------------------
       - name: Assert the review left the working tree clean
-        if: steps.guards.outputs.skipped != 'true' && steps.diff.outputs.empty != 'true'
         run: |
           set -euo pipefail
           # $REVIEW_DIR is gitignored so it normally does not appear at all; filter it
@@ -264,24 +360,248 @@ jobs:
           echo "Working tree clean apart from ${REVIEW_DIR}/."
 
       - name: Assert the review produced findings
-        if: steps.guards.outputs.skipped != 'true' && steps.diff.outputs.empty != 'true'
+        env:
+          REVIEW_MODEL: ${{ matrix.model }}
         run: |
           set -euo pipefail
           if [ ! -f "$REVIEW_DIR/findings.json" ]; then
-            echo "::error::The review did not write ${REVIEW_DIR}/findings.json, so no valid review was produced."
+            echo "::error::${REVIEW_MODEL} did not write ${REVIEW_DIR}/findings.json, so no valid review was produced."
             echo "::error::Failing rather than reporting a clean review. Inspect the transcript above."
             exit 1
           fi
           echo "Findings file present."
 
-      - name: Upload review artifact
-        if: steps.guards.outputs.skipped != 'true' && steps.diff.outputs.empty != 'true'
+      - name: Upload this reviewer's output
         uses: actions/upload-artifact@v7
         with:
-          name: code-review
+          # The artifact name carries the model id: the compare job derives the reviewer
+          # roster from these names, so there is no second list to keep in sync.
+          name: code-review-${{ matrix.model }}
+          path: |
+            ${{ env.REVIEW_DIR }}/findings.json
+            ${{ env.REVIEW_DIR }}/usage.json
+            ${{ env.REVIEW_DIR }}/transcript.jsonl
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: error
+
+  # =====================================================================================
+  # compare -- pairs the reviews, then narrates the comparison.
+  # Holds the Copilot credential, NO write permission (design D3).
+  # =====================================================================================
+  compare:
+    name: Compare the reviews
+    needs: [prepare, review]
+    if: needs.prepare.outputs.skipped != 'true' && needs.prepare.outputs.empty != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      # The BASE branch, not the pull request head, and deliberately the whole tree:
+      #   * compare-reviews.mjs and the standards the narrating model may want to check
+      #     (CLAUDE.md, .claude/skills/, openspec/specs/, docs/) are then the versions
+      #     this pull request cannot have edited;
+      #   * the change under review reaches the model only as diff.patch, which is what
+      #     it is supposed to be judging the two reviews against.
+      - name: Checkout base branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.base_sha }}
+          fetch-depth: 1
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Download diff scope
+        uses: actions/download-artifact@v8
+        with:
+          name: review-inputs
+          path: ${{ env.REVIEW_DIR }}
+
+      - name: Download the review configuration
+        uses: actions/download-artifact@v8
+        with:
+          name: review-config
+          path: ${{ runner.temp }}/config
+
+      - name: Download every reviewer's output
+        uses: actions/download-artifact@v8
+        with:
+          pattern: code-review-*
+          path: ${{ env.REVIEW_DIR }}/models
+
+      - name: Pair the findings deterministically
+        id: pair
+        run: |
+          set -euo pipefail
+
+          # download-artifact names each directory after its artifact; strip the prefix
+          # so the model reads `.code-review/models/<model>/findings.json`, exactly as
+          # compare-prompt.md documents.
+          for dir in "$REVIEW_DIR"/models/code-review-*; do
+            [ -d "$dir" ] || continue
+            model="$(basename "$dir")"
+            mv "$dir" "$REVIEW_DIR/models/${model#code-review-}"
+          done
+
+          args=()
+          models=()
+          for dir in "$REVIEW_DIR"/models/*; do
+            [ -f "$dir/findings.json" ] || continue
+            model="$(basename "$dir")"
+            models+=("$model")
+            args+=(--review "${model}=${dir}/findings.json")
+          done
+
+          if [ "${#models[@]}" -lt 2 ]; then
+            echo "::error::Found ${#models[@]} reviewer output(s); at least two are required to compare."
+            exit 1
+          fi
+          echo "Comparing: ${models[*]}"
+
+          # The merged findings document is what the publisher gates on, so it is written
+          # OUTSIDE the working tree and stays there until the narrative session has been
+          # verified (design D16). The narrating model never sees it, cannot overwrite it,
+          # and does not need it: it reads comparison.json and the raw findings instead.
+          mkdir -p "${RUNNER_TEMP}/merged"
+          node "${RUNNER_TEMP}/config/compare-reviews.mjs" \
+            "${args[@]}" \
+            --diff "$REVIEW_DIR/diff.patch" \
+            --out-json "$REVIEW_DIR/comparison.json" \
+            --out-findings "${RUNNER_TEMP}/merged/findings.merged.json"
+
+      # ---------------------------------------------------------------------------------
+      # design D16 -- the narrative gets one writable output, and that is enforced by
+      # verification rather than by trusting a deny rule. Everything the model can reach
+      # is fingerprinted here and checked after it exits; the file that decides the gate
+      # is not in the tree at all.
+      # ---------------------------------------------------------------------------------
+      - name: Fingerprint everything the narrative can reach
+        run: |
+          set -euo pipefail
+          find "$REVIEW_DIR" -type f | LC_ALL=C sort > "${RUNNER_TEMP}/pre-narrative.list"
+          xargs -a "${RUNNER_TEMP}/pre-narrative.list" -r sha256sum > "${RUNNER_TEMP}/pre-narrative.sha256"
+          echo "Fingerprinted $(wc -l < "${RUNNER_TEMP}/pre-narrative.sha256") file(s) under ${REVIEW_DIR}/."
+
+      - name: Install Copilot CLI (pinned)
+        run: |
+          set -euo pipefail
+          npm install -g "@github/copilot@${COPILOT_CLI_VERSION}"
+          copilot --version
+
+      # ---------------------------------------------------------------------------------
+      # The narrative comparison. Same restrictions as a review: no shell, no network, no
+      # MCP, no repo instruction loading. It writes commentary and nothing else -- it
+      # cannot change a severity, add a finding, or move the gate (design D14).
+      # ---------------------------------------------------------------------------------
+      - name: Narrate the comparison
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          # No `continue-on-error:` here -- that would swallow every failure in the step,
+          # including the working-tree and artifact problems that must fail the check.
+          # Only the CLI's own exit status is tolerated, and only because the narrative
+          # is commentary: both reviews are already complete at this point, and losing a
+          # valid review over a missing prose section would be the wrong trade.
+          if ! copilot -p "$(cat "${RUNNER_TEMP}/config/compare-prompt.md")" \
+            --model "$COMPARE_MODEL" \
+            --allow-all-tools \
+            --deny-tool 'shell' \
+            --deny-tool 'url' \
+            --disable-builtin-mcps \
+            --no-custom-instructions \
+            --no-ask-user \
+            --disallow-temp-dir \
+            --secret-env-vars=COPILOT_GITHUB_TOKEN \
+            --no-remote \
+            --no-remote-export \
+            --no-auto-update \
+            --output-format json \
+            --usage-output-file "$REVIEW_DIR/usage-compare.json" \
+            --max-ai-credits "$MAX_AI_CREDITS" \
+            --no-color \
+            --log-level error \
+            2>&1 | tee "$REVIEW_DIR/transcript-compare.jsonl"; then
+            echo "::warning::The narrative comparison session failed. The deterministic comparison stands; the review will be published without the narrative."
+          fi
+
+      - name: Assert the comparison left the working tree clean
+        run: |
+          set -euo pipefail
+          unexpected="$(git status --porcelain | grep -v "${REVIEW_DIR}/" || true)"
+          if [ -n "$unexpected" ]; then
+            echo "::error::The comparison modified the working tree. It runs read-only; nothing will be published."
+            echo "$unexpected"
+            exit 1
+          fi
+          echo "Working tree clean apart from ${REVIEW_DIR}/."
+
+      # ---------------------------------------------------------------------------------
+      # design D16. The working-tree assertion above deliberately ignores $REVIEW_DIR,
+      # which is where the reviewers' findings and the deterministic comparison live --
+      # so on its own it would let a prompt-injected narrative session rewrite them. This
+      # step is what makes "commentary only" true rather than merely intended.
+      # ---------------------------------------------------------------------------------
+      - name: Assert the narrative changed nothing but its own output
+        run: |
+          set -euo pipefail
+
+          # Every file that existed before the model ran must be byte-identical. This
+          # covers comparison.json, diff.patch, changed-files.txt and every reviewer's
+          # own findings.json.
+          if ! sha256sum -c --quiet "${RUNNER_TEMP}/pre-narrative.sha256"; then
+            echo "::error::The narrative session altered or deleted a file it was only allowed to read. Nothing will be published."
+            echo "::error::These are the reviewers' findings and the deterministic comparison; a change here would change what the check reports."
+            sha256sum -c "${RUNNER_TEMP}/pre-narrative.sha256" || true
+            exit 1
+          fi
+
+          # ...and the only files it may have added are its own output and the two the
+          # workflow itself redirects. Anything else means it wrote somewhere it should
+          # not have, and that file would otherwise travel in the artifact.
+          find "$REVIEW_DIR" -type f | LC_ALL=C sort > "${RUNNER_TEMP}/post-narrative.list"
+          added="$(comm -13 "${RUNNER_TEMP}/pre-narrative.list" "${RUNNER_TEMP}/post-narrative.list" \
+            | grep -vE "^${REVIEW_DIR}/(comparison\.md|transcript-compare\.jsonl|usage-compare\.json)$" || true)"
+          if [ -n "$added" ]; then
+            echo "::error::The narrative session wrote files outside its single permitted output:"
+            echo "$added"
+            exit 1
+          fi
+
+          echo "Narrative touched nothing it was not allowed to."
+
+      # Only now does the document the gate depends on enter the tree, so it was never
+      # reachable by the model at all (design D16).
+      - name: Place the merged findings for publication
+        run: |
+          set -euo pipefail
+          cp "${RUNNER_TEMP}/merged/findings.merged.json" "$REVIEW_DIR/findings.merged.json"
+          echo "Merged findings placed for the publisher."
+
+      # The narrative is commentary, so its absence degrades rather than fails: the
+      # deterministic comparison and both reviews are already complete, and suppressing
+      # a real review over a missing prose section would be the wrong trade. The
+      # publisher says so in the review body.
+      - name: Check whether the narrative was written
+        run: |
+          set -euo pipefail
+          if [ ! -s "$REVIEW_DIR/comparison.md" ]; then
+            echo "::warning::No comparison narrative was produced (${REVIEW_DIR}/comparison.md is missing or empty). Publishing the deterministic comparison only."
+          else
+            echo "Narrative present: $(wc -c < "$REVIEW_DIR/comparison.md") bytes."
+          fi
+
+      - name: Upload the comparison
+        uses: actions/upload-artifact@v7
+        with:
+          name: review-comparison
           path: ${{ env.REVIEW_DIR }}/
-          # $REVIEW_DIR is dot-prefixed, and upload-artifact filters hidden paths out
-          # by default -- without this the upload finds no files at all.
           include-hidden-files: true
           retention-days: 7
           if-no-files-found: error
@@ -291,10 +611,10 @@ jobs:
   # =====================================================================================
   publish:
     name: Publish review
-    needs: review
+    needs: [prepare, compare]
     # Nothing to publish when the review was skipped or the diff was empty -- and no
     # artifact to download either.
-    if: needs.review.outputs.skipped != 'true' && needs.review.outputs.empty != 'true'
+    if: needs.prepare.outputs.skipped != 'true' && needs.prepare.outputs.empty != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -302,34 +622,58 @@ jobs:
       pull-requests: write
 
     steps:
-      # Only the publisher script is needed from the repo, not the PR's code.
-      - name: Checkout base branch
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event.pull_request.base.sha }}
-          sparse-checkout: .github/code-review
-          sparse-checkout-cone-mode: false
-
+      # No checkout at all: the only thing this job needs from the repository is the
+      # publisher, and it takes that from the base-branch copy `prepare` extracted
+      # (design D6b). That also means the gate still works on the pull request that
+      # first introduces it, when the base branch has no publisher to check out.
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: "22"
 
-      - name: Download review artifact
+      - name: Download the review configuration
         uses: actions/download-artifact@v8
         with:
-          name: code-review
+          name: review-config
+          path: ${{ runner.temp }}/config
+
+      # One artifact: the compare job's $REVIEW_DIR already carries the merged findings,
+      # the comparison, the narrative, the diff and every reviewer's own output.
+      - name: Download the comparison
+        uses: actions/download-artifact@v8
+        with:
+          name: review-comparison
           path: ${{ env.REVIEW_DIR }}
+
+      - name: Collect the usage files
+        run: |
+          set -euo pipefail
+          paths=()
+          for dir in "$REVIEW_DIR"/models/*; do
+            [ -f "$dir/usage.json" ] || continue
+            paths+=("$(basename "$dir")=${dir}/usage.json")
+          done
+          if [ -f "$REVIEW_DIR/usage-compare.json" ]; then
+            paths+=("comparison=${REVIEW_DIR}/usage-compare.json")
+          fi
+          if [ "${#paths[@]}" -eq 0 ]; then
+            echo "::warning::No usage files were reported by the CLI for this run."
+            exit 0
+          fi
+          printf 'USAGE_PATHS=%s\n' "$(IFS=,; echo "${paths[*]}")" >> "$GITHUB_ENV"
 
       - name: Post review and set the gate
         env:
           # Actions token, not the Copilot PAT: comments are attributed to the bot, and
-          # the model never had write capability.
+          # no model ever had write capability.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_REPOSITORY: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          FINDINGS_PATH: ${{ env.REVIEW_DIR }}/findings.json
+          # The merged document, not either reviewer's own: one comment per problem,
+          # attributed to whoever reported it, at the worst severity anyone gave it.
+          FINDINGS_PATH: ${{ env.REVIEW_DIR }}/findings.merged.json
           DIFF_PATH: ${{ env.REVIEW_DIR }}/diff.patch
-          USAGE_PATH: ${{ env.REVIEW_DIR }}/usage.json
-        run: node .github/code-review/publish-review.mjs
+          COMPARISON_PATH: ${{ env.REVIEW_DIR }}/comparison.json
+          COMPARISON_MD_PATH: ${{ env.REVIEW_DIR }}/comparison.md
+        run: node "${RUNNER_TEMP}/config/publish-review.mjs"
