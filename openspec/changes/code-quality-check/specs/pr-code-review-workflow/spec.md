@@ -300,3 +300,76 @@ The change SHALL document the workflow in `README.md`, covering the required `CO
 
 - **WHEN** the workflow is added
 - **THEN** both `CLAUDE.md` and `.github/copilot-instructions.md` describe it, and neither omits the other's content
+
+### Requirement: The diff scope and prompts are computed once, before any model runs
+
+The workflow SHALL compute the guards, the diff scope and the review prompts in a single
+`prepare` job that holds no Copilot credential and no write permission, and SHALL publish
+them as artifacts for the jobs that run models. Reviewers SHALL NOT recompute the diff.
+
+#### Scenario: Both reviewers judge the same input
+
+- **WHEN** the reviewing models run
+- **THEN** each receives the byte-identical `changed-files.txt` and `diff.patch` produced by `prepare`, so any difference in their findings is a difference of judgement rather than of input
+
+#### Scenario: The guards are unambiguous
+
+- **WHEN** the draft, fork and empty-diff guards are evaluated
+- **THEN** they are evaluated once in a non-matrix job, so the `skipped` and `empty` outputs the downstream jobs depend on have exactly one value
+
+#### Scenario: The prompts come from the base branch
+
+- **WHEN** the review prompt and the comparison prompt are resolved
+- **THEN** both are read from the merge-base commit rather than the pull request head, and a pull request that edits them does not change the rules by which it is judged
+
+### Requirement: Several models review the same diff independently
+
+The workflow SHALL run one review per configured model as separate matrix legs, each
+holding the Copilot credential and `contents: read` only. A leg SHALL NOT have access to
+another leg's findings. The matrix SHALL NOT fail fast.
+
+#### Scenario: The reviewers cannot influence each other
+
+- **WHEN** two models review the same pull request
+- **THEN** each runs in its own job with its own checkout and its own findings file, and neither is given the other's output in any form
+
+#### Scenario: One reviewer fails
+
+- **WHEN** one model's review fails, writes no findings file, or exhausts its credit cap
+- **THEN** its matrix leg fails, the comparison job does not run, and nothing is published — a single surviving review is never published as a comparison
+
+#### Scenario: The reviewer roster is defined in one place
+
+- **WHEN** a model is added to or removed from the review matrix
+- **THEN** no other file needs editing, because the comparison and the publisher derive the roster from the per-model artifacts the matrix produces
+
+#### Scenario: Each reviewer's model is pinned
+
+- **WHEN** a matrix leg invokes the CLI
+- **THEN** it passes an explicit `--model` for that leg rather than `auto`, so the same commit reviewed twice is reviewed by the same models
+
+### Requirement: The comparison job runs a model without write access, against the base tree
+
+The workflow SHALL compare the reviews in a job that holds the Copilot credential and
+`contents: read` only, checked out at the merge-base commit. That job SHALL assert the
+working tree is unchanged apart from the scratch directory after the model runs.
+
+#### Scenario: The narrating model judges against unmodifiable standards
+
+- **WHEN** the comparison model reads a standard a finding cites
+- **THEN** it reads the base-branch version of that file, so a pull request cannot edit the standard it is being judged against, and the change itself is available to the model only as the diff
+
+#### Scenario: The comparison cannot write to the pull request
+
+- **WHEN** the comparison job runs
+- **THEN** it has no `pull-requests: write` permission and no GitHub tools, exactly like a review job
+
+#### Scenario: A failed narrative does not discard the reviews
+
+- **WHEN** the narrative session fails or writes no `comparison.md`
+- **THEN** the workflow emits a warning and publication continues with the deterministic comparison, because both reviews are already complete and the narrative changes no severity
+
+#### Scenario: The tolerance is narrow
+
+- **WHEN** the narrative step tolerates the CLI's exit status
+- **THEN** it does so for that command alone, and the working-tree assertion, the artifact steps and the deterministic comparison still fail the check as before

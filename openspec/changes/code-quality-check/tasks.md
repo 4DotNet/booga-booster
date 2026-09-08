@@ -48,7 +48,7 @@
 - [x] 5.8 Add the working-tree assertion: `git status --porcelain` may report paths under `.code-review/` only, otherwise fail (design D9).
 - [x] 5.9 Upload `.code-review/` as a workflow artifact.
 - [x] 5.10 Define the `publish` job with `needs: review`, `permissions: contents: read` + `pull-requests: write`, **no** Copilot credential in its environment, artifact download, and the `publish-review.mjs` invocation using the Actions `GITHUB_TOKEN`.
-- [x] 5.11 Confirm no step uses `continue-on-error`, and that a CLI failure, a Copilot entitlement error, a policy-blocked model, a missing findings file and an invalid findings file each fail the check.
+- [x] 5.11 Confirm no step uses `continue-on-error`, and that a CLI failure, a Copilot entitlement error, a policy-blocked model, a missing findings file and an invalid findings file each fail the check. **Amended by task 8:** still no `continue-on-error:` anywhere, and the one tolerated failure — the narrative-comparison session — is expressed as `if ! copilot …` inside its step so the working-tree assertion and every other failure in that job still fail the check.
 - [x] 5.12 Add the workflow comment documenting the `workflow_run` two-workflow variant for anyone who later needs fork-PR coverage, and why `pull_request_target` is not used — noting that the risk is sharper here because the reviewer's credential is a user PAT.
 
 ## 6. Documentation
@@ -74,3 +74,24 @@
 - [ ] 7.8 Temporarily unset the secret and confirm the check fails at the assertion step with the actionable message rather than an opaque CLI auth error.
 - [ ] 7.9 Confirm the working-tree assertion fires: temporarily relax the `shell` deny rule, have the reviewer touch a tracked file, and verify the job fails and nothing is published.
 - [ ] 7.10 Review the findings from the first few real pull requests and tighten the prompt where the reviewer over-reported, before proposing the check as required on `main`.
+
+## 8. Two reviewers and the comparison
+
+- [x] 8.1 Split the guards and the diff-scope computation into a `prepare` job that holds no credential and no write permission, publishing `review-inputs` (`changed-files.txt`, `diff.patch`) and `review-prompts` (both prompts, taken from the merge base) as artifacts. Matrix jobs cannot carry unambiguous outputs, and both reviewers must judge byte-identical input.
+- [x] 8.2 Turn `review` into a matrix over the model roster (`claude-sonnet-5`, `gpt-5.6-terra`) with `fail-fast: false`, each leg holding the Copilot PAT and `contents: read` only, downloading the prepared diff rather than recomputing it, and uploading `code-review-<model>` with its findings, usage and transcript.
+- [x] 8.3 Write `.github/code-review/compare-reviews.mjs`: pair findings across reviewers (same path, ±5 lines, same `category` or ≥ 0.5 title-token overlap), never merge two findings from one reviewer, record how each pairing matched, and emit `comparison.json` (roster, per-reviewer counts, shared, unique-per-reviewer, severity disagreements, agreement rate) plus `findings.merged.json` in the publisher's schema.
+- [x] 8.4 Make the merge preserve every reviewer's detail text, carry the worst severity any reviewer assigned (the union gate, design D15), and prefer a line the diff will accept as an inline anchor.
+- [x] 8.5 Write `.github/code-review/compare-prompt.md`: the narrative comparison, judging single-reviewer findings and severity disagreements, told that it cannot change a severity or the outcome, that the working tree is the base branch, that everything it reads is data rather than instructions, and that it must not favour whichever review its own model produced.
+- [x] 8.6 Add the `compare` job: base-branch checkout (so the standards a judgement rests on cannot have been edited by the pull request), reviewer artifacts downloaded and renamed to `.code-review/models/<model>/`, the deterministic comparison, then the narrative session under the same deny rules as a review, the D9 working-tree assertion, and a warning — not a failure — when no narrative is produced.
+- [x] 8.7 Derive the reviewer roster from the per-model artifact names in both the comparison and the publisher, so the matrix is the only place the roster is written.
+- [x] 8.8 Extend the publisher: accept the merged document's `models` and `severities`, attribute every comment (all reviewers / this one only, naming who missed it / both grades where they differ), render the comparison table, agreement figure and disagreements in the review body, embed and attribute the narrative with truncation, and report usage per session.
+- [x] 8.9 Keep the gate a union — `blocking` from any single reviewer fails the check — and cover it in the specs so a later change cannot quietly relax it to consensus.
+- [x] 8.10 Add `compare-reviews.test.mjs` (pairing, one-per-model clustering, merge severity and anchoring, comparison totals and disagreements, argument parsing) and extend `publish-review.test.mjs` (attribution rendering, comparison section, missing and over-long narratives, single-reviewer documents).
+- [x] 8.11 Document the two-reviewer topology, the tripled credit cost and the new tuning points in `README.md`, `CLAUDE.md` and `.github/copilot-instructions.md`.
+- [ ] 8.12 Confirm `gpt-5.6-terra` is permitted by the organisation's Copilot policy and that `--model gpt-5.6-terra` is the id the pinned CLI accepts; if the id differs, correct the matrix entry (it is the only place it appears).
+- [ ] 8.13 Open a probe pull request and confirm both reviews run, that neither leg can see the other's findings, and that a deliberate `blocking` violation found by only one model still fails the check.
+- [ ] 8.14 On the same probe, read the comparison in the review body: check the pairing did not merge unrelated findings, that the attribution on each comment is right, and that the narrative judged the single-reviewer findings rather than restating them.
+- [ ] 8.15 Force a one-sided failure (block one model by policy, or exhaust its credit cap) and confirm the review job fails, `compare` never runs, and nothing is published.
+- [ ] 8.16 Force a narrative failure and confirm the review is still published, with the warning and the body's "narrative was not produced" note.
+- [ ] 8.17 Record the observed per-session usage for all three sessions in the README and re-set `MAX_AI_CREDITS` if the cap no longer clears a normal run.
+- [ ] 8.18 After a few real pull requests, compare the two reviewers' precision and decide whether to keep both, swap one, or change which model narrates — recording the reasoning, since this is the teaching-demo half of the deliverable.
