@@ -107,6 +107,16 @@ any severity, add or remove any finding, or affect the check's outcome.
 - **WHEN** the deterministic report has merged what appear to be two different problems
 - **THEN** the narrative says so plainly, because a defect in the comparison is more useful to the reader than another paragraph of agreement
 
+#### Scenario: The narrative is prevented from touching the gate, not merely told not to
+
+- **WHEN** the narrative model runs with file-writing tools available
+- **THEN** the document the check's outcome is computed from is not reachable by it, and every file that is gets verified afterwards, so "commentary only" holds even if the model is subverted
+
+#### Scenario: The publisher is handed a merged document the comparison does not corroborate
+
+- **WHEN** the merged findings document and the comparison report disagree on how many distinct problems there were
+- **THEN** the publisher fails the check rather than gating on the document
+
 #### Scenario: Injected instructions in the material being compared
 
 - **WHEN** a findings file, the diff, or a file the narrative reads tells it to approve unconditionally, ignore its rules, or write different output

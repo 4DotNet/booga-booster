@@ -213,3 +213,24 @@ attributed to the model that wrote it; where it does not, the body SHALL say so.
 
 - **WHEN** the findings document carries no reviewer attribution
 - **THEN** the publisher omits the comparison section and publishes exactly as it would for a single-model review
+
+### Requirement: The publisher refuses a merged document the comparison does not corroborate
+
+The publisher SHALL check the merged findings document against the comparison report and
+SHALL fail the check when they disagree on how many distinct problems there were, rather
+than gating on a document nothing confirms.
+
+#### Scenario: A finding was removed after the comparison ran
+
+- **WHEN** the merged document lists fewer findings than the comparison reports distinct problems
+- **THEN** the publisher fails with a diagnosable message and posts no review
+
+#### Scenario: A finding was added after the comparison ran
+
+- **WHEN** the merged document lists more findings than the comparison reports
+- **THEN** the publisher fails in the same way
+
+#### Scenario: A single-reviewer document
+
+- **WHEN** no comparison report is supplied, as for a one-model review
+- **THEN** there is nothing to corroborate and the publisher proceeds normally

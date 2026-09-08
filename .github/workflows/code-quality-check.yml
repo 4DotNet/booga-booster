@@ -284,7 +284,7 @@ jobs:
         with:
           # Pinned explicitly: @github/copilot declares no `engines` constraint, so
           # nothing would otherwise stop the runner default from drifting under us.
-          node-version: "22"
+          node-version: "24"
 
       - name: Install Copilot CLI (pinned)
         run: |
@@ -463,11 +463,29 @@ jobs:
           fi
           echo "Comparing: ${models[*]}"
 
+          # The merged findings document is what the publisher gates on, so it is written
+          # OUTSIDE the working tree and stays there until the narrative session has been
+          # verified (design D16). The narrating model never sees it, cannot overwrite it,
+          # and does not need it: it reads comparison.json and the raw findings instead.
+          mkdir -p "${RUNNER_TEMP}/merged"
           node "${RUNNER_TEMP}/config/compare-reviews.mjs" \
             "${args[@]}" \
             --diff "$REVIEW_DIR/diff.patch" \
             --out-json "$REVIEW_DIR/comparison.json" \
-            --out-findings "$REVIEW_DIR/findings.merged.json"
+            --out-findings "${RUNNER_TEMP}/merged/findings.merged.json"
+
+      # ---------------------------------------------------------------------------------
+      # design D16 -- the narrative gets one writable output, and that is enforced by
+      # verification rather than by trusting a deny rule. Everything the model can reach
+      # is fingerprinted here and checked after it exits; the file that decides the gate
+      # is not in the tree at all.
+      # ---------------------------------------------------------------------------------
+      - name: Fingerprint everything the narrative can reach
+        run: |
+          set -euo pipefail
+          find "$REVIEW_DIR" -type f | LC_ALL=C sort > "${RUNNER_TEMP}/pre-narrative.list"
+          xargs -a "${RUNNER_TEMP}/pre-narrative.list" -r sha256sum > "${RUNNER_TEMP}/pre-narrative.sha256"
+          echo "Fingerprinted $(wc -l < "${RUNNER_TEMP}/pre-narrative.sha256") file(s) under ${REVIEW_DIR}/."
 
       - name: Install Copilot CLI (pinned)
         run: |
@@ -523,6 +541,48 @@ jobs:
             exit 1
           fi
           echo "Working tree clean apart from ${REVIEW_DIR}/."
+
+      # ---------------------------------------------------------------------------------
+      # design D16. The working-tree assertion above deliberately ignores $REVIEW_DIR,
+      # which is where the reviewers' findings and the deterministic comparison live --
+      # so on its own it would let a prompt-injected narrative session rewrite them. This
+      # step is what makes "commentary only" true rather than merely intended.
+      # ---------------------------------------------------------------------------------
+      - name: Assert the narrative changed nothing but its own output
+        run: |
+          set -euo pipefail
+
+          # Every file that existed before the model ran must be byte-identical. This
+          # covers comparison.json, diff.patch, changed-files.txt and every reviewer's
+          # own findings.json.
+          if ! sha256sum -c --quiet "${RUNNER_TEMP}/pre-narrative.sha256"; then
+            echo "::error::The narrative session altered or deleted a file it was only allowed to read. Nothing will be published."
+            echo "::error::These are the reviewers' findings and the deterministic comparison; a change here would change what the check reports."
+            sha256sum -c "${RUNNER_TEMP}/pre-narrative.sha256" || true
+            exit 1
+          fi
+
+          # ...and the only files it may have added are its own output and the two the
+          # workflow itself redirects. Anything else means it wrote somewhere it should
+          # not have, and that file would otherwise travel in the artifact.
+          find "$REVIEW_DIR" -type f | LC_ALL=C sort > "${RUNNER_TEMP}/post-narrative.list"
+          added="$(comm -13 "${RUNNER_TEMP}/pre-narrative.list" "${RUNNER_TEMP}/post-narrative.list" \
+            | grep -vE "^${REVIEW_DIR}/(comparison\.md|transcript-compare\.jsonl|usage-compare\.json)$" || true)"
+          if [ -n "$added" ]; then
+            echo "::error::The narrative session wrote files outside its single permitted output:"
+            echo "$added"
+            exit 1
+          fi
+
+          echo "Narrative touched nothing it was not allowed to."
+
+      # Only now does the document the gate depends on enter the tree, so it was never
+      # reachable by the model at all (design D16).
+      - name: Place the merged findings for publication
+        run: |
+          set -euo pipefail
+          cp "${RUNNER_TEMP}/merged/findings.merged.json" "$REVIEW_DIR/findings.merged.json"
+          echo "Merged findings placed for the publisher."
 
       # The narrative is commentary, so its absence degrades rather than fails: the
       # deterministic comparison and both reviews are already complete, and suppressing

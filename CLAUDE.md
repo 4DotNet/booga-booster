@@ -279,6 +279,12 @@ reviewers: one model catching a MUST violation alone still fails the check.
 - Every model run — both reviews and the comparison — has no shell, no network, no GitHub
   tools, no MCP servers and no write permission, and each job asserts the model left the
   working tree untouched.
+- **The comparison cannot reach what the gate is computed from.** `findings.merged.json` is
+  written outside the working tree and placed only after the narrative session has exited,
+  and every file that session *can* reach is hashed before and verified after. Do not move
+  that file into the scratch directory before the model runs, and do not remove the
+  fingerprint check: without them, an injected narrative could rewrite the findings the
+  check gates on (design D16).
 - Adding or removing a reviewing model is an edit to the workflow’s `strategy.matrix.model`
   list and nowhere else: the comparison and the publisher derive the roster from the
   per-model artifacts.

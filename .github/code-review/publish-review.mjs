@@ -249,6 +249,28 @@ function renderStandard(finding) {
 const quoted = (models) => models.map((model) => `\`${model}\``).join(', ');
 
 /**
+ * Defence in depth (design D16): the merged findings document and the comparison report
+ * are written from the same clusters by the same script, so they must agree on how many
+ * distinct problems there were. A mismatch means one of the two was altered after the
+ * comparison ran -- exactly what an injected narrative session would try -- and the
+ * publisher must fail rather than gate on a document it cannot corroborate.
+ *
+ * Returns a diagnostic message, or `null` when the two agree or there is nothing to check.
+ */
+export function comparisonMismatch(findings, comparison) {
+  const expected = comparison?.totals?.clusters;
+  if (!Number.isInteger(expected)) return null;
+  if (expected === findings.length) return null;
+
+  return (
+    `The merged findings document lists ${findings.length} finding(s) but the comparison ` +
+    `reports ${expected} distinct problem(s). The two are written together, so one of them ` +
+    'has been altered since. Failing rather than publishing a review whose findings the ' +
+    'comparison does not corroborate.'
+  );
+}
+
+/**
  * Say which reviewers reported this finding, and where they graded it differently.
  *
  * A finding only one of several reviewers saw is not weaker -- the gate treats it exactly
@@ -631,6 +653,10 @@ async function main() {
   }
 
   const { summary, findings } = document;
+
+  const mismatch = comparisonMismatch(findings, comparison);
+  if (mismatch !== null) fail(mismatch);
+
   const positions = parseDiffPositions(readFileSync(diffPath, 'utf8'));
   const { anchorable, unanchorable } = partitionFindings(findings, positions);
 

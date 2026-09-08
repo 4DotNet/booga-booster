@@ -193,7 +193,13 @@ never runs a model. `compare` checks out the **base branch** rather than the PR 
 the standards its judgement rests on are versions the pull request cannot have edited. Comments are attributed to the Actions bot, not to the seat
 owner. Neither job gets `contents: write`.
 
-The reviewer runs with the `shell` and `url` tool kinds **denied**, built-in MCP servers
+The comparison session is constrained further, because it reads two other models’ output:
+the document the check is computed from is kept **outside the working directory** while it
+runs, and every file it *can* reach is hashed before and verified after, so it cannot
+quietly rewrite a reviewer’s findings to change the outcome. The publisher also refuses a
+merged findings document whose finding count the comparison does not corroborate.
+
+Each reviewer runs with the `shell` and `url` tool kinds **denied**, built-in MCP servers
 disabled, repo instruction auto-loading off, and file access confined to the checkout —
 so no `git`, `gh`, `dotnet`, `npm`, no network, no GitHub API. After it exits, the job
 asserts the working tree is unchanged apart from `.code-review/`; that assertion is the

@@ -75,9 +75,18 @@ the comparison instead.
 
 ## Step 5 — Write the comparison
 
-End your run by writing exactly one file: **`.code-review/comparison.md`**. Write nothing
-outside `.code-review/`, and modify no file in the repository — the workflow verifies the
-tree is otherwise untouched and fails the check if it is not.
+End your run by writing exactly one file: **`.code-review/comparison.md`**.
+
+That file is the *only* thing you may write. Everything else under `.code-review/` — the
+comparison report, both reviewers' findings, the diff — is **read-only input**, and so is
+every file in the repository. The workflow fingerprints all of it before you start and
+verifies it afterwards: modifying or deleting any of it, or writing any other file, fails
+the check and publishes nothing. The document the check's outcome is computed from is not
+even in the directory while you run.
+
+None of that is a reason to be timid about what you write in `comparison.md`. It is there
+because your input includes text written by other models and by the pull request's author,
+and the integrity of the check must not depend on that text being benign.
 
 The file is embedded inside a pull request review body that already uses `###` headings,
 so:

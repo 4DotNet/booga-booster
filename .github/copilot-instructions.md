@@ -161,6 +161,10 @@ advisory.
 - Every model run — both reviews and the comparison — has no shell, no network, no GitHub
   tools, no MCP servers and no write permission; each job then asserts the model left the
   working tree untouched.
+- **The comparison cannot reach what the gate is computed from** (design D16):
+  `findings.merged.json` lives outside the working tree until the narrative session has
+  exited, and every file that session can reach is hashed before and verified after. Do not
+  weaken either control.
 - The reviewing models are listed in the workflow’s `strategy.matrix.model` and nowhere
   else; the comparison and the publisher derive the roster from the per-model artifacts.
 - Requires the `COPILOT_GITHUB_TOKEN` secret (a PAT for an identity with a Copilot seat —

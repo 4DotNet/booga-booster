@@ -16,6 +16,7 @@ import {
   countBySeverity,
   renderReviewBody,
   renderInlineComment,
+  comparisonMismatch,
 } from './publish-review.mjs';
 
 // ---------------------------------------------------------------------------
@@ -476,4 +477,31 @@ test('no comparison section when only one reviewer ran', () => {
 
   assert.doesNotMatch(body, /Reviewer comparison/);
   assert.match(body, /model `test-model`/);
+});
+
+// ---------------------------------------------------------------------------
+// The merged document must be corroborated by the comparison (design D16)
+// ---------------------------------------------------------------------------
+
+test('a merged document matching the comparison passes corroboration', () => {
+  assert.equal(comparisonMismatch([finding(), finding()], { totals: { clusters: 2 } }), null);
+});
+
+test('a finding removed after the comparison ran is caught', () => {
+  const message = comparisonMismatch([finding()], { totals: { clusters: 2 } });
+  assert.match(message, /lists 1 finding\(s\) but the comparison reports 2/);
+  assert.match(message, /has been altered since/);
+});
+
+test('a finding added after the comparison ran is caught', () => {
+  assert.match(
+    comparisonMismatch([finding(), finding(), finding()], { totals: { clusters: 2 } }),
+    /lists 3 finding\(s\) but the comparison reports 2/,
+  );
+});
+
+test('nothing to corroborate is not a mismatch', () => {
+  assert.equal(comparisonMismatch([finding()], null), null);
+  assert.equal(comparisonMismatch([finding()], {}), null);
+  assert.equal(comparisonMismatch([finding()], { totals: {} }), null);
 });

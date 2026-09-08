@@ -373,3 +373,32 @@ working tree is unchanged apart from the scratch directory after the model runs.
 
 - **WHEN** the narrative step tolerates the CLI's exit status
 - **THEN** it does so for that command alone, and the working-tree assertion, the artifact steps and the deterministic comparison still fail the check as before
+
+### Requirement: The narrative session cannot alter what the check is computed from
+
+The workflow SHALL keep the merged findings document outside the working directory while
+the narrative model runs, and SHALL place it for publication only after that model has
+exited and been verified. The workflow SHALL fingerprint every file the narrative model can
+reach before it runs and verify them afterwards, failing the check on any modification,
+deletion, or unexpected new file. Neither control SHALL depend on a CLI permission flag
+behaving as documented.
+
+#### Scenario: The narrative rewrites the merged findings
+
+- **WHEN** the narrative session attempts to remove or add a `blocking` finding in the document the publisher gates on
+- **THEN** it cannot, because that document is not in the working directory while it runs and is placed only after verification
+
+#### Scenario: The narrative alters a reviewer's findings or the comparison
+
+- **WHEN** any file under the scratch directory that existed before the narrative ran is modified or deleted
+- **THEN** the fingerprint check fails, the artifact is not uploaded and nothing is published
+
+#### Scenario: The narrative writes somewhere it should not
+
+- **WHEN** the narrative session creates any file other than its own output and the two the workflow itself redirects
+- **THEN** the check fails, so no unexpected file travels in the artifact
+
+#### Scenario: The working-tree assertion is not relied on alone
+
+- **WHEN** the narrative session writes inside the scratch directory
+- **THEN** the working-tree assertion passes it, as designed, and the fingerprint check is what constrains it — the two controls are not substitutes for each other
