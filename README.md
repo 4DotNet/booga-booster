@@ -96,6 +96,129 @@ npx vitest run src/app/queue/state/queue-state.service.spec.ts   # single file
 
 ---
 
+## Automated code review (CI)
+
+Every pull request into `main` gets reviewed by **GitHub Copilot CLI running headless**,
+grounded in this repository's own checked-in standards. The workflow is
+`.github/workflows/code-quality-check.yml`.
+
+> **A green `code-quality-check` is not a green build.** This workflow reviews the diff.
+> It does **not** compile the code, run the tests or check coverage — there is no
+> build/test workflow in this repo yet. Do not read the check as a substitute for
+> `dotnet test`.
+
+### What it does
+
+1. Computes the PR's changed files and unified diff from the merge base, onto disk.
+2. Runs `copilot -p` with `.github/code-review/review-prompt.md`, which tells it to
+   review only the changed lines and to ground every finding in a specific rule file
+   (`CLAUDE.md`, a `.claude/skills/*` rule, an `openspec/specs/` requirement, `docs/`).
+3. The reviewer writes `.code-review/findings.json` — path, line, severity, category,
+   rationale and the standard cited.
+4. `.github/code-review/publish-review.mjs` posts them as **inline review comments** on
+   the changed lines, plus a summary. Findings that cannot be anchored to a diff line go
+   in the summary rather than being dropped.
+5. The check **fails only on `blocking` findings**. `major`, `minor` and `nit` are
+   advisory.
+
+Drafts and pull requests **from forks are skipped** with a passing check — the
+`pull_request` event grants forks no secrets, so the review cannot run for them.
+
+### One-time setup
+
+Add a repository (or organisation) secret named **`COPILOT_GITHUB_TOKEN`** holding a
+personal access token for an identity with an **active Copilot seat**.
+
+The Actions-provided `GITHUB_TOKEN` **cannot** be used: it is an installation token with
+no Copilot entitlement. `COPILOT_GITHUB_TOKEN` is also the variable the CLI itself reads,
+and it takes precedence over `GH_TOKEN` and `GITHUB_TOKEN`.
+
+**Use a dedicated machine account, not your own PAT.** With a personal token:
+
+- every PR review spends *your* AI-credit allowance, i.e. your working capacity;
+- the token carries *your* access to every repo you can reach into CI;
+- the gate breaks silently when you rotate it, change teams or leave.
+
+A machine account with its own Copilot seat and a fine-grained PAT scoped to this
+repository (read-only contents is enough — the reviewer never writes to GitHub) avoids
+all three.
+
+Also required:
+
+- **Copilot policy** — for Copilot Business/Enterprise, the **"Copilot in the CLI"**
+  organisation policy must be enabled, and the pinned model must be permitted.
+- **Node 22** — set by the workflow.
+
+### Cost
+
+Reviews draw **AI credits** from the seat's allowance, not metered API tokens.
+
+- `MAX_AI_CREDITS` in the workflow is a **hard per-session cap** (`--max-ai-credits`).
+- Each run's actual usage appears in the **Actions job summary**, read from the CLI's
+  `--usage-output-file`.
+- Consumption is bounded further by per-PR concurrency cancellation (a new push cancels
+  the superseded run), the draft skip, `paths-ignore` for image assets, and a job timeout.
+
+### Security posture
+
+The workflow is split into two jobs on purpose:
+
+| Job | Credential | Permissions | Runs the model |
+| --- | --- | --- | :-: |
+| `review` | `COPILOT_GITHUB_TOKEN` (user PAT) | `contents: read` | ✅ |
+| `publish` | Actions `GITHUB_TOKEN` | `contents: read`, `pull-requests: write` | — |
+
+So the job holding a user PAT cannot write to the PR, and the job that can write to the
+PR never runs the model. Comments are attributed to the Actions bot, not to the seat
+owner. Neither job gets `contents: write`.
+
+The reviewer runs with the `shell` and `url` tool kinds **denied**, built-in MCP servers
+disabled, repo instruction auto-loading off, and file access confined to the checkout —
+so no `git`, `gh`, `dotnet`, `npm`, no network, no GitHub API. After it exits, the job
+asserts the working tree is unchanged apart from `.code-review/`; that assertion is the
+actual read-only guarantee, and it holds regardless of whether the CLI's flags behave as
+documented.
+
+### Tuning it
+
+| To change | Edit |
+| --- | --- |
+| What counts as `blocking` | the severity section of `.github/code-review/review-prompt.md` |
+| Which standards are consulted | the standards section of the same file |
+| The credit cap, model or CLI version | the `env:` block of `.github/workflows/code-quality-check.yml` |
+| Whether findings gate the merge | the exit condition in `.github/code-review/publish-review.mjs` |
+
+Run the publisher's tests with:
+
+```bash
+node --test .github/code-review/publish-review.test.mjs
+```
+
+**Bumping the pinned CLI version is a behavioural change, not a chore.** Three of this
+workflow's original assumptions about Copilot CLI's flag surface turned out to be wrong
+during implementation (see `openspec/changes/code-quality-check/design.md`, D4–D6), so
+re-verify the tool restrictions on a probe PR after any bump.
+
+### Troubleshooting
+
+The check failed but you see no review comments — in likely order:
+
+1. **`COPILOT_GITHUB_TOKEN` is missing.** The first step fails loudly and names it.
+2. **The Copilot seat is inactive, expired or revoked**, or the token was rotated.
+3. **The AI-credit allowance is exhausted.**
+4. **The pinned model is blocked by org policy.**
+5. **The credit cap was hit mid-review**, so no findings file was written. Raise
+   `MAX_AI_CREDITS`.
+6. **The findings file was missing or malformed.** This deliberately fails rather than
+   reporting a clean review — a review that did not happen must never look like a review
+   that found nothing.
+
+Making `code-quality-check` a **required** check on `main` is a deliberate follow-up.
+Calibrate the prompt against real pull requests first: an AI gate that fires on taste
+gets switched off within a week.
+
+---
+
 ## Repository layout
 
 ```
@@ -234,6 +357,11 @@ tooling**: `.claude/` is the single source of truth, and Copilot CLI reads it na
 | Instructions | `.github/copilot-instructions.md` (mirror) | — | — | ✅ |
 | Slash commands | `.claude/commands/` | ✅ | — | — |
 | Slash commands | `.github/prompts/*.prompt.md` | — | ✅ | — |
+| CI code review | `.github/code-review/` + `.github/workflows/code-quality-check.yml` | — | ✅ headless | — |
+
+The last row is the one that runs without a human: every pull request into `main` is
+reviewed by Copilot CLI in `-p` mode against the rules in the rows above it. See
+[Automated code review (CI)](#automated-code-review-ci).
 
 ### MCP servers (`.mcp.json`)
 

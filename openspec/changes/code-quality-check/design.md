@@ -156,6 +156,37 @@ The MCP half of that worry also dissolves. Copilot CLI reads MCP configuration f
 
 **Decision:** there is no trust step. What the run does need is the non-interactive hardening already listed in D5 — `--allow-all-tools` to satisfy the mode, `--no-ask-user` so nothing waits on a human, and the job `timeout-minutes` as the backstop. The probe pull request (task 7.2) verifies the run reaches the findings-file write without stalling, that a shell command is refused, and that no MCP tool is present. Verification stays in the plan; the invented mechanism does not.
 
+### D6b — The reviewer's own configuration comes from the base branch
+
+Found while implementing, not while designing. The `review` job checks out the **pull
+request head**, because that is the code under review (D7). But the review prompt and the
+publisher live in that same checkout — so as first written, a pull request would have been
+reviewed using *its own* copy of the prompt. A PR could then replace the prompt wholesale,
+and the self-configuration rule that was supposed to flag exactly that (D10, and the
+`pr-review-prompt` spec) would have been deleted along with everything else that would
+have caught it. The mitigation would have removed itself.
+
+**Decision:** the review's configuration is always read from the merge base, never from
+the head:
+
+- The prompt is extracted with `git show <base_sha>:.github/code-review/review-prompt.md`
+  into `$RUNNER_TEMP`, outside the working tree so it cannot trip the D9 assertion, and
+  passed to `-p` from there. The shell reads it, not the CLI, so no path permission is
+  involved.
+- The publisher is obtained by the `publish` job checking out
+  `.github/code-review` at `github.event.pull_request.base.sha` — it never runs the PR's
+  version of the script that decides whether the check passes.
+
+One documented exception: when the base branch has no prompt yet — the bootstrapping case,
+including the pull request that introduces this workflow — the job falls back to the head's
+copy and emits a `::warning::` telling the reviewer to read the prompt by hand. Failing
+instead would make the workflow unable to land itself; failing *silently* is what the
+warning exists to prevent.
+
+A pull request can still change the prompt for *subsequent* pull requests, which is
+correct — that is what review is for, and the self-configuration rule ensures a human is
+pointed at the diff.
+
 ### D7 — Diff scope comes from git, computed before Copilot runs
 
 `actions/checkout` with `fetch-depth: 0`, then a shell step computes the merge base against `origin/${{ github.base_ref }}` and writes `.code-review/changed-files.txt` and `.code-review/diff.patch`. The prompt tells the reviewer to read those two files first and to raise findings **only** on lines present in the diff.

@@ -237,6 +237,7 @@ This repo is set up so **Claude Code and GitHub Copilot CLI share the same MCP s
 | Skills | `.claude/skills/<name>/SKILL.md` | ✅ | ✅ (also scans `.github/skills/`) |
 | Instructions | `CLAUDE.md` **and** `.github/copilot-instructions.md` | `CLAUDE.md` | `CLAUDE.md` |
 | Slash commands | `.claude/commands/` **and** `.github/prompts/*.prompt.md` | `.claude/commands/` only | `.github/prompts/` only |
+| CI code review | `.github/code-review/` + `.github/workflows/code-quality-check.yml` | — | ✅ (headless, in Actions) |
 
 ### MCP servers available
 
@@ -245,6 +246,25 @@ This repo is set up so **Claude Code and GitHub Copilot CLI share the same MCP s
 | `4dotnet-csharp-style-guide` | **Authoritative** for all C# and solution-design decisions. Query it first, every time. Requires the `4dotnet-csharp-style-guide` executable on `PATH`. |
 | `primeng` | PrimeNG 22 component API, props, events, theming, accessibility. Consult before using any PrimeNG component. |
 | `microsoft-learn` | Official Microsoft/Azure documentation and code samples. |
+
+### Automated PR review (CI)
+
+`.github/workflows/code-quality-check.yml` runs **GitHub Copilot CLI headless** (`copilot -p`)
+on every pull request into `main`, reviewing the diff against the standards in this file,
+`.claude/skills/*`, `openspec/specs/` and `docs/`. It posts inline review comments and
+**fails the check only on `blocking` findings**.
+
+- The review instruction is `.github/code-review/review-prompt.md` — a checked-in,
+  reviewable file. It is *not* a slash command and must not move into `.github/prompts/`
+  or `.claude/skills/`, which are discovery paths.
+- Findings are published by `.github/code-review/publish-review.mjs`
+  (`node --test .github/code-review/publish-review.test.mjs` to test it).
+- The reviewer runs with no shell, no network, no GitHub tools and no MCP servers, and the
+  job asserts it left the working tree untouched.
+- Requires the `COPILOT_GITHUB_TOKEN` secret; see the README for setup and cost.
+- **Do not weaken the review configuration casually.** The prompt requires any PR touching
+  `.github/workflows/`, `.github/code-review/`, `CLAUDE.md` or `.claude/` to be flagged at
+  `major` or higher, precisely so such changes get human eyes.
 
 ### Agents and skills
 

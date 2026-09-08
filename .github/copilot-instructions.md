@@ -133,6 +133,27 @@ doc before changing anything in `DigitalTwin/Domain`.
   per module under `src/Tests/`.
 - Frontend: **Vitest**, plus `axe-core` accessibility specs (`*.a11y.spec.ts`).
 
+## Automated PR review (CI)
+
+`.github/workflows/code-quality-check.yml` runs **GitHub Copilot CLI headless**
+(`copilot -p`) on every pull request into `main`, reviewing the diff against `CLAUDE.md`,
+`.claude/skills/*`, `openspec/specs/` and `docs/`. It posts inline review comments and
+**fails the check only on `blocking` findings**; `major` and below are advisory.
+
+- Review instruction: `.github/code-review/review-prompt.md` — a checked-in, reviewable
+  file. It is **not** a slash command; it must not move into `.github/prompts/` or
+  `.github/skills/`, which are discovery paths.
+- Publisher: `.github/code-review/publish-review.mjs`
+  (test with `node --test .github/code-review/publish-review.test.mjs`).
+- The reviewer runs with no shell, no network, no GitHub tools and no MCP servers; the job
+  then asserts it left the working tree untouched.
+- Requires the `COPILOT_GITHUB_TOKEN` secret (a PAT for an identity with a Copilot seat —
+  the Actions `GITHUB_TOKEN` cannot drive the CLI). See the README for setup and cost.
+- A green check is **not** a green build: this workflow does not compile or test anything.
+- **Do not weaken the review configuration casually.** The prompt requires any PR touching
+  `.github/workflows/`, `.github/code-review/`, `CLAUDE.md`, this file or `.claude/` to be
+  flagged at `major` or higher, precisely so such changes get human eyes.
+
 ## Spec-driven workflow (OpenSpec)
 
 Features go through `openspec/` rather than straight into code: explore → propose
@@ -207,6 +228,8 @@ and `copilot mcp list` shows user-scoped servers only.
   `.github/prompts/<ns>-<name>.prompt.md`. Keep them in sync.
 - **Repo-wide instructions** → written twice: `CLAUDE.md` (canonical) **and** this file.
   Keep them in sync.
+- **CI review assets** → `.github/code-review/`. Deliberately *not* a discovery path, so
+  the prompt does not surface as a bogus slash command or skill.
 - **Agent `tools:` lists** → list **both** tool vocabularies (`Read`/`Bash`/
   `mcp__server__tool` *and* `read`/`shell`/`server/*`). Unknown names are ignored by
   both tools; omitting one leaves the agent tool-less in that tool.

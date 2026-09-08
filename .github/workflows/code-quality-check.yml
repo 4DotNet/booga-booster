@@ -1,0 +1,332 @@
+# Automated pull request code review, driven by GitHub Copilot CLI running headless.
+#
+# Spec: openspec/changes/code-quality-check/ (proposal.md, design.md, specs/, tasks.md)
+# Setup: see the "Automated code review" section of README.md.
+#
+# ---------------------------------------------------------------------------------------
+# Copilot CLI 1.0.83 reconnaissance (openspec task 1.4) -- READ BEFORE CHANGING FLAGS
+# ---------------------------------------------------------------------------------------
+# Verified against 1.0.83 via `copilot --help` and the `permissions` / `environment`
+# help topics. Three earlier assumptions about this CLI turned out to be wrong, so treat
+# every flag below as load-bearing and re-verify on any version bump:
+#
+#   * `--allow-all-tools` is REQUIRED for non-interactive (-p) mode. It is not optional,
+#     and omitting it does not make the run safer -- it makes it not run.
+#   * Restriction therefore comes from DENY rules, not from withholding approval:
+#     "Denial rules always take precedence over allow rules, even --allow-all-tools."
+#     So `--deny-tool shell` beats `--allow-all-tools`, and would also beat a
+#     `--allow-tool 'shell(git diff)'` -- do not try to combine them.
+#   * Deny/allow patterns use the documented KINDS `shell(cmd:*)`, `write(path)`,
+#     `url(domain)` and `<mcp-server>(tool)`. No internal tool identifiers are used
+#     anywhere here, deliberately: kinds are the stable vocabulary.
+#   * `--available-tools` / `--excluded-tools` gate tool VISIBILITY (a separate layer).
+#     Not used here; the deny rules cover what we need without naming internals.
+#   * `--output-format json` and `--usage-output-file` DO exist. The JSON output is a
+#     session transcript, not a result document, which is why findings still come from a
+#     file the reviewer writes (design D4).
+#   * File access already defaults to the working directory + system temp dir.
+#   * There is NO folder-trust prompt in -p mode, and repo-root `.mcp.json` is not read
+#     (MCP config comes from ~/.copilot/mcp-config.json / --additional-mcp-config).
+#
+# The guarantee that does NOT depend on any of the above is the working-tree assertion
+# after the run (design D9). Keep it.
+#
+# Fork PRs: `pull_request` gives them no secrets, so they are skipped. `pull_request_target`
+# is deliberately NOT used -- it would combine untrusted code, a user PAT and write
+# permission. If fork coverage is ever needed, use the two-workflow `workflow_run` pattern
+# instead.
+
+name: code-quality-check
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+    branches: [main]
+    # Deliberately does NOT ignore '**/*.md'. CLAUDE.md, the openspec specs and this
+    # workflow's own review prompt are all markdown, and a pull request that weakens
+    # them must still be reviewed -- see the self-configuration rule in the prompt.
+    paths-ignore:
+      - '**/*.png'
+      - '**/*.jpg'
+      - '**/*.jpeg'
+      - '**/*.gif'
+      - '**/*.svg'
+      - '**/*.ico'
+      - 'LICENSE'
+
+# Stop burning AI credits on superseded commits.
+concurrency:
+  group: code-quality-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+# Workflow-level default: read-only. Each job narrows or widens deliberately.
+permissions:
+  contents: read
+
+env:
+  COPILOT_CLI_VERSION: 1.0.83
+  # Pinned rather than `auto`: a gate must not let the CLI pick a different model between
+  # two runs of the same commit. Availability depends on Copilot org policy (see README).
+  COPILOT_MODEL_PINNED: claude-sonnet-4.5
+  # Hard per-session spend cap. Raise deliberately; see README for observed usage.
+  MAX_AI_CREDITS: '5'
+  REVIEW_DIR: .code-review
+
+jobs:
+  # =====================================================================================
+  # review -- holds the Copilot credential, has NO write permission (design D3)
+  # =====================================================================================
+  review:
+    name: Review diff with Copilot CLI
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    outputs:
+      skipped: ${{ steps.guards.outputs.skipped }}
+      reason: ${{ steps.guards.outputs.reason }}
+      empty: ${{ steps.diff.outputs.empty }}
+
+    steps:
+      - name: Evaluate guards (draft / fork)
+        id: guards
+        env:
+          IS_DRAFT: ${{ github.event.pull_request.draft }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          THIS_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          skipped=false
+          reason=''
+
+          if [ "$IS_DRAFT" = "true" ]; then
+            skipped=true
+            reason='Pull request is a draft. Mark it ready for review to run the automated review.'
+          elif [ "$HEAD_REPO" != "$THIS_REPO" ]; then
+            skipped=true
+            reason="Pull request originates from a fork ($HEAD_REPO). The pull_request event grants forks no repository secrets, so automated review is unavailable. A maintainer must review manually."
+          fi
+
+          echo "skipped=$skipped" >> "$GITHUB_OUTPUT"
+          echo "reason=$reason" >> "$GITHUB_OUTPUT"
+
+          if [ "$skipped" = "true" ]; then
+            {
+              echo '## Code quality check — skipped'
+              echo ''
+              echo "$reason"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # The secret check comes before checkout and install: fail fast, spend nothing.
+      - name: Verify COPILOT_GITHUB_TOKEN secret is present
+        if: steps.guards.outputs.skipped != 'true'
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${COPILOT_GITHUB_TOKEN:-}" ]; then
+            echo "::error::The COPILOT_GITHUB_TOKEN secret is not configured for this repository."
+            echo "::error::It must hold a personal access token for an identity with an active Copilot seat."
+            echo "::error::See the 'Automated code review' section of README.md for setup, including why a dedicated machine account is recommended."
+            exit 1
+          fi
+          echo "COPILOT_GITHUB_TOKEN is present."
+
+      - name: Checkout pull request head
+        if: steps.guards.outputs.skipped != 'true'
+        uses: actions/checkout@v4
+        with:
+          # The PR head, not the synthetic refs/pull/N/merge commit this event checks out
+          # by default: the reviewer should see exactly what was pushed, and the publisher
+          # anchors its inline comments to this same SHA.
+          ref: ${{ github.event.pull_request.head.sha }}
+          # Full history so the merge base with the base branch is reachable.
+          fetch-depth: 0
+
+      - name: Set up Node
+        if: steps.guards.outputs.skipped != 'true'
+        uses: actions/setup-node@v4
+        with:
+          # Pinned explicitly: @github/copilot declares no `engines` constraint, so
+          # nothing would otherwise stop the runner default from drifting under us.
+          node-version: '22'
+
+      - name: Install Copilot CLI (pinned)
+        if: steps.guards.outputs.skipped != 'true'
+        run: |
+          set -euo pipefail
+          npm install -g "@github/copilot@${COPILOT_CLI_VERSION}"
+          copilot --version
+
+      # ---------------------------------------------------------------------------------
+      # Diff scope (design D7). Computed here, on disk, so the reviewer needs no shell
+      # and no GitHub access to know what changed.
+      # ---------------------------------------------------------------------------------
+      - name: Compute diff scope
+        id: diff
+        if: steps.guards.outputs.skipped != 'true'
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$REVIEW_DIR"
+
+          git fetch --no-tags origin "$BASE_REF"
+          base_sha="$(git merge-base "origin/${BASE_REF}" "$HEAD_SHA")"
+          echo "Merge base: $base_sha"
+          echo "base_sha=$base_sha" >> "$GITHUB_OUTPUT"
+
+          # Take the review prompt from the BASE branch, never from the PR head. The
+          # checkout above is the PR's code -- if we also used the PR's prompt, a pull
+          # request could rewrite the rules it is judged by, and the self-configuration
+          # rule would be deleted along with everything else that would have flagged it.
+          # Written outside the working tree so it cannot trip the D9 assertion.
+          prompt_src=".github/code-review/review-prompt.md"
+          if git cat-file -e "${base_sha}:${prompt_src}" 2>/dev/null; then
+            git show "${base_sha}:${prompt_src}" > "${RUNNER_TEMP}/review-prompt.md"
+            echo "Using the review prompt from the base branch (${base_sha})."
+          else
+            # Bootstrapping: the base branch predates this workflow, so there is no base
+            # version to trust. Fall back to the PR's copy and say so loudly.
+            cp "$prompt_src" "${RUNNER_TEMP}/review-prompt.md"
+            echo "::warning::The base branch has no ${prompt_src}; falling back to this pull request's copy. Review the prompt itself by hand."
+          fi
+
+          # name-status keeps A/M/D/R distinguishable for the reviewer.
+          git diff --name-status "$base_sha" "$HEAD_SHA" > "$REVIEW_DIR/changed-files.txt"
+          git diff --unified=3 "$base_sha" "$HEAD_SHA" > "$REVIEW_DIR/diff.patch"
+
+          if [ ! -s "$REVIEW_DIR/changed-files.txt" ]; then
+            echo "empty=true" >> "$GITHUB_OUTPUT"
+            {
+              echo '## Code quality check — nothing to review'
+              echo ''
+              echo 'The pull request changed no reviewable files.'
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "empty=false" >> "$GITHUB_OUTPUT"
+            echo "Changed files:"
+            cat "$REVIEW_DIR/changed-files.txt"
+          fi
+
+      # ---------------------------------------------------------------------------------
+      # The review itself. Every flag here is justified in design D5 and in the header
+      # comment above. Do not relax one without reading both.
+      # ---------------------------------------------------------------------------------
+      - name: Run Copilot CLI review
+        if: steps.guards.outputs.skipped != 'true' && steps.diff.outputs.empty != 'true'
+        env:
+          # The credential is scoped to THIS STEP only -- never job- or workflow-level.
+          # COPILOT_GITHUB_TOKEN takes precedence over GH_TOKEN and GITHUB_TOKEN in the
+          # CLI, which matters because Actions puts GITHUB_TOKEN in the environment.
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          # Prompt comes from the base branch (see the diff-scope step), not the PR head.
+          copilot -p "$(cat "${RUNNER_TEMP}/review-prompt.md")" \
+            --model "$COPILOT_MODEL_PINNED" \
+            --allow-all-tools \
+            --deny-tool 'shell' \
+            --deny-tool 'url' \
+            --disable-builtin-mcps \
+            --no-custom-instructions \
+            --no-ask-user \
+            --disallow-temp-dir \
+            --secret-env-vars=COPILOT_GITHUB_TOKEN \
+            --no-remote \
+            --no-remote-export \
+            --no-auto-update \
+            --output-format json \
+            --usage-output-file "$REVIEW_DIR/usage.json" \
+            --max-ai-credits "$MAX_AI_CREDITS" \
+            --no-color \
+            --log-level error \
+            2>&1 | tee "$REVIEW_DIR/transcript.jsonl"
+
+      # ---------------------------------------------------------------------------------
+      # design D9 -- the one control that depends on no claim about the CLI.
+      # ---------------------------------------------------------------------------------
+      - name: Assert the review left the working tree clean
+        if: steps.guards.outputs.skipped != 'true' && steps.diff.outputs.empty != 'true'
+        run: |
+          set -euo pipefail
+          # $REVIEW_DIR is gitignored so it normally does not appear at all; filter it
+          # anyway in case that ignore rule is ever removed.
+          unexpected="$(git status --porcelain | grep -v "${REVIEW_DIR}/" || true)"
+          if [ -n "$unexpected" ]; then
+            echo "::error::The review modified the working tree. The review runs read-only; nothing will be published."
+            echo "$unexpected"
+            exit 1
+          fi
+          echo "Working tree clean apart from ${REVIEW_DIR}/."
+
+      - name: Assert the review produced findings
+        if: steps.guards.outputs.skipped != 'true' && steps.diff.outputs.empty != 'true'
+        run: |
+          set -euo pipefail
+          if [ ! -f "$REVIEW_DIR/findings.json" ]; then
+            echo "::error::The review did not write ${REVIEW_DIR}/findings.json, so no valid review was produced."
+            echo "::error::Failing rather than reporting a clean review. Inspect the transcript above."
+            exit 1
+          fi
+          echo "Findings file present."
+
+      - name: Upload review artifact
+        if: steps.guards.outputs.skipped != 'true' && steps.diff.outputs.empty != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: code-review
+          path: ${{ env.REVIEW_DIR }}/
+          retention-days: 7
+          if-no-files-found: error
+
+  # =====================================================================================
+  # publish -- holds pull-requests:write, has NO Copilot credential (design D3)
+  # =====================================================================================
+  publish:
+    name: Publish review
+    needs: review
+    # Nothing to publish when the review was skipped or the diff was empty -- and no
+    # artifact to download either.
+    if: needs.review.outputs.skipped != 'true' && needs.review.outputs.empty != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      # Only the publisher script is needed from the repo, not the PR's code.
+      - name: Checkout base branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          sparse-checkout: .github/code-review
+          sparse-checkout-cone-mode: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Download review artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: code-review
+          path: ${{ env.REVIEW_DIR }}
+
+      - name: Post review and set the gate
+        env:
+          # Actions token, not the Copilot PAT: comments are attributed to the bot, and
+          # the model never had write capability.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          FINDINGS_PATH: ${{ env.REVIEW_DIR }}/findings.json
+          DIFF_PATH: ${{ env.REVIEW_DIR }}/diff.patch
+          USAGE_PATH: ${{ env.REVIEW_DIR }}/usage.json
+        run: node .github/code-review/publish-review.mjs

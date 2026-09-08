@@ -163,6 +163,39 @@ The review invocation SHALL deny the `shell` and `url` permission kinds outright
 - **WHEN** the pinned CLI version is introduced or bumped
 - **THEN** a probe run confirms that a shell command is actually refused and that no MCP tool is present, rather than the restriction being assumed
 
+### Requirement: The review configuration is taken from the base branch
+
+The review prompt and the findings publisher SHALL be read from the pull request's merge
+base or base branch, never from the pull request head, so that a pull request cannot alter
+the rules by which it is itself reviewed. Where the base branch does not yet contain the
+review prompt, the workflow MAY fall back to the head's copy but SHALL emit a warning
+saying so.
+
+#### Scenario: A pull request rewrites the review prompt
+
+- **WHEN** the diff replaces or weakens `.github/code-review/review-prompt.md`
+- **THEN** the review still runs under the base branch's prompt, so the rule requiring
+  such a change to be flagged is still in force and cannot delete itself
+
+#### Scenario: A pull request modifies the publisher
+
+- **WHEN** the diff changes `.github/code-review/publish-review.mjs`, including the
+  condition that fails the check
+- **THEN** the `publish` job runs the base branch's version of the script
+
+#### Scenario: The base branch predates the workflow
+
+- **WHEN** no review prompt exists at the merge base, as when the pull request introduces
+  the workflow itself
+- **THEN** the head's copy is used and a warning states that the prompt must be reviewed
+  by hand, rather than the job failing and making the workflow unable to land
+
+#### Scenario: Extracting the base configuration does not dirty the tree
+
+- **WHEN** the base prompt is materialised for the run
+- **THEN** it is written outside the working tree, so the working-tree assertion still
+  holds
+
 ### Requirement: Repository instruction files do not shape the reviewer's system prompt
 
 The review invocation SHALL disable the CLI's automatic loading of custom instruction files. The reviewer's grounding SHALL come from the standards the prompt names by explicit path, so that what informed a review is auditable from the prompt alone.
