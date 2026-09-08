@@ -1,6 +1,8 @@
 using FourDotnet.BoogaBooster.IntegrationMessages;
 using FourDotnet.BoogaBooster.IntegrationMessages.Events.Queue;
 using FourDotnet.BoogaBooster.Queue.Abstractions;
+using FourDotnet.BoogaBooster.Queue.Abstractions.DataTransferObjects;
+using FourDotnet.BoogaBooster.Queue.Abstractions.DataTransferObjects.GetQueueStatus;
 using FourDotnet.BoogaBooster.Queue.Domain;
 using FourDotnet.BoogaBooster.Queue.Filling;
 using FourDotnet.BoogaBooster.Queue.Infrastructure;
@@ -90,19 +92,19 @@ internal sealed class RideQueueService : IRideQueueService
         return enqueued;
     }
 
-    public QueueStatusDto GetStatus(Guid rideId)
+    public GetQueueStatusResponse GetStatus(Guid rideId)
     {
         var queue = _store.Find(rideId);
         if (queue is null)
         {
-            return new QueueStatusDto(rideId, GroupCount: 0, PeopleWaiting: 0, Groups: []);
+            return new GetQueueStatusResponse(rideId, GroupCount: 0, PeopleWaiting: 0, Groups: []);
         }
 
         var groups = queue.SnapshotGroups()
             .Select(ToDto)
             .ToArray();
 
-        return new QueueStatusDto(
+        return new GetQueueStatusResponse(
             rideId,
             GroupCount: groups.Length,
             PeopleWaiting: groups.Sum(g => g.Size),
