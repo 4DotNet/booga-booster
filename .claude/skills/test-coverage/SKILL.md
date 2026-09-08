@@ -30,13 +30,15 @@ skill's intent.
   no numeric gate, but endpoint behavior must be covered through integration-style
   tests per the style guide's guidance.
 
-## Testing conventions come from the style guide
+## Testing conventions
 
-Before writing any test code, consult the `4dotnet-csharp-style-guide` MCP server
-(`find_guidance_for_task`, `search_documents` with keywords like `testing`,
-`unit test`, `coverage`) for the mandated test framework, assertion library, mocking
-approach, project naming, and structure. The server is authoritative; follow it
-exactly. Mirror the existing test projects' layout once one exists.
+The tooling and layout rules — xUnit v3, the native `Assert` API, Moq, Bogus, the
+FluentAssertions prohibition, and test-project naming/placement — live in the
+**`csharp-unit-testing`** skill. Follow it; this skill owns only the coverage
+dimension. For rationale or a case neither skill settles, read
+`guideline-unit-testing` from the `4dotnet-csharp-style-guide` MCP server
+(`get_document`, or `get_rules` with `appliesTo: "tests"`). The server is
+authoritative. Mirror the existing test projects' layout.
 
 ## Measuring coverage
 
