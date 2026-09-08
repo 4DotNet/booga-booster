@@ -67,8 +67,9 @@ env:
   COPILOT_CLI_VERSION: 1.0.83
   # Pinned rather than `auto`: a gate must not let the CLI pick a different model between
   # two runs of the same commit. Availability depends on Copilot org policy (see README).
-  COPILOT_MODEL_PINNED: claude-sonnet-4.5
+  COPILOT_MODEL_PINNED: claude-sonnet-5
   # Hard per-session spend cap. Raise deliberately; see README for observed usage.
+  MAX_AI_CREDITS: "100"
   REVIEW_DIR: .code-review
 
 jobs:
@@ -240,6 +241,7 @@ jobs:
             --no-auto-update \
             --output-format json \
             --usage-output-file "$REVIEW_DIR/usage.json" \
+            --max-ai-credits "$MAX_AI_CREDITS" \
             --no-color \
             --log-level error \
             2>&1 | tee "$REVIEW_DIR/transcript.jsonl"
