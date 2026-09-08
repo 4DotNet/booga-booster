@@ -46,13 +46,13 @@ on:
     # workflow's own review prompt are all markdown, and a pull request that weakens
     # them must still be reviewed -- see the self-configuration rule in the prompt.
     paths-ignore:
-      - '**/*.png'
-      - '**/*.jpg'
-      - '**/*.jpeg'
-      - '**/*.gif'
-      - '**/*.svg'
-      - '**/*.ico'
-      - 'LICENSE'
+      - "**/*.png"
+      - "**/*.jpg"
+      - "**/*.jpeg"
+      - "**/*.gif"
+      - "**/*.svg"
+      - "**/*.ico"
+      - "LICENSE"
 
 # Stop burning AI credits on superseded commits.
 concurrency:
@@ -69,7 +69,6 @@ env:
   # two runs of the same commit. Availability depends on Copilot org policy (see README).
   COPILOT_MODEL_PINNED: claude-sonnet-4.5
   # Hard per-session spend cap. Raise deliberately; see README for observed usage.
-  MAX_AI_CREDITS: '5'
   REVIEW_DIR: .code-review
 
 jobs:
@@ -150,7 +149,7 @@ jobs:
         with:
           # Pinned explicitly: @github/copilot declares no `engines` constraint, so
           # nothing would otherwise stop the runner default from drifting under us.
-          node-version: '22'
+          node-version: "22"
 
       - name: Install Copilot CLI (pinned)
         if: steps.guards.outputs.skipped != 'true'
@@ -241,7 +240,6 @@ jobs:
             --no-auto-update \
             --output-format json \
             --usage-output-file "$REVIEW_DIR/usage.json" \
-            --max-ai-credits "$MAX_AI_CREDITS" \
             --no-color \
             --log-level error \
             2>&1 | tee "$REVIEW_DIR/transcript.jsonl"
@@ -310,7 +308,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: "22"
 
       - name: Download review artifact
         uses: actions/download-artifact@v4
