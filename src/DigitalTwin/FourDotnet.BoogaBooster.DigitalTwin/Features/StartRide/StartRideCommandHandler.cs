@@ -13,7 +13,7 @@ public sealed class StartRideCommandHandler : CommandHandler<StartRideCommand>
         _store = store ?? throw new ArgumentNullException(nameof(store));
     }
 
-    public override Task HandleAsync(StartRideCommand command, CancellationToken cancellationToken)
+    protected override Task ExecuteAsync(StartRideCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
         _store.StartRide();

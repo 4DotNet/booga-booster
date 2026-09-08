@@ -14,7 +14,7 @@ public sealed class SetMainEnginePowerCommandHandler : CommandHandler<SetMainEng
         _store = store ?? throw new ArgumentNullException(nameof(store));
     }
 
-    public override Task HandleAsync(SetMainEnginePowerCommand command, CancellationToken cancellationToken)
+    protected override Task ExecuteAsync(SetMainEnginePowerCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
         _store.SetMainEnginePower(new EnginePower(command.Percent));

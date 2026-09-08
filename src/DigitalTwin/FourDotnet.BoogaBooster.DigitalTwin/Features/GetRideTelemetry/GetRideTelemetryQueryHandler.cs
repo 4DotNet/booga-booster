@@ -14,6 +14,6 @@ public sealed class GetRideTelemetryQueryHandler : QueryHandler<GetRideTelemetry
         _store = store ?? throw new ArgumentNullException(nameof(store));
     }
 
-    public override Task<RideTelemetry> HandleAsync(GetRideTelemetryQuery query, CancellationToken cancellationToken)
+    protected override Task<RideTelemetry> ExecuteAsync(GetRideTelemetryQuery query, CancellationToken cancellationToken)
         => Task.FromResult(_store.GetTelemetry());
 }

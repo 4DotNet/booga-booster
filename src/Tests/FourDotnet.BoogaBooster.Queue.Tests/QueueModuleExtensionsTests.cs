@@ -1,5 +1,9 @@
+using FourDotnet.BoogaBooster.Core.Cqrs;
 using FourDotnet.BoogaBooster.IntegrationMessages;
 using FourDotnet.BoogaBooster.Queue.Abstractions;
+using FourDotnet.BoogaBooster.Queue.Abstractions.DataTransferObjects.GetQueueStatus;
+using FourDotnet.BoogaBooster.Queue.Features.GetQueueStatus;
+using FourDotnet.BoogaBooster.Queue.Features.RecordWeatherUpdate;
 using FourDotnet.BoogaBooster.Queue.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -48,6 +52,34 @@ public class QueueModuleExtensionsTests
         Assert.Same(
             provider.GetRequiredService<IRideQueueStore>(),
             provider.GetRequiredService<IRideQueueStore>());
+    }
+
+    [Fact]
+    public void AddQueueModule_RegistersFeatureHandlers()
+    {
+        // Endpoints inject handlers by interface (ADR-0005), so registration must be
+        // against the interface, not the concrete handler.
+        var builder = BuildHost();
+
+        Assert.Contains(
+            builder.Services,
+            d => d.ServiceType == typeof(IQueryHandler<GetQueueStatusQuery, GetQueueStatusResponse>));
+        Assert.Contains(
+            builder.Services,
+            d => d.ServiceType == typeof(ICommandHandler<RecordWeatherUpdateCommand>));
+    }
+
+    [Fact]
+    public void AddQueueModule_ResolvesFeatureHandlers()
+    {
+        var builder = BuildHost();
+        using var provider = builder.Services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+
+        Assert.NotNull(scope.ServiceProvider
+            .GetRequiredService<IQueryHandler<GetQueueStatusQuery, GetQueueStatusResponse>>());
+        Assert.NotNull(scope.ServiceProvider
+            .GetRequiredService<ICommandHandler<RecordWeatherUpdateCommand>>());
     }
 
     [Fact]

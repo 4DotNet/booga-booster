@@ -13,7 +13,7 @@ public sealed class RequestRideStateTransitionCommandHandler : CommandHandler<Re
         _store = store ?? throw new ArgumentNullException(nameof(store));
     }
 
-    public override Task HandleAsync(RequestRideStateTransitionCommand command, CancellationToken cancellationToken)
+    protected override Task ExecuteAsync(RequestRideStateTransitionCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
         _store.RequestStateTransition(command.Target);

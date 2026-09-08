@@ -14,6 +14,6 @@ public sealed class GetWeatherQueryHandler : QueryHandler<GetWeatherQuery, Weath
         _store = store ?? throw new ArgumentNullException(nameof(store));
     }
 
-    public override Task<WeatherConditionDto> HandleAsync(GetWeatherQuery query, CancellationToken cancellationToken)
+    protected override Task<WeatherConditionDto> ExecuteAsync(GetWeatherQuery query, CancellationToken cancellationToken)
         => Task.FromResult(_store.GetSnapshot());
 }

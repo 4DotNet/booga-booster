@@ -30,12 +30,17 @@ runs on a fixed 1/120 s timestep and is **deterministic**; telemetry publishes a
    `Endpoints/` class; `Program.cs` only composes.
 4. **No business logic in endpoints.** Parse the request into a command/query and
    dispatch to an `ICommandHandler<T>` / `IQueryHandler<T,R>`.
-5. **No magic numbers in the physics.** Every constant lives in
+5. **Handlers implement `ExecuteAsync`, not `HandleAsync`.** The CQRS base classes own
+   the ADR-0009 instrumentation (activity, timing, outcome counter, duration
+   histogram); a handler adds only its own span tags by overriding `EnrichActivity`
+   (plus `EnrichActivityWithResponse` on a query) and its own domain metrics through
+   `BoogaBoosterTelemetry.Meter`. OTEL is configured only in `ServiceDefaults`.
+6. **No magic numbers in the physics.** Every constant lives in
    `DigitalTwin/Domain/RideParameters.cs`, derived in `docs/`.
-6. **Determinism is a hard requirement** in the simulation. Randomness goes through an
+7. **Determinism is a hard requirement** in the simulation. Randomness goes through an
    injected sampler; time goes through `TimeProvider`.
-7. **Accessibility must pass AXE / WCAG AA** in the Angular app.
-8. Module and `Shared/` libraries must hold **≥ 80 % line coverage**.
+8. **Accessibility must pass AXE / WCAG AA** in the Angular app.
+9. Module and `Shared/` libraries must hold **≥ 80 % line coverage**.
 
 ## Repository layout
 

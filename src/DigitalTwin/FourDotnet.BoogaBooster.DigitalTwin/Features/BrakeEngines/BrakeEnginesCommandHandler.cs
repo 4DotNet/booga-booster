@@ -13,7 +13,7 @@ public sealed class BrakeEnginesCommandHandler : CommandHandler<BrakeEnginesComm
         _store = store ?? throw new ArgumentNullException(nameof(store));
     }
 
-    public override Task HandleAsync(BrakeEnginesCommand command, CancellationToken cancellationToken)
+    protected override Task ExecuteAsync(BrakeEnginesCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
         _store.SetEngineBrakes(command.Engaged);

@@ -13,7 +13,7 @@ public sealed class SetGondolaBrakeCommandHandler : CommandHandler<SetGondolaBra
         _store = store ?? throw new ArgumentNullException(nameof(store));
     }
 
-    public override Task HandleAsync(SetGondolaBrakeCommand command, CancellationToken cancellationToken)
+    protected override Task ExecuteAsync(SetGondolaBrakeCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
         _store.SetGondolaBrake(command.HubIndex, command.GondolaIndex, command.Brake);

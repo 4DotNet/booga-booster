@@ -14,7 +14,7 @@ public sealed class BoardPassengerCommandHandler : CommandHandler<BoardPassenger
         _store = store ?? throw new ArgumentNullException(nameof(store));
     }
 
-    public override Task HandleAsync(BoardPassengerCommand command, CancellationToken cancellationToken)
+    protected override Task ExecuteAsync(BoardPassengerCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
 

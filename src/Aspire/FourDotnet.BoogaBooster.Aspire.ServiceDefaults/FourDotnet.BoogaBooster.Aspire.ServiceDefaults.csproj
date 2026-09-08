@@ -19,4 +19,9 @@
     <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" Version="1.18.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- For the well-known ActivitySource/Meter name every handler emits under (ADR-0009). -->
+    <ProjectReference Include="..\..\Shared\FourDotnet.BoogaBooster.Core\FourDotnet.BoogaBooster.Core.csproj" />
+  </ItemGroup>
+
 </Project>

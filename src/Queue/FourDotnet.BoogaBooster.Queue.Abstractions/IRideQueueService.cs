@@ -1,3 +1,6 @@
+using FourDotnet.BoogaBooster.Queue.Abstractions.DataTransferObjects;
+using FourDotnet.BoogaBooster.Queue.Abstractions.DataTransferObjects.GetQueueStatus;
+
 namespace FourDotnet.BoogaBooster.Queue.Abstractions;
 
 /// <summary>
@@ -25,7 +28,7 @@ public interface IRideQueueService
     Task<IReadOnlyList<QueuedGroupDto>> EnqueueGroupAsync(Guid rideId, int groupSize, CancellationToken cancellationToken);
 
     /// <summary>Returns a snapshot of the given ride's waiting line.</summary>
-    QueueStatusDto GetStatus(Guid rideId);
+    GetQueueStatusResponse GetStatus(Guid rideId);
 
     /// <summary>
     /// Removes the group identified by <paramref name="groupId"/> from the given
