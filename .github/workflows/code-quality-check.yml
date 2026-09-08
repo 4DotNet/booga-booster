@@ -280,6 +280,9 @@ jobs:
         with:
           name: code-review
           path: ${{ env.REVIEW_DIR }}/
+          # $REVIEW_DIR is dot-prefixed, and upload-artifact filters hidden paths out
+          # by default -- without this the upload finds no files at all.
+          include-hidden-files: true
           retention-days: 7
           if-no-files-found: error
 
