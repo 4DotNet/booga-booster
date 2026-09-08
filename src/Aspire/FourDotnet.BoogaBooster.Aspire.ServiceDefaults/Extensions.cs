@@ -1,3 +1,4 @@
+using FourDotnet.BoogaBooster.Core.Observability;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.DependencyInjection;
@@ -57,11 +58,15 @@ public static class Extensions
             {
                 metrics.AddAspNetCoreInstrumentation()
                     .AddHttpClientInstrumentation()
-                    .AddRuntimeInstrumentation();
+                    .AddRuntimeInstrumentation()
+                    // Our own meter — the handler counters and histograms (ADR-0009).
+                    .AddMeter(BoogaBoosterTelemetry.SourceName);
             })
             .WithTracing(tracing =>
             {
                 tracing.AddSource(builder.Environment.ApplicationName)
+                    // Our own activity source — every command and query handler spans from it (ADR-0009).
+                    .AddSource(BoogaBoosterTelemetry.SourceName)
                     .AddAspNetCoreInstrumentation(tracing =>
                         // Exclude health check requests from tracing
                         tracing.Filter = context =>

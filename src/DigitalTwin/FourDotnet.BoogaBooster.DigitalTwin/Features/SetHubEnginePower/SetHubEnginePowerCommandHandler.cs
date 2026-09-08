@@ -14,7 +14,7 @@ public sealed class SetHubEnginePowerCommandHandler : CommandHandler<SetHubEngin
         _store = store ?? throw new ArgumentNullException(nameof(store));
     }
 
-    public override Task HandleAsync(SetHubEnginePowerCommand command, CancellationToken cancellationToken)
+    protected override Task ExecuteAsync(SetHubEnginePowerCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
         _store.SetHubEnginePower(new EnginePower(command.Percent));

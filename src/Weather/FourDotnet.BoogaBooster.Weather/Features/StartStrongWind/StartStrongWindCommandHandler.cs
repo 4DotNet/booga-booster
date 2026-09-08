@@ -18,7 +18,7 @@ public sealed class StartStrongWindCommandHandler : CommandHandler<StartStrongWi
         _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
     }
 
-    public override async Task HandleAsync(StartStrongWindCommand command, CancellationToken cancellationToken)
+    protected override async Task ExecuteAsync(StartStrongWindCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
 

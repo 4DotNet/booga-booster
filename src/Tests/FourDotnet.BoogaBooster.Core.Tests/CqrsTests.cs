@@ -15,7 +15,7 @@ public class CqrsTests
     {
         public int? Result { get; private set; }
 
-        public override Task HandleAsync(AddNumbersCommand command, CancellationToken cancellationToken)
+        protected override Task ExecuteAsync(AddNumbersCommand command, CancellationToken cancellationToken)
         {
             Result = command.A + command.B;
             return Task.CompletedTask;
@@ -26,7 +26,7 @@ public class CqrsTests
 
     private sealed class SquareQueryHandler : QueryHandler<SquareQuery, int>
     {
-        public override Task<int> HandleAsync(SquareQuery query, CancellationToken cancellationToken)
+        protected override Task<int> ExecuteAsync(SquareQuery query, CancellationToken cancellationToken)
             => Task.FromResult(query.Value * query.Value);
     }
 

@@ -13,7 +13,7 @@ public sealed class SetMainEngineDirectionCommandHandler : CommandHandler<SetMai
         _store = store ?? throw new ArgumentNullException(nameof(store));
     }
 
-    public override Task HandleAsync(SetMainEngineDirectionCommand command, CancellationToken cancellationToken)
+    protected override Task ExecuteAsync(SetMainEngineDirectionCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
         _store.SetMainEngineDirection(command.Direction);

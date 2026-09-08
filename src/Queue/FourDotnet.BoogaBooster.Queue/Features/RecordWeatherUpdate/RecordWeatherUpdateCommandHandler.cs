@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using FourDotnet.BoogaBooster.Core.Cqrs;
 using FourDotnet.BoogaBooster.Queue.Filling;
 
@@ -18,11 +19,21 @@ public sealed class RecordWeatherUpdateCommandHandler : CommandHandler<RecordWea
         _weatherInfluence = weatherInfluence ?? throw new ArgumentNullException(nameof(weatherInfluence));
     }
 
-    public override Task HandleAsync(RecordWeatherUpdateCommand command, CancellationToken cancellationToken)
+    protected override Task ExecuteAsync(RecordWeatherUpdateCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
 
         _weatherInfluence.Update(command.NiceWeather);
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Records both the reading that arrived and the value now in effect, so a
+    /// clamped out-of-range event is visible as such in the trace.
+    /// </summary>
+    protected override void EnrichActivity(Activity activity, RecordWeatherUpdateCommand command)
+    {
+        activity.SetTag("queue.weather.nice_weather.observed", command.NiceWeather);
+        activity.SetTag("queue.weather.nice_weather.previous", _weatherInfluence.Current);
     }
 }

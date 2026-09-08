@@ -13,7 +13,7 @@ public sealed class SetHubEngineDirectionCommandHandler : CommandHandler<SetHubE
         _store = store ?? throw new ArgumentNullException(nameof(store));
     }
 
-    public override Task HandleAsync(SetHubEngineDirectionCommand command, CancellationToken cancellationToken)
+    protected override Task ExecuteAsync(SetHubEngineDirectionCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
         _store.SetHubEngineDirection(command.Direction);

@@ -18,7 +18,7 @@ public sealed class StartPrecipitationCommandHandler : CommandHandler<StartPreci
         _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
     }
 
-    public override async Task HandleAsync(StartPrecipitationCommand command, CancellationToken cancellationToken)
+    protected override async Task ExecuteAsync(StartPrecipitationCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
 
