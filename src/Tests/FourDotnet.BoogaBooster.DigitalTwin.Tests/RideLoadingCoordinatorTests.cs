@@ -3,6 +3,8 @@ using FourDotnet.BoogaBooster.DigitalTwin.Abstractions;
 using FourDotnet.BoogaBooster.DigitalTwin.Application;
 using FourDotnet.BoogaBooster.DigitalTwin.Domain;
 using FourDotnet.BoogaBooster.Queue.Abstractions;
+using FourDotnet.BoogaBooster.Queue.Abstractions.DataTransferObjects;
+using FourDotnet.BoogaBooster.Queue.Abstractions.DataTransferObjects.GetQueueStatus;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -286,7 +288,7 @@ public sealed class RideLoadingCoordinatorTests
         public Task<IReadOnlyList<QueuedGroupDto>> EnqueueGroupAsync(Guid rideId, int groupSize, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
-        public QueueStatusDto GetStatus(Guid rideId) =>
+        public GetQueueStatusResponse GetStatus(Guid rideId) =>
             new(rideId, _groups.Count, _groups.Sum(g => g.Size), [.. _groups]);
 
         public Task<QueuedGroupDto?> TakeGroupAsync(Guid rideId, Guid groupId, CancellationToken cancellationToken)
