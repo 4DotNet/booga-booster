@@ -229,16 +229,39 @@ Suggested landing order, each step independently green:
 
 ## Open Questions
 
-- **Should the ride-state-transition counter also tag the target state?** Target state is a
-  bounded set (7 values) so it is cardinality-safe, and it would let a dashboard show which
-  transitions get rejected most. Leaning yes; deferred to implementation because it is a
-  one-tag decision with no design consequence.
-- **Does the loading-pass span want a tag for *why* a pass boarded nobody** (ride full vs.
-  queue empty vs. no waiting group fits)? D4 keeps the no-op pass span-free, so this would
-  mean either spanning every pass or folding the reason into a counter tag. The three
-  reasons are a bounded set, so a counter tag is the cheap option — but it is only worth
-  adding if operators actually ask why boarding stalled. Deferred until the dashboard
-  exists.
+Both are now resolved in code; the outcomes are recorded here rather than left open.
+
+- **Should the ride-state-transition counter also tag the target state?** **Yes — it does.**
+  `boogabooster.ride.state.transitions` is tagged `ride.state.requested` × `outcome`: seven
+  lifecycle states against two outcomes (`accepted` / `rejected`) is at most fourteen time
+  series, which is cheap for the ability to see *which* transition the guard refuses most.
+  `DigitalTwinHandlerTelemetryTests` pins the tag key set, so a third tag cannot creep in
+  unnoticed.
+- **Does the loading-pass span want a tag for *why* a pass boarded nobody?** **No — left
+  out deliberately.** D4's reasoning held up: the no-op pass runs every simulation tick and
+  stays span-free, and the three reasons (ride full, queue empty, no waiting group fits)
+  are all readable from the ride and queue state a dashboard already shows. Adding a
+  fourth counter to answer a question nobody has asked yet would be speculative; the cheap
+  counter-tag option remains available if an operator does ask.
+
+  What *did* prove worth adding beyond the design: a pass that **throws** starts its span
+  lazily even though it boarded nobody. Without it the simulation loop's log-and-continue
+  leaves a broken pass with no trace at all — the spec's "a background failure is recorded,
+  not swallowed silently" requirement.
 
 *Resolved during design:* metrics are asserted with the built-in `MeterListener`, so D8
 adds no package reference and the proposal's "no new dependencies" claim holds.
+
+*Resolved during implementation:*
+
+- **`weather.wind.speed_ms` became `weather.wind.beaufort`.** The `Wind` value object holds
+  Beaufort (0–12) and the module has no metres-per-second anywhere, so the attribute
+  reports the unit the domain actually carries rather than inventing a conversion.
+- **`IntegrationMessages` now references `Core`.** The publisher needs
+  `BoogaBoosterTelemetry` and the shared `outcome` constants. Both are `Shared/` libraries
+  and `Core` references nothing, so this adds no cycle — `Weather` already referenced both.
+- **The per-handler contract is enforced by a reflection gate, not by review.** Each module
+  test project holds a `<Module>HandlerInstrumentationGateTests` asserting every
+  `CommandHandler<>` / `QueryHandler<,>` subclass in the module declares an `Enrich*`
+  override. This is what makes the spec's "a handler that stops tagging fails the build"
+  requirement real; it was verified by deleting an override and watching the build go red.
