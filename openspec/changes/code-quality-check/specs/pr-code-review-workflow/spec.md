@@ -83,7 +83,7 @@ The workflow SHALL verify that the `COPILOT_GITHUB_TOKEN` secret is non-empty as
 #### Scenario: Secret is not configured
 
 - **WHEN** the workflow runs in a repository where `COPILOT_GITHUB_TOKEN` has not been configured
-- **THEN** the job fails immediately with an explicit message naming `COPILOT_GITHUB_TOKEN`, without installing the CLI or consuming premium requests
+- **THEN** the job fails immediately with an explicit message naming `COPILOT_GITHUB_TOKEN`, without installing the CLI or consuming AI credits
 
 #### Scenario: The token has no active Copilot seat
 
@@ -92,60 +92,90 @@ The workflow SHALL verify that the `COPILOT_GITHUB_TOKEN` secret is non-empty as
 
 ### Requirement: Pinned Copilot CLI invoked non-interactively
 
-The `review` job SHALL install `@github/copilot` from npm at an exact pinned version on Node 22 or later, and invoke it non-interactively with `copilot -p`. The invocation SHALL pass an explicitly pinned `--model` and an explicit tool allowlist. The invocation SHALL NOT pass `--allow-all-tools` unless the folder-trust fallback described in the design is in force, in which case general shell access SHALL be denied explicitly.
+The `review` job SHALL install `@github/copilot` from npm at an exact pinned version on Node 22 or later, and invoke it non-interactively with `copilot -p`. The invocation SHALL pass an explicitly pinned `--model`, and SHALL NOT rely on the CLI's `auto` model selection. Because the CLI documents `--allow-all-tools` as required for non-interactive mode, the invocation SHALL pass it and SHALL derive its restrictions from deny rules instead, per the tool-restriction requirement below.
 
 #### Scenario: CLI version is pinned
 
 - **WHEN** the install step runs
 - **THEN** it installs `@github/copilot` at an exact version, so two runs of the same commit use the same CLI
 
-#### Scenario: Node version satisfies the CLI
+#### Scenario: Node version is pinned explicitly
 
 - **WHEN** the runner is provisioned
-- **THEN** Node 22 or later is installed, above the runner default, as the CLI requires
+- **THEN** Node 22 or later is installed explicitly rather than inherited from the runner default, because the package declares no `engines` constraint that would enforce it
 
 #### Scenario: The pinned model is unavailable under org policy
 
 - **WHEN** the pinned model is not permitted for the token's organisation
 - **THEN** the job fails with a message identifying the model and pointing at the Copilot policy prerequisite in the README
 
-### Requirement: The reviewer has no GitHub, network or build tools
+#### Scenario: The run does not stall awaiting input
 
-The review invocation SHALL permit only file reads, a `write` tool for producing the findings file, and read-only git inspection commands. It SHALL disable the CLI's built-in GitHub MCP server, and SHALL NOT start any server declared in the repository's root `.mcp.json`. General shell access, package managers, build tools and network fetch tools SHALL be denied.
+- **WHEN** the reviewer would otherwise ask the operator a question
+- **THEN** the `ask_user` tool is disabled so the agent proceeds autonomously, and the job `timeout-minutes` bounds any residual stall
+
+#### Scenario: A CLI version bump is treated as a behavioural change
+
+- **WHEN** the pinned CLI version is raised
+- **THEN** the probe verification is re-run before the new pin is relied upon, because the CLI's flag surface has already been observed to differ from expectation
+
+### Requirement: The reviewer has no shell, network, GitHub or MCP tools
+
+The review invocation SHALL deny the `shell` and `url` permission kinds outright, SHALL disable the CLI's built-in MCP servers, and SHALL pass no MCP server configuration. Because deny rules take precedence over allow rules — including over `--allow-all-tools` — these denials SHALL be expressed as deny rules rather than as omissions from an allowlist. File access SHALL remain confined to the working directory, with the system temporary directory excluded.
+
+#### Scenario: The reviewer cannot run any command
+
+- **WHEN** the review attempts to run `git`, `gh`, `dotnet`, `npm`, or any other command
+- **THEN** the call is refused, because the whole `shell` kind is denied rather than selectively allowed
+
+#### Scenario: The reviewer does not need a shell
+
+- **WHEN** the reviewer requires the diff or the changed-file list
+- **THEN** it reads them from files the workflow wrote before the CLI started, so denying all shell access removes a capability it never needs
 
 #### Scenario: The built-in GitHub MCP server is disabled
 
 - **WHEN** the review runs
 - **THEN** no GitHub MCP tool is available to it, so it cannot comment, label, close or push using the Copilot token's permissions
 
-#### Scenario: Repository MCP servers are not started in CI
+#### Scenario: No MCP server starts in CI
 
 - **WHEN** the review runs in a fresh checkout
-- **THEN** the servers declared in the root `.mcp.json` do not start, and the `4dotnet-csharp-style-guide` executable — which is not present on the runner — is never launched
+- **THEN** built-in MCP servers are disabled and no MCP configuration is supplied, so the `4dotnet-csharp-style-guide` executable — which is not present on the runner — is never launched
 
-#### Scenario: The reviewer attempts a denied command
+#### Scenario: The reviewer cannot reach the network
 
-- **WHEN** the review attempts a tool call outside the allowlist, such as running `dotnet`, `npm`, `gh`, or a destructive shell command
-- **THEN** the tool call is denied and the review continues without it
+- **WHEN** the review attempts to fetch a URL
+- **THEN** the call is refused, because the `url` kind is denied
+
+#### Scenario: The credential is not recoverable from output
+
+- **WHEN** the review's transcript, findings file or job log is inspected
+- **THEN** the Copilot token's value is absent, having been stripped from tool environments and redacted from output
+
+#### Scenario: The session is not exported off the runner
+
+- **WHEN** the review runs
+- **THEN** remote control and session export to GitHub web and mobile are disabled, so an unmerged diff is not published outside the run
 
 #### Scenario: Tool restrictions are verified against the pinned version
 
 - **WHEN** the pinned CLI version is introduced or bumped
-- **THEN** a probe run confirms that a denied shell command is actually refused and that no GitHub MCP tool is present, rather than the restriction being assumed
+- **THEN** a probe run confirms that a shell command is actually refused and that no MCP tool is present, rather than the restriction being assumed
 
-### Requirement: Non-interactive execution is not blocked by folder trust
+### Requirement: Repository instruction files do not shape the reviewer's system prompt
 
-Because the CLI loads workspace configuration only for trusted folders and a CI checkout is always untrusted, the workflow SHALL establish the required trust state before the review step and SHALL confirm that the run completes without waiting on an interactive prompt.
+The review invocation SHALL disable the CLI's automatic loading of custom instruction files. The reviewer's grounding SHALL come from the standards the prompt names by explicit path, so that what informed a review is auditable from the prompt alone.
 
-#### Scenario: A fresh checkout runs to completion
+#### Scenario: A pull request edits an auto-loaded instruction file
 
-- **WHEN** the review step runs in a newly checked-out repository
-- **THEN** the CLI reaches the point of writing the findings file without emitting an interactive confirmation prompt
+- **WHEN** the diff modifies a file the CLI would otherwise load as custom instructions
+- **THEN** that content does not enter the system prompt, and reaches the reviewer only as file content the prompt has framed as data
 
-#### Scenario: The run stalls on a prompt
+#### Scenario: Grounding survives a change in auto-discovery behaviour
 
-- **WHEN** the CLI blocks awaiting interactive confirmation
-- **THEN** the job timeout terminates it and the check fails, rather than the run appearing to succeed
+- **WHEN** a CLI version changes which instruction files it discovers, or which skill directories it scans
+- **THEN** the review is unaffected, because the prompt names the standards it must read by path
 
 ### Requirement: The review run leaves the working tree unmodified
 
@@ -163,12 +193,17 @@ After the CLI exits, the `review` job SHALL verify that the only path changed in
 
 #### Scenario: A tool restriction silently fails
 
-- **WHEN** an allowlist entry is ignored by the CLI and the reviewer edits a tracked file
+- **WHEN** a deny rule is ignored by the CLI and the reviewer edits a tracked file
 - **THEN** the working-tree assertion still catches it, independently of the CLI's own permission handling
 
-### Requirement: Bounded consumption per pull request
+### Requirement: Bounded and reported consumption per pull request
 
-The workflow SHALL bound the resources a single pull request can consume through a job-level `timeout-minutes`, a `concurrency` group keyed on the pull request reference with `cancel-in-progress: true`, a skip for draft pull requests, and `paths-ignore` for pure-asset changes.
+The workflow SHALL bound what a single pull request can consume through an explicit per-session AI-credit cap, a job-level `timeout-minutes`, a `concurrency` group keyed on the pull request reference with `cancel-in-progress: true`, a skip for draft pull requests, and `paths-ignore` for pure-asset changes. The workflow SHALL also capture the CLI's own usage statistics for the run so that consumption is reported rather than estimated.
+
+#### Scenario: A single run cannot exceed its credit cap
+
+- **WHEN** the review would consume more AI credits than the configured cap
+- **THEN** the CLI stops at the cap, bounding the spend of one run directly rather than through a proxy such as a turn count
 
 #### Scenario: A superseded run is cancelled
 
@@ -180,10 +215,15 @@ The workflow SHALL bound the resources a single pull request can consume through
 - **WHEN** the CLI fails to terminate within the configured timeout
 - **THEN** the job is cancelled by the runner and the check fails
 
-#### Scenario: Consumption is not machine-reportable
+#### Scenario: Actual consumption is recorded
 
-- **WHEN** a maintainer wants to know what a review cost
-- **THEN** the README records the observed premium-request consumption per pull request from the calibration period, because the CLI reports no per-run cost figure
+- **WHEN** a review run completes
+- **THEN** the CLI's usage statistics are written to a file in the review artifact and rendered into the job summary, so a maintainer can see what the run actually used
+
+#### Scenario: The allowance is exhausted
+
+- **WHEN** the seat's AI-credit allowance is spent
+- **THEN** the CLI fails, the check fails, and the README's troubleshooting list names the exhausted allowance as a cause
 
 ### Requirement: The check fails when a blocking finding is reported
 
@@ -211,7 +251,7 @@ The `publish` job SHALL exit non-zero if and only if at least one reported findi
 
 ### Requirement: Setup, prerequisites and limitations are documented
 
-The change SHALL document the workflow in `README.md`, covering the required `COPILOT_GITHUB_TOKEN` secret and the recommendation to back it with a dedicated machine account holding its own Copilot seat, the "Copilot in the CLI" organisation policy prerequisite, the pinned model, the premium-request cost model, and the fact that a passing `code-quality-check` is not a build or test result. The AI-tooling tables in `CLAUDE.md` and `.github/copilot-instructions.md` SHALL both be updated, keeping the two files in sync as the repository requires.
+The change SHALL document the workflow in `README.md`, covering the required `COPILOT_GITHUB_TOKEN` secret and the recommendation to back it with a dedicated machine account holding its own Copilot seat, the "Copilot in the CLI" organisation policy prerequisite, the pinned model, the AI-credit cost model and the per-session credit cap, and the fact that a passing `code-quality-check` is not a build or test result. The AI-tooling tables in `CLAUDE.md` and `.github/copilot-instructions.md` SHALL both be updated, keeping the two files in sync as the repository requires.
 
 #### Scenario: A new maintainer sets up the check
 

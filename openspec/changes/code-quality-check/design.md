@@ -12,15 +12,17 @@ The chosen shape is fixed by the request: **GitHub Copilot CLI**, run headless, 
 
 ### What changes because the engine is Copilot CLI rather than Claude Code
 
-This is the same workflow skeleton as a Claude-Code-driven review, but four differences are load-bearing and drive most of the decisions below:
+This is the same workflow skeleton as a Claude-Code-driven review, but five differences are load-bearing and drive most of the decisions below.
+
+**All rows below were verified against Copilot CLI 1.0.83** — the version this change pins — by reading `copilot --help` and the `permissions`, `environment` and `config` help topics. Earlier drafts of this document asserted three things about the CLI that turned out to be false; they are corrected here and called out in D4, D5 and D6 so the record of what was assumed versus verified stays visible.
 
 | Concern | Consequence for this design |
 | --- | --- |
-| **Credential** | Copilot CLI authenticates as a *user with a Copilot seat*, via a PAT it reads from `COPILOT_GITHUB_TOKEN`. The Actions-issued `GITHUB_TOKEN` is an installation token with no Copilot entitlement and **cannot** drive the CLI. Two distinct credentials are therefore mandatory, not merely tidy. → D2, D3 |
-| **No structured result envelope** | Copilot CLI has no `--output-format json`; it prints prose. There is no machine-readable per-run cost or turn count. → D4, D8 |
-| **Built-in GitHub MCP server** | Copilot CLI ships with GitHub MCP enabled, including write-capable tools, running under a *user* PAT. That must be switched off. → D5 |
-| **Folder trust** | Copilot CLI only loads workspace configuration for a trusted folder, and a fresh CI checkout is untrusted. This conveniently suppresses `.mcp.json`, but risks a trust prompt stalling a non-interactive run. → D6 |
-| **Billing model** | Premium requests against a seat's monthly allowance, not metered tokens. Cost control becomes an account-design question, not just a turn cap. → D2, risks |
+| **Credential** | Copilot CLI authenticates as a *user with a Copilot seat*, via a PAT it reads from `COPILOT_GITHUB_TOKEN` — which the CLI documents as taking precedence over both `GH_TOKEN` and `GITHUB_TOKEN`. That precedence matters: Actions puts `GITHUB_TOKEN` in the environment routinely, and the reviewer must not silently fall back to it. The Actions-issued `GITHUB_TOKEN` is an installation token with no Copilot entitlement and **cannot** drive the CLI. Two distinct credentials are therefore mandatory, not merely tidy. → D2, D3 |
+| **Permissions are two independent layers** | `--available-tools` / `--excluded-tools` decide what the model can *see*; `--allow-tool` / `--deny-tool` / `--allow-all-tools` decide what prompts for approval. **Denial always beats allow, including `--allow-all-tools`.** Crucially, `--allow-all-tools` is *required* for non-interactive mode, so the restriction has to come from deny rules rather than from withholding blanket approval. → D5 |
+| **Built-in GitHub MCP server** | Copilot CLI ships with `github-mcp-server` enabled, including write-capable tools, running under a *user* PAT. `--disable-builtin-mcps` switches it off. → D5 |
+| **Structured output and usage reporting both exist** | `--output-format json` emits JSONL, and `--usage-output-file` writes usage statistics as JSON. `--max-ai-credits` caps spend for the session outright. → D4, D8, D10 |
+| **Path access is already confined** | File access defaults to the working directory and its subdirectories plus the system temp directory; `--disallow-temp-dir` removes the latter. The checkout is therefore the blast radius by default, before any rule we add. → D5, D9 |
 
 ## Goals / Non-Goals
 
@@ -71,9 +73,11 @@ The diff Copilot reads is attacker-influenced content in the general case, and i
 
 Two consequences that matter: the job holding a user PAT has no way to write to the PR, and review comments are attributed to `github-actions[bot]` rather than to whichever human owns the seat — which is both honest and avoids a bot's findings appearing to be a colleague's approval. Neither job ever needs `contents: write`.
 
-### D4 — Structured findings via a written file — mandatory here, not merely preferable
+### D4 — Structured findings via a written file, alongside the CLI's own JSON output
 
-With Claude Code one could at least parse a JSON envelope. Copilot CLI offers no structured output mode at all: stdout is prose intended for a human terminal, and `--log-dir` produces session logs, not a result document. Scraping either for file paths and line numbers would be indefensible in a gate.
+**Correction.** An earlier draft justified this decision by claiming Copilot CLI has no structured output mode. That is false: 1.0.83 supports `--output-format json` (JSONL, one object per line) and `--usage-output-file`. The decision stands, but on different and narrower grounds.
+
+`--output-format json` gives a *transcript* — a stream of session events — not a result document. Recovering a finding's file path and line number from it means scraping whichever assistant message happened to contain the conclusions, which is the same brittleness as parsing prose with extra steps. A gate should not depend on the shape of a model's closing message.
 
 So the prompt instructs the reviewer to end its run by writing exactly one file, `.code-review/findings.json`:
 
@@ -94,39 +98,63 @@ So the prompt instructs the reviewer to end its run by writing exactly one file,
 }
 ```
 
-The file is the review's only authoritative output; stdout is captured to the job log for debugging and nothing more. If the file is missing or fails validation, the `publish` job fails loudly rather than reporting a clean review — **a review that did not happen must never look like a review that found nothing.** This failure mode is more likely with Copilot CLI than it would be with a JSON-envelope CLI, because a run that ends early leaves no machine-readable trace of having done so, which is exactly why validation is strict and the default is failure.
+The file is the review's only authoritative source of findings. The CLI's own outputs are still captured, for different jobs: `--output-format json` goes to the job log as a debuggable transcript, and `--usage-output-file` produces the usage figures the job summary reports (D8). If the findings file is missing or fails validation, the `publish` job fails loudly rather than reporting a clean review — **a review that did not happen must never look like a review that found nothing.**
 
-### D5 — Deny-by-default tools; the built-in GitHub MCP server is switched off
+### D5 — Restrict by denying permission *kinds*, not by allowlisting tool names
 
-Copilot CLI requires approval for tool use, and in non-interactive mode an unapproved call cannot be granted. The review is therefore run with an explicit allowlist covering only what it needs — file reads, two read-only git commands, and the single `write` used for the findings file — and with the built-in **GitHub MCP server disabled**.
+**Correction.** An earlier draft stated that `--allow-all-tools` "is never used" and built an allowlist of `--allow-tool` entries around that. The premise was wrong twice over: `--allow-all-tools` is *required* for non-interactive mode, so the invocation as drafted would not have run at all; and `--allow-tool` controls approval prompts, not which tools exist.
 
-Disabling GitHub MCP is the important half. It is enabled by default, it includes write-capable tools, and under D2 it would be operating with a *user's* PAT. Leaving it on would hand a prompt-injectable reviewer the ability to comment, label, close or (depending on PAT scope) push — under a human's name. The reviewer does not need it: the diff and changed-file list are computed by the workflow and written to disk before the CLI starts (D7), so there is nothing to fetch.
+The verified model has two independent layers, and denial beats everything:
 
-The intended invocation shape:
+- **Visibility** — `--available-tools` (allowlist) and `--excluded-tools` (denylist) decide what the model can see.
+- **Approval** — `--allow-tool`, `--deny-tool` and `--allow-all-tools` decide what prompts. **Deny rules take precedence over allow rules, including over `--allow-all-tools`.**
+
+`--deny-tool` and `--allow-tool` take a pattern of the form `kind(argument)`, where the documented kinds are `shell(command:*?)`, `write(path?)`, `url(domain?)` and `<mcp-server-name>(tool?)`. Those four kinds are the whole vocabulary the design needs — no internal tool identifiers appear anywhere in it.
+
+**Decision:** grant blanket approval (as non-interactive mode requires) and then deny the dangerous kinds outright:
 
 ```bash
 copilot -p "$(cat .github/code-review/review-prompt.md)" \
   --model <pinned model> \
-  --allow-tool 'write' \
-  --allow-tool 'shell(git diff)' \
-  --allow-tool 'shell(git log)' \
+  --allow-all-tools \
   --deny-tool 'shell' \
+  --deny-tool 'url' \
+  --disable-builtin-mcps \
+  --no-custom-instructions \
+  --no-ask-user \
+  --disallow-temp-dir \
+  --secret-env-vars=COPILOT_GITHUB_TOKEN \
+  --no-remote --no-remote-export \
+  --no-auto-update \
+  --output-format json \
+  --usage-output-file .code-review/usage.json \
+  --max-ai-credits <cap> \
   --no-color \
   --log-level error
 ```
 
-- **`--allow-all-tools` is never used.** It is the direct equivalent of `--dangerously-skip-permissions` and would defeat the point of the allowlist.
-- No general `shell`, no `gh`, no `dotnet`, no `npm`, no network fetch. The reviewer cannot build, test, install or phone home.
-- **The exact tool identifiers and the precise mechanism for disabling built-in MCP must be verified against the pinned CLI version before this ships** (task 1.4). Copilot CLI's flag surface is younger and less stable than the rest of this design, and an allowlist entry that is silently ignored is a security hole, not a typo. Verification is a task with a defined pass condition — a probe PR must show a denied `shell(rm -rf)` and an absent `github` MCP tool — rather than an assumption.
-- Belt and braces: after the CLI exits, the job asserts the working tree is clean apart from `.code-review/` (D9). That assertion, not the allowlist, is what actually *guarantees* the run was read-only.
+Why each restriction is there:
 
-### D6 — Handle folder trust explicitly rather than relying on it
+- **`--deny-tool 'shell'`** — denies *every* shell command, so no `git`, `gh`, `dotnet`, `npm` or anything else. This is stronger than the drafted `shell(git diff)` allowlist and, better, it removes a need rather than managing one: the workflow writes `diff.patch` and `changed-files.txt` to disk before the CLI starts (D7), so the reviewer has no reason to run git at all. Denying the whole kind also sidesteps the precedence trap — a `--deny-tool 'shell'` alongside `--allow-tool 'shell(git diff)'` would have denied the git command too, since denial wins.
+- **`--deny-tool 'url'`** — the `url` kind gates both the shell and web-fetch tools, so the reviewer cannot reach the network. Note `--allow-all-tools` does *not* imply URL access (`--allow-all` = `--allow-all-tools --allow-all-paths --allow-all-urls`), so this is belt-and-braces rather than strictly required.
+- **`--disable-builtin-mcps`** — switches off `github-mcp-server`, which is enabled by default, carries write-capable tools, and would be running under a *user's* PAT (D2). Leaving it on would hand a prompt-injectable reviewer the ability to comment, label, close or push under a human's name. The reviewer needs nothing from it (D7).
+- **`--no-custom-instructions`** — stops `AGENTS.md` and related files from silently shaping the system prompt. The prompt reads the standards by explicit path instead (D7, and the `pr-review-prompt` spec), so grounding is auditable and a PR cannot rewrite the reviewer's instructions before the review starts. This also removes a dependency on the repo's claim that Copilot CLI auto-loads `CLAUDE.md` and `.claude/skills/` — `--help` documents `.github/skills` and `.github/agents` for `--add-dir`, and `AGENTS.md` for custom instructions, but never `.claude/skills`, so that claim may be stale. Explicit reads make it moot.
+- **`--no-ask-user`** — disables the `ask_user` tool so the agent cannot stall the job waiting on a question it will never get answered.
+- **`--disallow-temp-dir`** — path access already defaults to the working directory plus the system temp directory; this drops the temp directory, leaving the checkout as the only writable area.
+- **`--secret-env-vars=COPILOT_GITHUB_TOKEN`** — strips the token's value from tool environments and redacts it from output, so the credential cannot be echoed into the findings file, the transcript or the job log.
+- **`--no-remote --no-remote-export`** — the CLI can export or remote-control a session via GitHub web and mobile. A CI review of an unmerged diff has no business being exportable, so both are off.
+- **`--max-ai-credits`** — a hard per-session spend cap, which is a far better bound than a turn count (D10).
+- **`--no-auto-update`** — auto-update is already disabled when `CI` is set, but stating it keeps the pinned version honest (D12).
 
-Copilot CLI loads workspace configuration only for a folder the user has trusted, and the repo's own onboarding notes say a first interactive run is needed before `.mcp.json` is picked up. In CI the checkout is always fresh and therefore untrusted.
+Belt and braces regardless: after the CLI exits the job asserts the working tree is clean apart from `.code-review/` (D9). That assertion, not the flag list, is what actually *guarantees* the run was read-only — and it is the reason this design survived its own flags being wrong.
 
-This cuts both ways. The **benefit** is that the hostile `.mcp.json` (D-context 3) is not loaded, so the missing `4dotnet-csharp-style-guide` binary can never stall a run — no CI-specific MCP config file is needed, unlike a Claude Code setup. The **risk** is that an untrusted folder could prompt for confirmation, and a non-interactive run that blocks on a prompt burns the whole job timeout and fails opaquely.
+### D6 — Non-interactive execution needs hardening, not folder trust
 
-**Decision:** treat trust as an explicit, tested precondition. A setup step establishes the runner's Copilot configuration state before the review step (writing the CLI's config directory so the workspace is pre-trusted, or passing the relevant flag) and the probe PR in task 7.x must confirm the run reaches the findings-file write without any interactive prompt. If the pinned version turns out to prompt regardless, the fallback is `--allow-all-tools` **with** a hard-denied shell — explicitly *not* the first choice, and recorded here so the trade-off is visible rather than discovered later. Whichever mechanism is used, the workflow asserts that `.mcp.json`'s servers did not start.
+**Correction.** An earlier draft devoted a decision to folder trust, on the theory that Copilot CLI only loads workspace configuration for a trusted folder and that an untrusted CI checkout might stall on a confirmation prompt. Nothing in 1.0.83's documented surface supports that. There is no folder-trust prompt in `-p` mode; `--add-dir` grants access to *additional* directories, and path access is confined to the working directory by default. The gating that actually exists is tool approval, handled in D5.
+
+The MCP half of that worry also dissolves. Copilot CLI reads MCP configuration from `~/.copilot/mcp-config.json` and `--additional-mcp-config`; the repo-root `.mcp.json` is never mentioned in its documentation. Combined with `--disable-builtin-mcps` and passing no MCP config at all, **no MCP server starts**, so the missing `4dotnet-csharp-style-guide` executable is a non-issue. No CI-specific MCP config file is needed — unlike the Claude Code shape of this design, which required one.
+
+**Decision:** there is no trust step. What the run does need is the non-interactive hardening already listed in D5 — `--allow-all-tools` to satisfy the mode, `--no-ask-user` so nothing waits on a human, and the job `timeout-minutes` as the backstop. The probe pull request (task 7.2) verifies the run reaches the findings-file write without stalling, that a shell command is refused, and that no MCP tool is present. Verification stays in the plan; the invented mechanism does not.
 
 ### D7 — Diff scope comes from git, computed before Copilot runs
 
@@ -145,13 +173,17 @@ So `.github/code-review/publish-review.mjs`:
 3. Posts one review with `event: "COMMENT"` carrying the anchorable findings inline, and the summary plus a rendered list of the unanchorable findings in the review body.
 4. Never uses `event: "REQUEST_CHANGES"` — that would leave the PR formally blocked by a bot until a human dismisses it. The gate is the check's exit code, which a re-run can clear.
 
-Written in Node (already on the runner) using `fetch` against the REST API with the Actions `GITHUB_TOKEN`. No `actions/github-script`, no new dependencies. Note this is deliberately **not** done by asking Copilot to post the review through GitHub MCP, even though it could: that would put write capability in the model's hands (D5) and attribute the comments to a human (D3).
+Written in Node (already on the runner) using `fetch` against the REST API with the Actions `GITHUB_TOKEN`. No `actions/github-script`, no new dependencies. Note this is deliberately **not** done by asking Copilot to post the review through GitHub MCP, even though `github-mcp-server` ships enabled and could: that would put write capability in the model's hands (D5) and attribute the comments to a human (D3).
+
+The publisher also renders the usage figures from `--usage-output-file` into the job summary, so a run's cost is visible on its own page (D10).
 
 **Idempotency:** each pushed commit produces a new review, which is the natural GitHub model — a review is a point-in-time statement about a commit, and stale inline comments collapse in the UI once their lines change. A sticky-comment scheme was considered for the summary and rejected as an unnecessary second mechanism.
 
 ### D9 — The run must leave the working tree clean
 
-After the CLI exits, the job runs `git status --porcelain` and fails unless every reported path is under `.code-review/`. This is the real read-only guarantee: it holds even if a tool identifier in the D5 allowlist is misspelled, silently ignored by the pinned version, or widened by a future CLI release. It also catches a reviewer that decides to "helpfully" fix what it found.
+After the CLI exits, the job runs `git status --porcelain` and fails unless every reported path is under `.code-review/`. This is the real read-only guarantee: it holds even if a D5 flag is misspelled, silently ignored by the pinned version, renamed by a future release, or — as actually happened during this change's reconnaissance — based on a misreading of how the CLI's permissions work. It also catches a reviewer that decides to "helpfully" fix what it found.
+
+This is the one control in the design that does not depend on any claim about the CLI, which is why it is not optional and why the probe pull request tests it directly (task 7.9).
 
 ### D10 — Severity taxonomy, and what `blocking` is allowed to mean
 
@@ -173,16 +205,19 @@ The directory name says *what it is for* rather than *which vendor's CLI runs it
 
 ### D12 — Pin the CLI version, the model and Node
 
-`npm i -g @github/copilot@<exact version>` on `node-version: 22` (Copilot CLI requires Node 22+, above the runner default), with npm caching via `actions/setup-node`. An unpinned global install means the gate's behaviour can change between two runs of the same commit, which is unacceptable for a required check; bumping the pin then becomes a normal, reviewable PR. `--model` is pinned for the same reason rather than left to the CLI default — with the added wrinkle that model availability depends on Copilot org policy, so the README records which model the pin assumes and the workflow fails with a clear message if it is unavailable.
+`npm i -g @github/copilot@1.0.83` on `node-version: 22`, with npm caching via `actions/setup-node`. 1.0.83 is `latest` at the time of writing (`1.0.84-1` is on the `prerelease` tag and is not used). Note the package declares no `engines` constraint, so Node 22 is pinned on GitHub's stated requirement rather than on anything npm will enforce — which is a reason to pin it explicitly rather than inherit the runner default.
+
+An unpinned global install means the gate's behaviour can change between two runs of the same commit, which is unacceptable for a required check; bumping the pin then becomes a normal, reviewable PR. Because this change has already had three of its assumptions about the CLI's flag surface invalidated (D4, D5, D6), a version bump is treated as a change that **re-runs the probe pull request** of task 7.2, not a rubber-stamp.
+
+`--model` is pinned for the same reason rather than left to the CLI default (`auto` lets Copilot choose, which is the opposite of what a gate wants) — with the added wrinkle that model availability depends on Copilot org policy, so the README records which model the pin assumes and the workflow fails with a clear message if it is unavailable.
 
 ## Risks / Trade-offs
 
-- **Copilot CLI's flag and tool surface is the least stable part of this design.** A renamed flag or a silently-ignored `--allow-tool` value degrades the security model without any error. → The D9 working-tree assertion is version-independent and catches the consequence; task 1.4 verifies identifiers against the pinned version with a defined pass condition; D12 pins the version so behaviour cannot shift underneath a passing check. Treat a CLI version bump as a change that re-runs the probe PR, not a rubber-stamp.
-- **The reviewer authenticates as a human with a Copilot seat.** A personal PAT carries that person's full repo access into CI, and its rotation or departure silently breaks the gate. → D2 recommends a dedicated machine account with a repo-scoped fine-grained PAT; D3 ensures the PAT-holding job has no write permission and never touches the GitHub API; publishing runs under the Actions token so nothing is attributed to the seat owner.
-- **Premium-request consumption is a shared, non-obvious budget, and Copilot CLI reports no per-run cost.** A busy PR day can eat into an individual's monthly allowance with no signal in the run. → A dedicated seat makes the budget legible (D2); concurrency cancellation, the draft skip, `paths-ignore` and the job timeout bound the request count; the README records the observed requests-per-PR from the calibration period, since the workflow cannot report it directly. If the allowance is exhausted the CLI fails and the check fails — noisily, not silently.
-- **Folder trust could stall a non-interactive run.** → D6 makes trust an explicit setup step with a probe-PR pass condition, and records the `--allow-all-tools`-plus-denied-shell fallback as a visible trade-off rather than a surprise.
+- **Copilot CLI's flag surface is the least stable part of this design — demonstrably so.** Three of this document's original claims about it were false (D4, D5, D6), and one of them would have shipped an invocation that could not run non-interactively at all. A renamed flag or a silently-ignored deny rule degrades the security model with no error. → The D9 working-tree assertion depends on no claim about the CLI and catches the consequence; the design now uses only the four documented permission *kinds* rather than internal tool identifiers, which is the more stable vocabulary; D12 pins the version and makes a bump re-run the probe PR (task 7.2). The general lesson is recorded rather than smoothed over: verify this CLI's surface, do not reason about it from analogy with other agentic CLIs.
+- **The reviewer authenticates as a human with a Copilot seat.** A personal PAT carries that person's full repo access into CI, and its rotation or departure silently breaks the gate. → D2 recommends a dedicated machine account with a repo-scoped fine-grained PAT; D3 ensures the PAT-holding job has no write permission and never touches the GitHub API; publishing runs under the Actions token so nothing is attributed to the seat owner; `--secret-env-vars` keeps the token out of transcripts and logs.
+- **AI-credit consumption is a shared budget.** A busy PR day draws down the seat's allowance, and if it is a person's seat that is their working capacity. → `--max-ai-credits` imposes a hard per-session cap, which is a real bound rather than a proxy for one; `--usage-output-file` makes each run's usage visible in the job summary, so drift is noticed in the run rather than on a bill; a dedicated seat makes the budget legible (D2); concurrency cancellation, the draft skip, `paths-ignore` and the job timeout bound how often the CLI starts at all. If the allowance is exhausted the CLI fails and the check fails — noisily, not silently.
 - **False-positive `blocking` findings block merges and erode trust.** → The `blocking` bar in D10 is narrow and enumerated; the prompt is explicit that a clean review is a good outcome; `event: COMMENT` keeps GitHub itself from blocking the PR; a maintainer can re-run or merge past a not-yet-required check. Treat the first weeks as calibration and tighten the prompt from real output *before* making the check required.
-- **Prompt injection from PR content.** A PR can add text to a source file, to `CLAUDE.md`, or to a skill file — all of which Copilot CLI auto-loads — instructing the reviewer to pass everything. → The `review` job holds no write permission and no GitHub tools (D3, D5), so the worst outcome is a useless review, not a compromised repo. The prompt additionally requires any diff touching its own review configuration (`.github/code-review/`, `.github/workflows/`, `CLAUDE.md`, `.claude/`) to be reported at `major` or higher, so such a diff is surfaced even when the reviewer has been talked into silence elsewhere.
+- **Prompt injection from PR content.** A PR can add text to any file the reviewer reads — a source file, `CLAUDE.md`, a skill file — instructing it to pass everything. → `--no-custom-instructions` (D5) stops repo files from shaping the system prompt, so injected text arrives as file content the prompt has framed as data rather than as instructions the CLI itself loaded. The `review` job holds no write permission, no shell, no network and no GitHub tools (D3, D5), so the worst outcome is a useless review, not a compromised repo. The prompt additionally requires any diff touching its own review configuration (`.github/code-review/`, `.github/workflows/`, `CLAUDE.md`, `.claude/`) to be reported at `major` or higher, so such a diff is surfaced even when the reviewer has been talked into silence elsewhere. Residual risk is accepted: a reviewer that has been successfully misled produces a clean review, and only a human reading the diff will notice.
 - **Non-determinism: the same diff can yield different findings.** → Accepted, and inherent to the approach. It is why the gate is narrow, why the check is re-runnable, and why this workflow is not a substitute for `dotnet test`. Pinning the CLI and the model (D12) removes the avoidable share of the variance.
 - **A missing secret, a revoked seat, or a policy-blocked model fails the check on every PR.** → The first substantive step asserts the secret is present and fails with a message naming `COPILOT_GITHUB_TOKEN` and pointing at the README; entitlement and model-policy failures are surfaced with the CLI's own error rather than swallowed, and the README lists both as the first things to check.
 - **The review API's diff-position rules are fiddly and version-sensitive.** → All position computation lives in one small, unit-testable Node module, and unanchorable findings degrade into the review body (D8) instead of 422-ing the entire review away. One bad line number must not suppress the other twelve findings.

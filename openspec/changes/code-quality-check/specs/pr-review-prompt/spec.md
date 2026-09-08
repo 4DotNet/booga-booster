@@ -138,10 +138,10 @@ The prompt SHALL require the reviewer to end its run by writing `.code-review/fi
 - **WHEN** the review finishes
 - **THEN** `.code-review/findings.json` exists, parses as JSON, and conforms to the documented schema
 
-#### Scenario: The CLI produces prose output only
+#### Scenario: The reviewer states its conclusions only in its transcript
 
-- **WHEN** the CLI writes its conclusions to stdout rather than to the findings file
-- **THEN** that output is captured to the job log for debugging and is not parsed for findings, and the run is treated as having produced no valid review
+- **WHEN** the reviewer reports findings in its own output rather than writing them to the findings file
+- **THEN** that output is captured to the job log for debugging and is never parsed for findings, and the run is treated as having produced no valid review — the CLI's structured output is a session transcript, not a result document
 
 #### Scenario: No file other than the findings file is written
 

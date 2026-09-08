@@ -121,17 +121,22 @@ The publisher SHALL post a new review per workflow run and SHALL NOT delete, edi
 
 ### Requirement: The run's outcome is summarised in the Actions job summary
 
-The publisher SHALL write the summary, the finding counts by severity, the pinned CLI and model versions used, and a link to the created review into the GitHub Actions job summary, so the outcome is legible from the run page without opening the pull request. Because the CLI reports no machine-readable per-run cost, the job summary SHALL NOT claim a cost figure.
+The publisher SHALL write the summary, the finding counts by severity, the pinned CLI and model versions used, the run's usage statistics as reported by the CLI, and a link to the created review into the GitHub Actions job summary, so the outcome is legible from the run page without opening the pull request.
 
 #### Scenario: A maintainer inspects the workflow run
 
 - **WHEN** a maintainer opens the `code-quality-check` run
-- **THEN** the job summary shows what was found, which CLI version and model produced it, and where the review was posted
+- **THEN** the job summary shows what was found, which CLI version and model produced it, what the run consumed, and where the review was posted
 
-#### Scenario: Cost is not fabricated
+#### Scenario: Usage is reported from the CLI's own output
 
-- **WHEN** the job summary is rendered
-- **THEN** it reports no per-run cost or token count, because the CLI provides none, and instead refers to the premium-request budget documented in the README
+- **WHEN** the job summary renders the run's consumption
+- **THEN** the figures come from the usage file the CLI wrote, and are never estimated or inferred
+
+#### Scenario: The usage file is absent
+
+- **WHEN** the review artifact contains no usage file
+- **THEN** the job summary states that usage was not reported rather than showing a zero or a guess, and the check's outcome is unaffected
 
 #### Scenario: A skipped run
 
