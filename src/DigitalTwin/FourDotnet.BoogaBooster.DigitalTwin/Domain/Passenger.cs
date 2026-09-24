@@ -69,9 +69,13 @@ public sealed class Passenger : DomainModel
             Nausea = ClampMood(Nausea + (RideParameters.NauseaGainPerSecond * dt));
             MarkChanged();
         }
-
-        // delta < -tolerance: the ride is tamer than the rider likes. Boredom is not
-        // modelled (design non-goal), so their mood is left as it is.
+        else
+        {
+            // The ride is tamer than the rider likes (delta < -tolerance). Boredom is
+            // not modelled (design non-goal), so their mood is deliberately left as
+            // it is and nothing is marked changed.
+            return;
+        }
     }
 
     /// <summary>Adds <paramref name="amount"/> nausea, clamped to <c>[0, 1]</c> — the sustained-G penalty path (docs/06 §6.3).</summary>

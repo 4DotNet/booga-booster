@@ -285,6 +285,32 @@ public class RideQueueServiceTests
     }
 
     [Fact]
+    public async Task GetStatus_AverageIsTheMeanOfTheHappinessValuesInTheSameResponse()
+    {
+        // Two groups of different sizes that joined at different times, so the
+        // people-weighted mean over the reported wait-adjusted values is the only
+        // number that can match: (1 × 0.7 + 3 × 0.6) / 4 = 0.625.
+        var generator = new Mock<IPersonGenerator>();
+        generator.Setup(g => g.CreateGroup(1)).Returns(() => QueueTestData.GroupWithHappiness(0.8));
+        generator.Setup(g => g.CreateGroup(3)).Returns(() => QueueTestData.GroupWithHappiness(0.6, 0.6, 0.6));
+        var time = new FakeTimeProvider(QueueTestData.Now);
+        var (service, _, _) = CreateService(timeProvider: time, personGenerator: generator.Object);
+        var rideId = Guid.NewGuid();
+
+        await service.EnqueueGroupAsync(rideId, 1, CancellationToken.None);
+        time.Advance(TimeSpan.FromMinutes(10));
+        await service.EnqueueGroupAsync(rideId, 3, CancellationToken.None);
+        time.Advance(TimeSpan.FromMinutes(5));
+
+        var status = service.GetStatus(rideId);
+
+        var reported = status.Groups.SelectMany(g => g.People).Select(p => p.Happiness).ToArray();
+        Assert.Equal(4, reported.Length);
+        Assert.Equal(reported.Average(), status.AverageHappiness!.Value, Precision);
+        Assert.Equal(0.625, status.AverageHappiness.Value, Precision);
+    }
+
+    [Fact]
     public async Task TakeGroupAsync_ReturnsWaitAdjustedHappiness_AsOfTheTake()
     {
         var time = new FakeTimeProvider(QueueTestData.Now);

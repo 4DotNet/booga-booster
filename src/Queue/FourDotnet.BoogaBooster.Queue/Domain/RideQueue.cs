@@ -187,24 +187,39 @@ public sealed class RideQueue : DomainModel
     {
         lock (_gate)
         {
-            if (_groups.Count == 0)
-            {
-                return null;
-            }
-
-            var total = 0.0;
-            var people = 0;
-
-            foreach (var group in _groups)
-            {
-                // Weight each group's mean by its headcount so the result is the
-                // mean over people, not over groups.
-                total += group.AverageHappiness(now) * group.Size;
-                people += group.Size;
-            }
-
-            return total / people;
+            return AverageHappiness(_groups, now);
         }
+    }
+
+    /// <summary>
+    /// The mean current happiness, as of <paramref name="now"/>, of every person in
+    /// <paramref name="groups"/> — a snapshot previously taken with
+    /// <see cref="SnapshotGroups"/> — or <c>null</c> when the snapshot is empty. A
+    /// caller that projects a snapshot and also reports its average uses this
+    /// overload so both describe the same instant: reading the live line again for
+    /// the aggregate could see groups that joined or left in between.
+    /// </summary>
+    public static double? AverageHappiness(IReadOnlyCollection<QueuedGroup> groups, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(groups);
+
+        if (groups.Count == 0)
+        {
+            return null;
+        }
+
+        var total = 0.0;
+        var people = 0;
+
+        foreach (var group in groups)
+        {
+            // Weight each group's mean by its headcount so the result is the
+            // mean over people, not over groups.
+            total += group.AverageHappiness(now) * group.Size;
+            people += group.Size;
+        }
+
+        return total / people;
     }
 
     /// <summary>Returns the group at the front of the queue without removing it, or null when empty.</summary>

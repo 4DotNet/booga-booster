@@ -113,8 +113,11 @@ internal sealed class RideQueueService : IRideQueueService
                 AverageHappiness: null);
         }
 
-        // One reading of the clock for the whole snapshot, so every person's
-        // wait-adjusted happiness and the line's average describe the same instant.
+        // One reading of the clock and one snapshot of the line for the whole
+        // response, so the groups, the counts, every person's wait-adjusted
+        // happiness and the average all describe the same instant. Asking the live
+        // queue for the average separately could see a group that joined or boarded
+        // in between and report an average of different people than the groups shown.
         var now = _timeProvider.GetUtcNow();
         var snapshot = queue.SnapshotGroups();
 
@@ -131,7 +134,7 @@ internal sealed class RideQueueService : IRideQueueService
             GroupCount: groups.Length,
             PeopleWaiting: peopleWaiting,
             Groups: groups,
-            AverageHappiness: queue.AverageHappiness(now));
+            AverageHappiness: RideQueue.AverageHappiness(snapshot, now));
     }
 
     public Task<QueuedGroupDto?> TakeGroupAsync(

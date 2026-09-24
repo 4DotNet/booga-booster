@@ -202,6 +202,31 @@ public sealed class QueueHappinessTests
     }
 
     [Fact]
+    public void SnapshotAverageHappiness_DescribesTheSnapshot_NotTheLiveLine()
+    {
+        var queue = QueueTestData.Queue();
+        var first = queue.Enqueue(QueueTestData.GroupWithHappiness(0.6), QueueTestData.Now);
+        queue.Enqueue(QueueTestData.GroupWithHappiness(0.8, 0.8, 0.8), QueueTestData.Now);
+        var snapshot = queue.SnapshotGroups();
+
+        // The line moves on after the snapshot was taken: the first group boards.
+        queue.Remove(first.GroupId);
+
+        // The snapshot's average still covers the people it holds — (0.6 + 3 × 0.8) / 4 —
+        // while the live line now averages 0.8.
+        Assert.Equal(0.75, RideQueue.AverageHappiness(snapshot, QueueTestData.Now)!.Value, Precision);
+        Assert.Equal(0.8, queue.AverageHappiness(QueueTestData.Now)!.Value, Precision);
+    }
+
+    [Fact]
+    public void SnapshotAverageHappiness_OfAnEmptySnapshot_IsNull()
+    {
+        var snapshot = QueueTestData.Queue().SnapshotGroups();
+
+        Assert.Null(RideQueue.AverageHappiness(snapshot, QueueTestData.Now));
+    }
+
+    [Fact]
     public void Store_BuildsEveryQueuesPolicy_FromTheOptions()
     {
         var options = Options.Create(new QueueModuleOptions
