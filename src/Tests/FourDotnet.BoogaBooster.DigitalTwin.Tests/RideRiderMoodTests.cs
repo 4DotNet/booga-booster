@@ -33,13 +33,20 @@ public sealed class RideRiderMoodTests
     private static Passenger Seated(Ride ride) =>
         Assert.IsType<Passenger>(ride.Mill.GetHub(0).GetGondola(0).GetSeat(SeatPosition.Left).Occupant);
 
-    private static void Advance(Ride ride, double seconds)
+    /// <summary>
+    /// Advances by whole fixed steps and returns the simulated seconds actually elapsed —
+    /// the step is a <see cref="TimeSpan"/> quantised to 100 ns, so that is a hair under
+    /// <paramref name="seconds"/>.
+    /// </summary>
+    private static double Advance(Ride ride, double seconds)
     {
         var steps = (int)Math.Round(seconds / TestHelpers.Dt.TotalSeconds);
         for (var i = 0; i < steps; i++)
         {
             ride.Advance(TestHelpers.Dt);
         }
+
+        return steps * TestHelpers.Dt.TotalSeconds;
     }
 
     /// <summary>A ride with the proving rider seated, in <see cref="RideState.Loading"/>.</summary>
@@ -83,10 +90,11 @@ public sealed class RideRiderMoodTests
         ride.RequestTransition(RideState.Safe);
         ride.RequestTransition(RideState.Started);
 
-        Advance(ride, seconds: 2d);
+        var elapsed = Advance(ride, seconds: 2d);
 
         Assert.Equal(RideState.Started, ride.CurrentState);
-        Assert.Equal(StartHappiness + (RideParameters.HappinessGainPerSecond * 2d), Seated(ride).Happiness, Tolerance);
+        Assert.Equal(StartHappiness + (RideParameters.HappinessGainPerSecond * elapsed), Seated(ride).Happiness, Tolerance);
+        Assert.Equal(0.7, Seated(ride).Happiness, 1e-5);
     }
 
     [Fact]

@@ -31,7 +31,7 @@ public sealed class PassengerExperienceTests
     }
 
     [Fact]
-    public void Experience_TickByTick_AccumulatesToTheSameResultAsOneStep()
+    public void Experience_TickByTick_AccumulatesAtTheRateTimesTheElapsedSimulatedTime()
     {
         var rider = Rider(preferred: 0.6, happiness: 0.7);
         var steps = (int)Math.Round(2d / TestHelpers.Dt.TotalSeconds);
@@ -41,7 +41,11 @@ public sealed class PassengerExperienceTests
             rider.Experience(0.6, TestHelpers.Dt.TotalSeconds);
         }
 
-        Assert.Equal(0.9, rider.Happiness, Tolerance);
+        // The fixed step is a TimeSpan, quantised to 100 ns, so 240 ticks are 1.999992 s
+        // rather than 2 s: the expectation is rate × elapsed simulated time, not 0.9 exactly.
+        var elapsed = steps * TestHelpers.Dt.TotalSeconds;
+        Assert.Equal(0.7 + (RideParameters.HappinessGainPerSecond * elapsed), rider.Happiness, Tolerance);
+        Assert.Equal(0.9, rider.Happiness, 1e-5);
     }
 
     [Theory]
