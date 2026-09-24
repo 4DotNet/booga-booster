@@ -21,6 +21,12 @@ internal static class QueueTelemetryAttributes
     /// <summary>How many people are waiting — a count, never the people themselves.</summary>
     internal const string PeopleWaiting = "queue.people.waiting";
 
+    /// <summary>
+    /// The mean current happiness of the line — an aggregate over everyone waiting,
+    /// never an individual's mood, name or number (ADR-0009).
+    /// </summary>
+    internal const string AverageHappiness = "queue.happiness.average";
+
     /// <summary>Groups a fill pass added to the line.</summary>
     internal const string GroupsAdded = "queue.groups.added";
 

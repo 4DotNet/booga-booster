@@ -236,4 +236,28 @@ describe('mapRideTelemetry', () => {
     expect(model.gondolas).toHaveLength(GONDOLA_COUNT);
     model.gondolas.forEach((gondola) => expect(gondola.seats).toHaveLength(SEATS_PER_GONDOLA));
   });
+
+  it('maps the riders roll-up from the wire field', () => {
+    const model = mapRideTelemetry(
+      buildDto({ riders: { riderCount: 12, averageHappiness: 0.6, averageNausea: 0.25 } }),
+    );
+
+    expect(model.riderMood).toEqual({ riderCount: 12, averageHappiness: 0.6, averageNausea: 0.25 });
+  });
+
+  it('maps null averages when nobody is aboard', () => {
+    const model = mapRideTelemetry(
+      buildDto({ riders: { riderCount: 0, averageHappiness: null, averageNausea: null } }),
+    );
+
+    expect(model.riderMood).toEqual({ riderCount: 0, averageHappiness: null, averageNausea: null });
+  });
+
+  it('defaults riderMood to zero riders and null averages when the wire field is absent', () => {
+    const dto = buildDto();
+    // `buildDto` doesn't set `riders`, simulating an older frame.
+    const model = mapRideTelemetry(dto);
+
+    expect(model.riderMood).toEqual({ riderCount: 0, averageHappiness: null, averageNausea: null });
+  });
 });

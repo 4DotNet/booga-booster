@@ -1,3 +1,4 @@
+using FourDotnet.BoogaBooster.Core.Observability;
 using FourDotnet.BoogaBooster.DigitalTwin.Abstractions;
 using FourDotnet.BoogaBooster.DigitalTwin.Domain;
 
@@ -63,10 +64,33 @@ public sealed class RideStore : IRideStore, IRideTelemetryProvider
 
     public RideTelemetry Advance(TimeSpan dt)
     {
+        IReadOnlyList<Passenger> departed;
+        RideTelemetry telemetry;
+
         lock (_gate)
         {
-            _ride.Advance(dt);
-            return _ride.ToTelemetry();
+            departed = _ride.Advance(dt);
+            telemetry = _ride.ToTelemetry();
+        }
+
+        // Recorded outside the lock: the meter is not part of the ride's consistency
+        // boundary, and the departed list is already a private snapshot.
+        RecordFinalMood(departed);
+        return telemetry;
+    }
+
+    /// <summary>
+    /// Records each leaving rider's final happiness and nausea in the two offload
+    /// histograms (design D10). Untagged, and never a name or a seat: the distribution
+    /// is what an operator trends, and ADR-0009 keeps personal data off metrics.
+    /// </summary>
+    private static void RecordFinalMood(IReadOnlyList<Passenger> departed)
+    {
+        for (var i = 0; i < departed.Count; i++)
+        {
+            var passenger = departed[i];
+            BoogaBoosterTelemetry.RiderFinalHappiness.Record(passenger.Happiness);
+            BoogaBoosterTelemetry.RiderFinalNausea.Record(passenger.Nausea);
         }
     }
 
@@ -110,14 +134,14 @@ public sealed class RideStore : IRideStore, IRideTelemetryProvider
     {
         lock (_gate)
         {
-            var passenger = new Passenger(weight ?? _sampler.NextPassengerWeight());
+            var passenger = new Passenger(weight ?? _sampler.NextPassengerWeight(), _sampler.NextRiderProfile());
             var delay = _sampler.NextRestraintCloseDelay();
             _ride.BoardPassenger(hubIndex, gondolaIndex, seat, passenger, delay);
             return _ride.ToTelemetry();
         }
     }
 
-    public RideTelemetry BoardGroup(IReadOnlyList<PassengerWeight> members)
+    public RideTelemetry BoardGroup(IReadOnlyList<Passenger> members)
     {
         ArgumentNullException.ThrowIfNull(members);
 

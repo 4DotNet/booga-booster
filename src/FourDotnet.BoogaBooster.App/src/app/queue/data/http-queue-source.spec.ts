@@ -12,6 +12,7 @@ const DTO: QueueStatusDto = {
   rideId: RIDE_ID,
   groupCount: 12,
   peopleWaiting: 34,
+  averageHappiness: 0.72,
 };
 
 const POLL_MS = 5000;
@@ -38,6 +39,7 @@ describe('HttpQueueSource', () => {
 
     expect(source.queue()?.groupCount).toBe(12);
     expect(source.queue()?.peopleWaiting).toBe(34);
+    expect(source.queue()?.averageHappiness).toBe(0.72);
     expect(source.status()).toBe('ready');
   });
 

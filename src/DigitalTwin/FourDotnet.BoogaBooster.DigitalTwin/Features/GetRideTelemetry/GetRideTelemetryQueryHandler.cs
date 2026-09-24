@@ -20,15 +20,26 @@ public sealed class GetRideTelemetryQueryHandler : QueryHandler<GetRideTelemetry
         => Task.FromResult(_store.GetTelemetry());
 
     /// <summary>
-    /// Summarises the snapshot with three scalars an operator would read first — the
-    /// lifecycle state, how many people are aboard, and how fast the mill is turning.
-    /// The sixteen gondolas and four hubs stay off the span: the payload belongs in
-    /// the response, not in the trace.
+    /// Summarises the snapshot with the scalars an operator would read first — the
+    /// lifecycle state, how many people are aboard, how fast the mill is turning, and
+    /// how the riders feel on average. The sixteen gondolas and four hubs stay off the
+    /// span: the payload belongs in the response, not in the trace. The mood
+    /// attributes are aggregates only and are omitted when nobody is seated.
     /// </summary>
     protected override void EnrichActivityWithResponse(Activity activity, RideTelemetry response)
     {
         activity.SetTag(RideTelemetryAttributes.State, response.State.ToString());
         activity.SetTag(RideTelemetryAttributes.PassengersBoarded, response.BoardedPassengerCount);
         activity.SetTag(RideTelemetryAttributes.MillRpm, response.Mill.Rpm);
+
+        if (response.Riders.AverageHappiness is { } happiness)
+        {
+            activity.SetTag(RideTelemetryAttributes.RidersHappinessAverage, happiness);
+        }
+
+        if (response.Riders.AverageNausea is { } nausea)
+        {
+            activity.SetTag(RideTelemetryAttributes.RidersNauseaAverage, nausea);
+        }
     }
 }

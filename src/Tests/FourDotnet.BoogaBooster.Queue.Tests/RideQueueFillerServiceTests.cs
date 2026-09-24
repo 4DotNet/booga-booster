@@ -123,7 +123,7 @@ public sealed class RideQueueFillerServiceTests
         var (filler, store, _) = Create(OptionsFor(rideId, min: 4, max: 8, maxQueue: 4));
 
         // Pre-fill the queue to its maximum before the cycle runs.
-        store.GetOrCreate(rideId).Enqueue(QueueTestData.Group(4));
+        store.GetOrCreate(rideId).Enqueue(QueueTestData.Group(4), QueueTestData.Now);
 
         await filler.RunFillCycleAsync(CancellationToken.None);
 

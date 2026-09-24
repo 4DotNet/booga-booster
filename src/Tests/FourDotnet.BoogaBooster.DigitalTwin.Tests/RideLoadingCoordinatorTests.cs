@@ -6,6 +6,7 @@ using FourDotnet.BoogaBooster.Queue.Abstractions;
 using FourDotnet.BoogaBooster.Queue.Abstractions.DataTransferObjects;
 using FourDotnet.BoogaBooster.Queue.Abstractions.DataTransferObjects.GetQueueStatus;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using Xunit;
 
 namespace FourDotnet.BoogaBooster.DigitalTwin.Tests;
@@ -41,7 +42,13 @@ public sealed class RideLoadingCoordinatorTests
     private static QueuedGroupDto MakeGroup(int size)
     {
         var people = Enumerable.Range(0, size)
-            .Select(_ => new PersonDto(_nextPersonNumber++, Faker.Name.FullName(), Faker.Random.Int(30, 150)))
+            .Select(_ => new PersonDto(
+                _nextPersonNumber++,
+                Faker.Name.FullName(),
+                Faker.Random.Int(30, 150),
+                Faker.Random.Double(RiderProfile.MinPreferredIntensity, RiderProfile.MaxPreferredIntensity),
+                Faker.Random.Double(RideParameters.MinBoardingHappiness, RideParameters.MaxBoardingHappiness),
+                Nausea: 0d))
             .ToArray();
         return new QueuedGroupDto(Guid.NewGuid(), people);
     }
@@ -50,7 +57,7 @@ public sealed class RideLoadingCoordinatorTests
     private static void LeaveEmptyGondolas(RideStore store, int desiredEmpty)
     {
         var seats = (TotalGondolas - desiredEmpty) * RideParameters.SeatsPerGondola;
-        var members = Enumerable.Range(0, seats).Select(_ => new PassengerWeight(75d)).ToArray();
+        var members = Enumerable.Range(0, seats).Select(_ => Passenger.OfWeight(75d)).ToArray();
         store.BoardGroup(members);
         Assert.Equal(desiredEmpty, store.EmptyGondolaCount);
     }
@@ -267,6 +274,71 @@ public sealed class RideLoadingCoordinatorTests
         Assert.Equal(RideState.Loading, store.CurrentState);
     }
 
+    // 4.6 — The profile travels with the member.
+
+    [Fact]
+    public async Task RunLoadingPass_BoardsEachMember_WithTheWeightAndMoodTheQueueReported()
+    {
+        var rideId = Guid.NewGuid();
+        var group = new QueuedGroupDto(
+            Guid.NewGuid(),
+            [
+                new PersonDto(1, "Ann", 80, PreferredIntensity: 0.3, Happiness: 0.55, Nausea: 0d),
+                new PersonDto(2, "Ben", 95, PreferredIntensity: 0.9, Happiness: 0.42, Nausea: 0.15),
+            ]);
+
+        var queue = new Mock<IRideQueueService>(MockBehavior.Strict);
+        queue.SetupSequence(q => q.GetStatus(rideId))
+            .Returns(new GetQueueStatusResponse(rideId, 1, 2, [group], AverageHappiness: 0.485))
+            .Returns(new GetQueueStatusResponse(rideId, 0, 0, [], AverageHappiness: null));
+        queue.Setup(q => q.TakeGroupAsync(rideId, group.GroupId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(group);
+
+        IReadOnlyList<Passenger>? boarded = null;
+        var store = new Mock<IRideStore>(MockBehavior.Strict);
+        store.SetupGet(s => s.CurrentState).Returns(RideState.Loading);
+        store.SetupGet(s => s.EmptyGondolaCount).Returns(TotalGondolas);
+        store.Setup(s => s.BoardGroup(It.IsAny<IReadOnlyList<Passenger>>()))
+            .Callback<IReadOnlyList<Passenger>>(members => boarded = members)
+            .Returns(() => NewStore().GetTelemetry());
+
+        await NewCoordinator(store.Object, queue.Object).RunLoadingPassAsync(rideId, Ct);
+
+        Assert.NotNull(boarded);
+        Assert.Equal(2, boarded.Count);
+
+        Assert.Equal(80d, boarded[0].Weight.Kilograms);
+        Assert.Equal(0.3, boarded[0].PreferredIntensity);
+        Assert.Equal(0.55, boarded[0].Happiness);
+        Assert.Equal(0d, boarded[0].Nausea);
+
+        Assert.Equal(95d, boarded[1].Weight.Kilograms);
+        Assert.Equal(0.9, boarded[1].PreferredIntensity);
+        Assert.Equal(0.42, boarded[1].Happiness);
+        Assert.Equal(0.15, boarded[1].Nausea);
+
+        store.Verify(s => s.BoardGroup(It.IsAny<IReadOnlyList<Passenger>>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RunLoadingPass_SeatsTheProfileOnTheRealRide_SoTheRollUpReflectsIt()
+    {
+        var (coordinator, store, queue, rideId) = Loading();
+        queue.Enqueue(new QueuedGroupDto(
+            Guid.NewGuid(),
+            [new PersonDto(1, "Ann", 80, PreferredIntensity: 0.3, Happiness: 0.55, Nausea: 0d)]));
+
+        await coordinator.RunLoadingPassAsync(rideId, Ct);
+
+        var riders = store.GetTelemetry().Riders;
+        Assert.Equal(1, riders.RiderCount);
+        Assert.Equal(0.55, riders.AverageHappiness);
+        Assert.Equal(0d, riders.AverageNausea);
+    }
+
+    private static RideLoadingCoordinator NewCoordinator(IRideStore store, IRideQueueService queue) =>
+        new(store, NullLogger<RideLoadingCoordinator>.Instance, queue);
+
     /// <summary>
     /// In-memory <see cref="IRideQueueService"/> for the coordinator tests: an ordered
     /// list of groups that supports the status snapshot and take-by-id the coordinator
@@ -289,7 +361,7 @@ public sealed class RideLoadingCoordinatorTests
             throw new NotSupportedException();
 
         public GetQueueStatusResponse GetStatus(Guid rideId) =>
-            new(rideId, _groups.Count, _groups.Sum(g => g.Size), [.. _groups]);
+            new(rideId, _groups.Count, _groups.Sum(g => g.Size), [.. _groups], AverageHappiness: null);
 
         public Task<QueuedGroupDto?> TakeGroupAsync(Guid rideId, Guid groupId, CancellationToken cancellationToken)
         {

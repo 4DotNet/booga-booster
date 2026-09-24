@@ -8,12 +8,17 @@ namespace FourDotnet.BoogaBooster.Queue.Filling;
 
 /// <summary>
 /// Default <see cref="IPersonGenerator"/>. Hands out ever-increasing unique person
-/// numbers, generates full names with Bogus, and draws each weight from a normal
+/// numbers, generates full names with Bogus, draws each weight from a normal
 /// distribution centred in the typical 70–100 kg band so most guests are average
 /// while lighter and heavier exceptions still occur across the full
 /// <c>[<see cref="Person.MinWeightInKilograms"/>, <see cref="Person.MaxWeightInKilograms"/>]</c>
-/// range. Registered as a singleton so the unique-number counter is shared; its
-/// randomness honours <see cref="QueueModuleOptions.RandomSeed"/> for deterministic tests.
+/// range, and draws each guest's <see cref="RiderProfile"/>: a uniformly random ride
+/// preference, an arrival happiness in the cheerful
+/// <c>[<see cref="MinArrivalHappiness"/>, <see cref="MaxArrivalHappiness"/>]</c> band
+/// and no nausea. Registered as a singleton so the unique-number counter is shared;
+/// all randomness comes from one <see cref="Randomizer"/> that honours
+/// <see cref="QueueModuleOptions.RandomSeed"/>, so a seed reproduces weights and
+/// profiles alike.
 /// </summary>
 internal sealed class PersonGenerator : IPersonGenerator
 {
@@ -22,6 +27,19 @@ internal sealed class PersonGenerator : IPersonGenerator
     // of the mass yet the clamped tails still reach 30 kg and 150 kg on occasion.
     private const double MeanWeightInKilograms = 85.0;
     private const double WeightStandardDeviation = 12.0;
+
+    /// <summary>
+    /// The least happy a guest arrives: nobody joins the line miserable, but a long
+    /// wait (<see cref="GrumpinessPolicy"/>) and a ride that does not suit them can
+    /// take them there.
+    /// </summary>
+    internal const double MinArrivalHappiness = 0.65;
+
+    /// <summary>The happiest a guest arrives — cheerful, with room to be delighted by the ride.</summary>
+    internal const double MaxArrivalHappiness = 0.85;
+
+    /// <summary>Guests always arrive with no nausea; only the ride can make them queasy.</summary>
+    internal const double ArrivalNausea = RiderProfile.MinNausea;
 
     private readonly Faker _faker;
     private long _lastNumber;
@@ -42,8 +60,9 @@ internal sealed class PersonGenerator : IPersonGenerator
         var number = Interlocked.Increment(ref _lastNumber);
         var name = _faker.Name.FullName();
         var weight = NextWeight();
+        var profile = NextProfile();
 
-        return new Person(number, name, weight);
+        return new Person(number, name, weight, profile);
     }
 
     public GroupArrival CreateGroup(int size)
@@ -77,5 +96,18 @@ internal sealed class PersonGenerator : IPersonGenerator
         var clamped = Math.Clamp(weight, Person.MinWeightInKilograms, Person.MaxWeightInKilograms);
 
         return (int)Math.Round(clamped);
+    }
+
+    /// <summary>
+    /// Draws the arriving guest's profile from the same seeded randomizer as the
+    /// weight: a ride preference uniform across the whole permitted range, an
+    /// arrival happiness uniform in the cheerful band, and no nausea.
+    /// </summary>
+    private RiderProfile NextProfile()
+    {
+        var preferredIntensity = _faker.Random.Double(RiderProfile.MinPreferredIntensity, RiderProfile.MaxPreferredIntensity);
+        var happiness = _faker.Random.Double(MinArrivalHappiness, MaxArrivalHappiness);
+
+        return new RiderProfile(preferredIntensity, happiness, ArrivalNausea);
     }
 }

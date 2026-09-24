@@ -22,6 +22,14 @@ public sealed class Gondola : DomainModel
     private double _omega;       // ω_cart — emergent yaw rate (rad/s)
     private double _lateralG;
     private double _forwardG;
+    private double _horizontalG;
+    private double _intensity;
+    private bool _isAtGLimit;
+
+    // The sustained-G latch (docs/06 §6.3): seconds spent continuously at the limit,
+    // and whether this episode's one-off penalty has already been handed out.
+    private double _secondsAtGLimit;
+    private bool _sustainedPenaltyApplied;
 
     public Gondola(int hubIndex, int index)
         : base(isNew: true)
@@ -65,6 +73,21 @@ public sealed class Gondola : DomainModel
 
     /// <summary>Fore/aft specific force felt by riders (g). Updated each physics tick.</summary>
     public double ForwardG => _forwardG;
+
+    /// <summary>Magnitude of the felt horizontal specific force (g) — <c>√(lateral² + forward²)</c>. Updated each physics tick.</summary>
+    public double HorizontalG => _horizontalG;
+
+    /// <summary>
+    /// How intense the ride feels in this gondola, in <c>[0, 1]</c>: the felt horizontal
+    /// G over <see cref="RideParameters.MaxGForce"/>, saturating at the limit (docs/06 §6.1).
+    /// </summary>
+    public double Intensity => _intensity;
+
+    /// <summary><c>true</c> while the felt horizontal G is at or above <see cref="RideParameters.MaxGForce"/>.</summary>
+    public bool IsAtGLimit => _isAtGLimit;
+
+    /// <summary>How long the gondola has been continuously at the G limit (s); zero when below it.</summary>
+    public double SecondsAtGLimit => _secondsAtGLimit;
 
     /// <summary>Total measured passenger weight in the gondola.</summary>
     public double PassengerLoadKg => _left.OccupiedKg + _right.OccupiedKg;
@@ -119,12 +142,39 @@ public sealed class Gondola : DomainModel
         MarkChanged();
     }
 
-    /// <summary>Lets any seated passengers leave once their restraints are released.</summary>
-    public void Offload()
+    /// <summary>
+    /// Lets any seated passengers leave once their restraints are released, adding each
+    /// one who left to <paramref name="departed"/> so their final mood can be recorded.
+    /// </summary>
+    public void Offload(ICollection<Passenger> departed)
     {
-        _left.Unboard();
-        _right.Unboard();
+        ArgumentNullException.ThrowIfNull(departed);
+
+        if (_left.Unboard() is { } left)
+        {
+            departed.Add(left);
+        }
+
+        if (_right.Unboard() is { } right)
+        {
+            departed.Add(right);
+        }
+
         MarkChanged();
+    }
+
+    /// <summary>Adds the gondola's seated passengers to the rider-mood roll-up.</summary>
+    internal void AccumulateRiderMood(ref RiderMoodSum sum)
+    {
+        if (_left.Occupant is { } left)
+        {
+            sum.Add(left);
+        }
+
+        if (_right.Occupant is { } right)
+        {
+            sum.Add(right);
+        }
     }
 
     /// <summary>Advances the two seats' natural passenger behaviour by <paramref name="elapsed"/>.</summary>
@@ -136,8 +186,9 @@ public sealed class Gondola : DomainModel
 
     /// <summary>
     /// Advances the gondola's swing by <paramref name="dt"/> seconds, given the
-    /// mill's and its hub's current angles and speeds. Updates the felt G-forces
-    /// every call; integrates the pendulum only when the brake is released.
+    /// mill's and its hub's current angles and speeds. Updates the felt G-forces and
+    /// lets the seated riders experience them every call; integrates the pendulum
+    /// only when the brake is released.
     /// </summary>
     public void AdvancePhysics(double millAngle, double millOmega, double hubAngle, double hubOmega, double dt)
     {
@@ -149,6 +200,7 @@ public sealed class Gondola : DomainModel
         var worldFacing = millAngle + hubAngle + RideKinematics.MountAngle(Index) + _angle;
 
         UpdateGForces(field, worldFacing, comAngle, comDistance);
+        AdvanceRiderExperience(dt);
 
         if (_brake == GondolaBrakeState.Engaged)
         {
@@ -209,6 +261,49 @@ public sealed class Gondola : DomainModel
 
         _forwardG = specific.Dot(forwardHat) / RideParameters.Gravity;
         _lateralG = specific.Dot(lateralHat) / RideParameters.Gravity;
+
+        // Intensity (docs/06 §6.1): the horizontal magnitude relative to the maximum
+        // allowed G. Horizontal only — gravity's constant 1 g would put the floor of a
+        // stationary ride at 1/4.5 instead of zero.
+        _horizontalG = Math.Sqrt((_lateralG * _lateralG) + (_forwardG * _forwardG));
+        _intensity = Math.Clamp(_horizontalG / RideParameters.MaxGForce, 0d, 1d);
+        _isAtGLimit = _horizontalG >= RideParameters.MaxGForce;
+    }
+
+    /// <summary>
+    /// The rider side of the tick (docs/06 §6.2–6.3): every seated passenger feels this
+    /// tick's intensity, and the gondola-level sustained-G latch hands out its one-off
+    /// nausea penalty when the gondola has sat at the limit for
+    /// <see cref="RideParameters.SustainedGLimitSeconds"/>. Called only from
+    /// <see cref="AdvancePhysics"/>, which the ride runs only while in motion — so a
+    /// stationary rider's mood is frozen by construction.
+    /// </summary>
+    private void AdvanceRiderExperience(double dt)
+    {
+        var left = _left.Occupant;
+        var right = _right.Occupant;
+
+        left?.Experience(_intensity, dt);
+        right?.Experience(_intensity, dt);
+
+        if (!_isAtGLimit)
+        {
+            // Dropping below the limit ends the episode and re-arms the penalty.
+            _secondsAtGLimit = 0d;
+            _sustainedPenaltyApplied = false;
+            return;
+        }
+
+        _secondsAtGLimit += dt;
+        if (_sustainedPenaltyApplied || _secondsAtGLimit < RideParameters.SustainedGLimitSeconds)
+        {
+            return;
+        }
+
+        // Exactly once per episode, and to everyone aboard regardless of preference.
+        _sustainedPenaltyApplied = true;
+        left?.AddNausea(RideParameters.SustainedGLimitNauseaPenalty);
+        right?.AddNausea(RideParameters.SustainedGLimitNauseaPenalty);
     }
 
     /// <summary>

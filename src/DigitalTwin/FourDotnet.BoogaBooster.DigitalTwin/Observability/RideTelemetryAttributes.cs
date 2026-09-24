@@ -63,6 +63,15 @@ internal static class RideTelemetryAttributes
     internal const string MillRpm = "ride.mill.rpm";
 
     /// <summary>
+    /// The seated riders' average happiness, <c>[0, 1]</c>. An aggregate over the whole
+    /// ride — never a single rider's mood, which would identify a person (ADR-0009).
+    /// </summary>
+    internal const string RidersHappinessAverage = "ride.riders.happiness.average";
+
+    /// <summary>The seated riders' average nausea, <c>[0, 1]</c>; an aggregate like <see cref="RidersHappinessAverage"/>.</summary>
+    internal const string RidersNauseaAverage = "ride.riders.nausea.average";
+
+    /// <summary>
     /// Whether a boarding command supplied a weight — never the weight itself, and
     /// never a passenger's name (ADR-0009 forbids personal data on a span).
     /// </summary>

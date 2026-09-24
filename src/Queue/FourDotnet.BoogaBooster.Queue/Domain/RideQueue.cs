@@ -5,7 +5,9 @@ namespace FourDotnet.BoogaBooster.Queue.Domain;
 /// <summary>
 /// Aggregate root for a single ride's waiting line (ADR-0003). Holds groups in
 /// arrival order and preserves each group's membership so members stay adjacent
-/// and board together. All mutation goes through intent-revealing methods; a
+/// and board together. Every group is stamped with the moment it joined, and the
+/// queue's <see cref="GrumpinessPolicy"/> turns that wait into the happiness its
+/// members currently report. All mutation goes through intent-revealing methods; a
 /// per-ride lock protects ordering against concurrent filling and reads.
 /// </summary>
 public sealed class RideQueue : DomainModel
@@ -13,7 +15,7 @@ public sealed class RideQueue : DomainModel
     private readonly Lock _gate = new();
     private readonly LinkedList<QueuedGroup> _groups = new();
 
-    public RideQueue(Guid rideId, int maxPeople, int maxBoardableGroupSize)
+    public RideQueue(Guid rideId, int maxPeople, int maxBoardableGroupSize, GrumpinessPolicy grumpinessPolicy)
         : base(isNew: true)
     {
         if (rideId == Guid.Empty)
@@ -31,12 +33,21 @@ public sealed class RideQueue : DomainModel
             throw new DomainValidationException("Maximum boardable group size must be at least one.");
         }
 
+        if (grumpinessPolicy is null)
+        {
+            throw new DomainValidationException("A grumpiness policy is required.");
+        }
+
         RideId = rideId;
         MaxPeople = maxPeople;
         MaxBoardableGroupSize = maxBoardableGroupSize;
+        GrumpinessPolicy = grumpinessPolicy;
     }
 
     public Guid RideId { get; private set; }
+
+    /// <summary>How waiting in this line erodes a guest's happiness.</summary>
+    public GrumpinessPolicy GrumpinessPolicy { get; private set; }
 
     /// <summary>The maximum number of people that may wait in this queue at once.</summary>
     public int MaxPeople { get; private set; }
@@ -84,33 +95,39 @@ public sealed class RideQueue : DomainModel
 
     /// <summary>
     /// Appends <paramref name="arrival"/> as a single contiguous group at the back
-    /// of the queue and marks the aggregate <see cref="DomainModelState.Modified"/>.
+    /// of the queue, stamped as having joined at <paramref name="now"/>, and marks
+    /// the aggregate <see cref="DomainModelState.Modified"/>.
     /// </summary>
     /// <exception cref="DomainValidationException">
     /// Adding the group would exceed <see cref="MaxPeople"/>, or the group is larger
     /// than <see cref="MaxBoardableGroupSize"/> and so could never board.
     /// </exception>
-    public QueuedGroup Enqueue(GroupArrival arrival)
+    public QueuedGroup Enqueue(GroupArrival arrival, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(arrival);
 
-        return EnqueueAll([arrival])[0];
+        return EnqueueAll([arrival], now)[0];
     }
 
     /// <summary>
     /// Appends every arrival in <paramref name="arrivals"/> as adjacent contiguous
-    /// groups, in order, and marks the aggregate
-    /// <see cref="DomainModelState.Modified"/>. The whole batch is applied under a
-    /// single lock and is all-or-nothing: if the arrivals together would overrun
-    /// <see cref="MaxPeople"/>, none of them are enqueued. This is what keeps a
-    /// party that was split into several boardable groups from being half-admitted
-    /// when the line is nearly full.
+    /// groups, in order, each stamped as having joined at <paramref name="now"/>,
+    /// and marks the aggregate <see cref="DomainModelState.Modified"/>. The whole
+    /// batch is applied under a single lock and is all-or-nothing: if the arrivals
+    /// together would overrun <see cref="MaxPeople"/>, none of them are enqueued.
+    /// This is what keeps a party that was split into several boardable groups from
+    /// being half-admitted when the line is nearly full.
     /// </summary>
+    /// <param name="arrivals">The groups joining the line.</param>
+    /// <param name="now">
+    /// The moment they join, supplied by the caller so the aggregate holds no clock
+    /// of its own and tests can drive the wait deterministically.
+    /// </param>
     /// <exception cref="DomainValidationException">
     /// The arrivals together would exceed <see cref="MaxPeople"/>, or one of them is
     /// larger than <see cref="MaxBoardableGroupSize"/> and so could never board.
     /// </exception>
-    public IReadOnlyList<QueuedGroup> EnqueueAll(IReadOnlyList<GroupArrival> arrivals)
+    public IReadOnlyList<QueuedGroup> EnqueueAll(IReadOnlyList<GroupArrival> arrivals, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(arrivals);
 
@@ -150,13 +167,43 @@ public sealed class RideQueue : DomainModel
             var groups = new List<QueuedGroup>(arrivals.Count);
             foreach (var arrival in arrivals)
             {
-                var group = new QueuedGroup(arrival);
+                var group = new QueuedGroup(arrival, now, GrumpinessPolicy);
                 _groups.AddLast(group);
                 groups.Add(group);
             }
 
             MarkChanged();
             return groups;
+        }
+    }
+
+    /// <summary>
+    /// The mean current happiness of everyone waiting as of <paramref name="now"/>,
+    /// or <c>null</c> when the line is empty. Each person's arrival happiness is
+    /// eroded by their own group's wait under <see cref="GrumpinessPolicy"/>; nothing
+    /// is written back.
+    /// </summary>
+    public double? AverageHappiness(DateTimeOffset now)
+    {
+        lock (_gate)
+        {
+            if (_groups.Count == 0)
+            {
+                return null;
+            }
+
+            var total = 0.0;
+            var people = 0;
+
+            foreach (var group in _groups)
+            {
+                // Weight each group's mean by its headcount so the result is the
+                // mean over people, not over groups.
+                total += group.AverageHappiness(now) * group.Size;
+                people += group.Size;
+            }
+
+            return total / people;
         }
     }
 

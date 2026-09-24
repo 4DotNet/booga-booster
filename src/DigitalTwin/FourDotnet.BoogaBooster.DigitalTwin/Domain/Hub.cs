@@ -218,12 +218,24 @@ public sealed class Hub : DomainModel
         }
     }
 
-    /// <summary>Lets passengers leave every gondola once their restraints are released.</summary>
-    public void Offload()
+    /// <summary>
+    /// Lets passengers leave every gondola once their restraints are released, adding
+    /// each one who left to <paramref name="departed"/>.
+    /// </summary>
+    public void Offload(ICollection<Passenger> departed)
     {
         foreach (var gondola in _gondolas)
         {
-            gondola.Offload();
+            gondola.Offload(departed);
+        }
+    }
+
+    /// <summary>Adds every seated passenger on this hub to the rider-mood roll-up.</summary>
+    internal void AccumulateRiderMood(ref RiderMoodSum sum)
+    {
+        foreach (var gondola in _gondolas)
+        {
+            gondola.AccumulateRiderMood(ref sum);
         }
     }
 

@@ -68,6 +68,22 @@ public static class BoogaBoosterTelemetry
         description: "Number of passengers boarded onto a gondola seat.");
 
     /// <summary>
+    /// The happiness each rider leaves the ride with, in <c>[0, 1]</c>, recorded once per
+    /// passenger as they offload. Untagged — no seat, gondola or name — so the series is
+    /// a single distribution an operator can trend, and no measurement identifies a person.
+    /// </summary>
+    public static readonly Histogram<double> RiderFinalHappiness = Meter.CreateHistogram<double>(
+        "boogabooster.ride.rider.happiness.final",
+        unit: "1",
+        description: "Happiness of each rider at the moment they leave the ride, 0 to 1.");
+
+    /// <summary>The nausea each rider leaves the ride with, in <c>[0, 1]</c>; untagged like <see cref="RiderFinalHappiness"/>.</summary>
+    public static readonly Histogram<double> RiderFinalNausea = Meter.CreateHistogram<double>(
+        "boogabooster.ride.rider.nausea.final",
+        unit: "1",
+        description: "Nausea of each rider at the moment they leave the ride, 0 to 1.");
+
+    /// <summary>
     /// Counts ride-state transition requests, tagged by outcome (<c>accepted</c> /
     /// <c>rejected</c>) and by the requested target state — seven values, so a dashboard
     /// can show which transition the lifecycle guard rejects most.

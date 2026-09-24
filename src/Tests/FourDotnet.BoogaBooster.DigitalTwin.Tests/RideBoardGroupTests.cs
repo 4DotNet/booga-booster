@@ -17,8 +17,8 @@ public sealed class RideBoardGroupTests
 
     private static readonly Func<TimeSpan> NoDelay = () => TimeSpan.Zero;
 
-    private static IReadOnlyList<PassengerWeight> Group(int size, double kilograms = 75d) =>
-        Enumerable.Range(0, size).Select(_ => new PassengerWeight(kilograms)).ToArray();
+    private static IReadOnlyList<Passenger> Group(int size, double kilograms = 75d) =>
+        Enumerable.Range(0, size).Select(_ => Passenger.OfWeight(kilograms)).ToArray();
 
     private static int OccupiedSeats(Gondola gondola) =>
         (gondola.GetSeat(SeatPosition.Left).IsOccupied ? 1 : 0)
@@ -57,7 +57,7 @@ public sealed class RideBoardGroupTests
     public void BoardGroup_CountsEveryMemberWeightTowardPassengerLoad()
     {
         var ride = Ride.Create();
-        var members = new[] { new PassengerWeight(60d), new PassengerWeight(70d), new PassengerWeight(80d) };
+        var members = new[] { Passenger.OfWeight(60d), Passenger.OfWeight(70d), Passenger.OfWeight(80d) };
 
         ride.BoardGroup(members, NoDelay);
 

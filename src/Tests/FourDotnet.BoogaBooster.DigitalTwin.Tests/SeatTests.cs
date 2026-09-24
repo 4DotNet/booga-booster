@@ -30,6 +30,31 @@ public sealed class SeatTests
     }
 
     [Fact]
+    public void Boarding_exposes_the_occupant_and_unboarding_hands_them_back()
+    {
+        var seat = new Seat(SeatPosition.Left);
+        var passenger = Passenger.OfWeight(85);
+        Assert.Null(seat.Occupant);
+
+        seat.Board(passenger, TimeSpan.Zero);
+        Assert.Same(passenger, seat.Occupant);
+
+        var left = seat.Unboard();
+
+        Assert.Same(passenger, left);
+        Assert.Null(seat.Occupant);
+        Assert.False(seat.IsOccupied);
+    }
+
+    [Fact]
+    public void Unboarding_an_empty_seat_returns_nobody()
+    {
+        var seat = new Seat(SeatPosition.Right);
+
+        Assert.Null(seat.Unboard());
+    }
+
+    [Fact]
     public void Cannot_board_an_occupied_seat()
     {
         var seat = new Seat(SeatPosition.Left);

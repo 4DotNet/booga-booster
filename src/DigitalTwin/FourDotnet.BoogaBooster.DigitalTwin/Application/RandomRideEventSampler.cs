@@ -3,8 +3,8 @@ using FourDotnet.BoogaBooster.DigitalTwin.Domain;
 namespace FourDotnet.BoogaBooster.DigitalTwin.Application;
 
 /// <summary>
-/// Default <see cref="IRideEventSampler"/>. Draws passenger weights and restraint
-/// delays from a uniform distribution. An optional seed makes every run
+/// Default <see cref="IRideEventSampler"/>. Draws passenger weights, rider profiles
+/// and restraint delays from uniform distributions. An optional seed makes every run
 /// reproducible — the discipline the whole twin depends on for testable physics.
 /// </summary>
 public sealed class RandomRideEventSampler : IRideEventSampler
@@ -26,6 +26,15 @@ public sealed class RandomRideEventSampler : IRideEventSampler
         var kilograms = RideParameters.MinPassengerKg
             + (_random.NextDouble() * (RideParameters.MaxPassengerKg - RideParameters.MinPassengerKg));
         return new PassengerWeight(kilograms);
+    }
+
+    public RiderProfile NextRiderProfile()
+    {
+        var preferredIntensity = RiderProfile.MinPreferredIntensity
+            + (_random.NextDouble() * (RiderProfile.MaxPreferredIntensity - RiderProfile.MinPreferredIntensity));
+        var happiness = RideParameters.MinBoardingHappiness
+            + (_random.NextDouble() * (RideParameters.MaxBoardingHappiness - RideParameters.MinBoardingHappiness));
+        return new RiderProfile(preferredIntensity, happiness, RiderProfile.MinMood);
     }
 
     public TimeSpan NextRestraintCloseDelay()

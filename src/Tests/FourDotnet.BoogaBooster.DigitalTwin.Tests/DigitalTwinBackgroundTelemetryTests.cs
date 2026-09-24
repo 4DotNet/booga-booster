@@ -203,7 +203,13 @@ public sealed class DigitalTwinBackgroundTelemetryTests : IDisposable
     private static QueuedGroupDto GroupOf(int size)
         => new(
             Guid.NewGuid(),
-            [.. Enumerable.Range(1, size).Select(number => new PersonDto(number, $"Person {number}", 75))]);
+            [.. Enumerable.Range(1, size).Select(number => new PersonDto(
+                number,
+                $"Person {number}",
+                75,
+                RideParameters.DefaultPreferredIntensity,
+                RideParameters.DefaultHappiness,
+                Nausea: 0d))]);
 
     private sealed class StubQueue : IRideQueueService
     {
@@ -217,7 +223,7 @@ public sealed class DigitalTwinBackgroundTelemetryTests : IDisposable
             CancellationToken cancellationToken) => throw new NotSupportedException();
 
         public GetQueueStatusResponse GetStatus(Guid rideId)
-            => new(rideId, _groups.Count, _groups.Sum(group => group.Size), [.. _groups]);
+            => new(rideId, _groups.Count, _groups.Sum(group => group.Size), [.. _groups], AverageHappiness: null);
 
         public Task<QueuedGroupDto?> TakeGroupAsync(
             Guid rideId,

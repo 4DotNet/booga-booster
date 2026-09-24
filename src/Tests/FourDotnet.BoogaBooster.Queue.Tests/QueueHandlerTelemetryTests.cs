@@ -45,12 +45,13 @@ public sealed class QueueHandlerTelemetryTests : IDisposable
     public async Task GetQueueStatus_TagsTheRide_AndTheLineItRead()
     {
         var rideId = Guid.NewGuid();
-        var person = new PersonDto(1, "Person 1", 80);
+        var person = new PersonDto(1, "Person 1", 80, PreferredIntensity: 0.5, Happiness: 0.75, Nausea: 0);
         var snapshot = new GetQueueStatusResponse(
             rideId,
             GroupCount: 1,
             PeopleWaiting: 1,
-            Groups: [new QueuedGroupDto(Guid.NewGuid(), [person])]);
+            Groups: [new QueuedGroupDto(Guid.NewGuid(), [person])],
+            AverageHappiness: 0.75);
         var service = new Mock<IRideQueueService>();
         service.Setup(s => s.GetStatus(rideId)).Returns(snapshot);
 
@@ -65,6 +66,61 @@ public sealed class QueueHandlerTelemetryTests : IDisposable
         Assert.DoesNotContain(
             activity.Tags,
             tag => tag.Value is not null && tag.Value.Contains(person.Name, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task GetQueueStatus_TagsTheAverageHappiness_AndNeverAPerson()
+    {
+        // Two people whose own happiness values differ from the average, so a tag that
+        // leaked an individual's mood would be distinguishable from the aggregate.
+        var rideId = Guid.NewGuid();
+        var grumpy = new PersonDto(7, "Grumpy Guest", 80, PreferredIntensity: 0.3, Happiness: 0.6, Nausea: 0);
+        var cheerful = new PersonDto(8, "Cheerful Guest", 70, PreferredIntensity: 0.9, Happiness: 0.8, Nausea: 0);
+        var snapshot = new GetQueueStatusResponse(
+            rideId,
+            GroupCount: 1,
+            PeopleWaiting: 2,
+            Groups: [new QueuedGroupDto(Guid.NewGuid(), [grumpy, cheerful])],
+            AverageHappiness: 0.7);
+        var service = new Mock<IRideQueueService>();
+        service.Setup(s => s.GetStatus(rideId)).Returns(snapshot);
+
+        await new GetQueueStatusQueryHandler(service.Object).HandleAsync(
+            new GetQueueStatusQuery(rideId),
+            TestContext.Current.CancellationToken);
+
+        var activity = ActivityFor("GetQueueStatus", "queue.ride.id", rideId);
+        Assert.Equal(0.7, activity.GetTagItem("queue.happiness.average"));
+
+        foreach (var person in new[] { grumpy, cheerful })
+        {
+            Assert.DoesNotContain(activity.TagObjects, tag => Equals(tag.Value, person.Happiness));
+            Assert.DoesNotContain(activity.TagObjects, tag => Equals(tag.Value, person.Number));
+            Assert.DoesNotContain(
+                activity.Tags,
+                tag => tag.Value is not null && tag.Value.Contains(person.Name, StringComparison.Ordinal));
+        }
+    }
+
+    [Fact]
+    public async Task GetQueueStatus_ForAnEmptyLine_OmitsTheAverageHappinessTag()
+    {
+        var rideId = Guid.NewGuid();
+        var snapshot = new GetQueueStatusResponse(
+            rideId,
+            GroupCount: 0,
+            PeopleWaiting: 0,
+            Groups: [],
+            AverageHappiness: null);
+        var service = new Mock<IRideQueueService>();
+        service.Setup(s => s.GetStatus(rideId)).Returns(snapshot);
+
+        await new GetQueueStatusQueryHandler(service.Object).HandleAsync(
+            new GetQueueStatusQuery(rideId),
+            TestContext.Current.CancellationToken);
+
+        var activity = ActivityFor("GetQueueStatus", "queue.ride.id", rideId);
+        Assert.DoesNotContain(activity.TagObjects, tag => tag.Key == "queue.happiness.average");
     }
 
     [Fact]

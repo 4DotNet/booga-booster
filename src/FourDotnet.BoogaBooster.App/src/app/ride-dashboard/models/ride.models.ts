@@ -96,6 +96,17 @@ export interface Gondola {
   readonly angleDegrees: number;
 }
 
+/**
+ * Rider-mood roll-up over every seated passenger, computed server-side each
+ * tick. `averageHappiness`/`averageNausea` are `null` when `riderCount` is
+ * `0` (nobody aboard to average).
+ */
+export interface RiderMood {
+  readonly riderCount: number;
+  readonly averageHappiness: number | null;
+  readonly averageNausea: number | null;
+}
+
 /** A full snapshot of ride telemetry. */
 export interface RideTelemetry {
   readonly state: RideState;
@@ -119,6 +130,13 @@ export interface RideTelemetry {
    * it is absent (see `RideStateService.occupiedSeats`).
    */
   readonly boardedPassengerCount?: number;
+  /**
+   * Rider-mood roll-up over every seated passenger. Always present on the
+   * normalized model — {@link mapRideTelemetry} defaults it to zero
+   * riders/null averages when the wire frame doesn't carry the `riders`
+   * field (an older frame or fixture).
+   */
+  readonly riderMood: RiderMood;
 }
 
 /**
@@ -212,6 +230,17 @@ export interface RideTelemetryGondolaStreamDto {
 }
 
 /**
+ * Raw wire shape of the rider-mood roll-up within a `RideTelemetry` stream
+ * frame. `averageHappiness`/`averageNausea` are `null` when nobody is
+ * seated.
+ */
+export interface RiderMoodStreamDto {
+  readonly riderCount: number;
+  readonly averageHappiness: number | null;
+  readonly averageNausea: number | null;
+}
+
+/**
  * Full raw wire shape of one `RideTelemetry` snapshot, shared by
  * `GET /api/ride/telemetry` and each `GET /api/ride/telemetry/stream` frame.
  * `state`/`availableTransitions` may arrive as numeric enum indices or as
@@ -221,7 +250,8 @@ export interface RideTelemetryGondolaStreamDto {
  * number of occupied seats across all 16 gondolas, computed server-side.
  * `brakesEngaged` is optional so older frames/fixtures without the field
  * still type check; {@link mapRideTelemetry} defaults it to `false` (brake
- * released) when absent.
+ * released) when absent. `riders` is optional for the same reason;
+ * {@link mapRideTelemetry} defaults it to zero riders with null averages.
  */
 export interface RideTelemetryStreamDto {
   readonly state: number | string;
@@ -234,6 +264,7 @@ export interface RideTelemetryStreamDto {
   readonly gondolas: readonly RideTelemetryGondolaStreamDto[];
   readonly boardedPassengerCount: number;
   readonly brakesEngaged?: boolean;
+  readonly riders?: RiderMoodStreamDto;
 }
 
 /** The backend's `GondolaBrakeState` names in index order (`0=Engaged, 1=Released`). */
@@ -368,6 +399,9 @@ export function mapRideTelemetry(dto: RideTelemetryStreamDto): RideTelemetry {
     gondolaBrakeEngaged: dto.gondolas.every((gondola) => brakeEngaged(gondola.brake)),
     // Defaults to released for an older frame that doesn't carry the field.
     brakesEngaged: dto.brakesEngaged ?? false,
+    // Defaults to zero riders/null averages for an older frame that doesn't
+    // carry the field.
+    riderMood: dto.riders ?? { riderCount: 0, averageHappiness: null, averageNausea: null },
   };
 }
 

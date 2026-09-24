@@ -361,13 +361,33 @@ public sealed class GreatMill : DomainModel
         }
     }
 
-    /// <summary>Lets passengers leave every gondola across the ride.</summary>
-    public void Offload()
+    /// <summary>
+    /// Lets passengers leave every gondola across the ride, adding each one who left to
+    /// <paramref name="departed"/> so the caller can record their final mood.
+    /// </summary>
+    public void Offload(ICollection<Passenger> departed)
     {
+        ArgumentNullException.ThrowIfNull(departed);
+
         foreach (var hub in _hubs)
         {
-            hub.Offload();
+            hub.Offload(departed);
         }
+    }
+
+    /// <summary>
+    /// The rider-mood roll-up over every occupied seat on the ride (design D9): the
+    /// count, and the average happiness and nausea — both <c>null</c> when nobody is seated.
+    /// </summary>
+    public RiderMoodTelemetry RiderMood()
+    {
+        var sum = default(RiderMoodSum);
+        foreach (var hub in _hubs)
+        {
+            hub.AccumulateRiderMood(ref sum);
+        }
+
+        return sum.ToTelemetry();
     }
 
     /// <summary>Total rotational kinetic energy of the mill and all hubs (joules).</summary>

@@ -114,18 +114,18 @@ public class OversizedGroupSplittingTests
     [Fact]
     public void Enqueue_GroupLargerThanTheRideCapacity_IsRejected()
     {
-        var queue = new RideQueue(Guid.NewGuid(), maxPeople: 500, maxBoardableGroupSize: RideSeatCapacity);
+        var queue = new RideQueue(Guid.NewGuid(), maxPeople: 500, maxBoardableGroupSize: RideSeatCapacity, QueueTestData.DefaultPolicy);
 
-        Assert.Throws<DomainValidationException>(() => queue.Enqueue(QueueTestData.Group(33)));
+        Assert.Throws<DomainValidationException>(() => queue.Enqueue(QueueTestData.Group(33), QueueTestData.Now));
         Assert.Equal(0, queue.GroupCount);
     }
 
     [Fact]
     public void Enqueue_GroupExactlyAtTheRideCapacity_IsAccepted()
     {
-        var queue = new RideQueue(Guid.NewGuid(), maxPeople: 500, maxBoardableGroupSize: RideSeatCapacity);
+        var queue = new RideQueue(Guid.NewGuid(), maxPeople: 500, maxBoardableGroupSize: RideSeatCapacity, QueueTestData.DefaultPolicy);
 
-        queue.Enqueue(QueueTestData.Group(RideSeatCapacity));
+        queue.Enqueue(QueueTestData.Group(RideSeatCapacity), QueueTestData.Now);
 
         Assert.Equal(1, queue.GroupCount);
         Assert.Equal(RideSeatCapacity, queue.PeopleWaiting);
@@ -135,15 +135,15 @@ public class OversizedGroupSplittingTests
     public void RideQueue_WithNonPositiveBoardableGroupSize_Throws()
     {
         Assert.Throws<DomainValidationException>(
-            () => new RideQueue(Guid.NewGuid(), maxPeople: 10, maxBoardableGroupSize: 0));
+            () => new RideQueue(Guid.NewGuid(), maxPeople: 10, maxBoardableGroupSize: 0, QueueTestData.DefaultPolicy));
     }
 
     [Fact]
     public void EnqueueAll_AppendsEveryArrivalAdjacentlyInOrder()
     {
-        var queue = new RideQueue(Guid.NewGuid(), maxPeople: 500, maxBoardableGroupSize: RideSeatCapacity);
+        var queue = new RideQueue(Guid.NewGuid(), maxPeople: 500, maxBoardableGroupSize: RideSeatCapacity, QueueTestData.DefaultPolicy);
 
-        var groups = queue.EnqueueAll([QueueTestData.Group(20), QueueTestData.Group(20)]);
+        var groups = queue.EnqueueAll([QueueTestData.Group(20), QueueTestData.Group(20)], QueueTestData.Now);
 
         Assert.Equal(2, groups.Count);
         Assert.Equal(2, queue.GroupCount);
@@ -157,10 +157,10 @@ public class OversizedGroupSplittingTests
     [Fact]
     public void EnqueueAll_WhenTheBatchWouldOverrunTheQueue_AdmitsNobody()
     {
-        var queue = new RideQueue(Guid.NewGuid(), maxPeople: 10, maxBoardableGroupSize: RideSeatCapacity);
+        var queue = new RideQueue(Guid.NewGuid(), maxPeople: 10, maxBoardableGroupSize: RideSeatCapacity, QueueTestData.DefaultPolicy);
 
         Assert.Throws<DomainValidationException>(
-            () => queue.EnqueueAll([QueueTestData.Group(6), QueueTestData.Group(6)]));
+            () => queue.EnqueueAll([QueueTestData.Group(6), QueueTestData.Group(6)], QueueTestData.Now));
 
         // All-or-nothing: the first arrival must not have slipped in on its own.
         Assert.Equal(0, queue.GroupCount);
@@ -170,9 +170,9 @@ public class OversizedGroupSplittingTests
     [Fact]
     public void EnqueueAll_WithNoArrivals_Throws()
     {
-        var queue = new RideQueue(Guid.NewGuid(), maxPeople: 10, maxBoardableGroupSize: RideSeatCapacity);
+        var queue = new RideQueue(Guid.NewGuid(), maxPeople: 10, maxBoardableGroupSize: RideSeatCapacity, QueueTestData.DefaultPolicy);
 
-        Assert.Throws<DomainValidationException>(() => queue.EnqueueAll([]));
+        Assert.Throws<DomainValidationException>(() => queue.EnqueueAll([], QueueTestData.Now));
     }
 
     // --- RideQueueService ------------------------------------------------------------

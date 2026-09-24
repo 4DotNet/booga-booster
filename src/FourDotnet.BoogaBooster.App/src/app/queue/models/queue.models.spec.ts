@@ -1,14 +1,26 @@
 import { pluralize, summaryText, toQueueStatus } from './queue.models';
 
 describe('queue.models', () => {
-  it('maps a raw DTO onto the normalized queue status', () => {
+  it('maps a raw DTO onto the normalized queue status, including average happiness', () => {
     const queue = toQueueStatus({
       rideId: '11111111-1111-1111-1111-111111111111',
       groupCount: 12,
       peopleWaiting: 34,
+      averageHappiness: 0.72,
     });
 
-    expect(queue).toEqual({ groupCount: 12, peopleWaiting: 34 });
+    expect(queue).toEqual({ groupCount: 12, peopleWaiting: 34, averageHappiness: 0.72 });
+  });
+
+  it('maps a null average happiness (empty queue) through unchanged', () => {
+    const queue = toQueueStatus({
+      rideId: '11111111-1111-1111-1111-111111111111',
+      groupCount: 0,
+      peopleWaiting: 0,
+      averageHappiness: null,
+    });
+
+    expect(queue.averageHappiness).toBeNull();
   });
 
   describe('pluralize', () => {
@@ -30,10 +42,10 @@ describe('queue.models', () => {
     });
 
     it('summarizes groups and people, pluralized', () => {
-      expect(summaryText({ groupCount: 12, peopleWaiting: 34 })).toBe(
+      expect(summaryText({ groupCount: 12, peopleWaiting: 34, averageHappiness: 0.72 })).toBe(
         '12 groups queued, 34 people waiting.',
       );
-      expect(summaryText({ groupCount: 1, peopleWaiting: 1 })).toBe(
+      expect(summaryText({ groupCount: 1, peopleWaiting: 1, averageHappiness: 1 })).toBe(
         '1 group queued, 1 person waiting.',
       );
     });
