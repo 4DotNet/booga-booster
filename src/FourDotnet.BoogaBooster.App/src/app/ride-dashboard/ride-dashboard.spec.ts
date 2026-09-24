@@ -74,4 +74,20 @@ describe('RideDashboard', () => {
     expect(text).toContain('20');
     expect(text).toContain('Secured');
   });
+
+  it('renders the Rider mood panel as the last right-rail panel, after Gondolas', async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/', RideDashboard);
+    http
+      .expectOne(TELEMETRY_URL)
+      .flush({ state: 'Idle', availableTransitions: ['Loading'] } satisfies RideTelemetryDto);
+
+    const rightRail = harness.routeNativeElement?.querySelector('.rail-right');
+    const panelHeadings = Array.from(rightRail?.querySelectorAll('.panel h2') ?? []).map(
+      (heading) => heading.textContent?.trim(),
+    );
+
+    expect(panelHeadings.at(-2)).toBe('Gondolas');
+    expect(panelHeadings.at(-1)).toBe('Rider mood');
+  });
 });

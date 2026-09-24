@@ -175,6 +175,28 @@ export class SimulatedRideTelemetrySource implements RideTelemetrySource {
       gondolas,
       gondolaBrakeEngaged: this.commands.gondolaBrakeEngaged,
       brakesEngaged: this.commands.brakesEngaged,
+      riderMood: this.buildRiderMood(gondolas),
+    };
+  }
+
+  /**
+   * Plausible rider-mood roll-up: happiness/nausea track how fast the mill
+   * is spinning, null when nobody is seated. The simulator has no rider
+   * model of its own, so this is a rough stand-in for the backend roll-up.
+   */
+  private buildRiderMood(gondolas: readonly Gondola[]): RideTelemetry['riderMood'] {
+    const riderCount = gondolas.reduce(
+      (total, gondola) => total + gondola.seats.filter((seat) => seat.state !== 'empty').length,
+      0,
+    );
+    if (riderCount === 0) {
+      return { riderCount, averageHappiness: null, averageNausea: null };
+    }
+    const millFraction = Math.min(1, Math.abs(this.millSpeed) / MAX_MILL_RPM);
+    return {
+      riderCount,
+      averageHappiness: round(clamp01(0.75 - millFraction * 0.25), 2),
+      averageNausea: round(clamp01(millFraction * 0.4), 2),
     };
   }
 
@@ -229,6 +251,11 @@ export class SimulatedRideTelemetrySource implements RideTelemetrySource {
 function round(value: number, decimals: number): number {
   const factor = 10 ** decimals;
   return Math.round(value * factor) / factor;
+}
+
+/** Clamp a value into the inclusive `[0, 1]` range. */
+function clamp01(value: number): number {
+  return Math.min(1, Math.max(0, value));
 }
 
 /** A plausible, whole-kilogram passenger weight in [MIN_SEAT_KG, MAX_SEAT_KG]. */

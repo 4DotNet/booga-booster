@@ -86,6 +86,7 @@ export function atRestTelemetry(): RideTelemetry {
     gondolaBrakeEngaged: true,
     brakesEngaged: false,
     boardedPassengerCount: 0,
+    riderMood: { riderCount: 0, averageHappiness: null, averageNausea: null },
   };
 }
 

@@ -40,6 +40,37 @@ number buried in the physics.
 | Wind cutoff | `windMax` | 18 | m/s |
 | E-stop decel ramp | — | 8 | s |
 
+## Rider experience
+
+Tuning values, not derivations — chosen to give readable mood swings over a
+two-to-three-minute ride cycle (doc 6). Intensity is the felt horizontal G over `G_max`,
+so it shares the preference's `[0, 1]` scale.
+
+| Parameter | Code | Default | Unit |
+|-----------|------|--------:|------|
+| Preferred-intensity range | `RiderProfile.MinPreferredIntensity` … `MaxPreferredIntensity` | 0.1 … 1 | — |
+| Happiness / nausea range | `RiderProfile.MinMood` … `MaxMood` | 0 … 1 | — |
+| Intensity match tolerance | `IntensityMatchTolerance` | 0.1 | — |
+| Happiness gain when matched | `HappinessGainPerSecond` | 0.1 | 1/s |
+| Happiness loss when too intense | `HappinessLossPerSecond` | 0.1 | 1/s |
+| Nausea gain when too intense | `NauseaGainPerSecond` | 0.2 | 1/s |
+| Sustained-G latch time | `SustainedGLimitSeconds` | 2 | s |
+| Sustained-G nausea penalty | `SustainedGLimitNauseaPenalty` | 0.5 | — |
+| Default preferred intensity (no profile) | `DefaultPreferredIntensity` | 0.5 | — |
+| Default happiness (no profile) | `DefaultHappiness` | 0.75 | — |
+| Boarding happiness range (manual board, sampled) | `MinBoardingHappiness` … `MaxBoardingHappiness` | 0.65 … 0.85 | — |
+
+The Queue module's half of the model (doc 6 §6.5) is configured through
+`QueueModuleOptions` rather than `RideParameters`:
+
+| Parameter | Option | Default | Unit |
+|-----------|--------|--------:|------|
+| Grumpiness onset (no erosion before this wait) | `GrumpinessOnset` | 5 | min |
+| Grumpiness rate (happiness lost per minute past onset) | `GrumpinessRatePerMinute` | 0.01 | 1/min |
+| Arrival preferred-intensity range (`PersonGenerator`) | — | 0.1 … 1 | — |
+| Arrival happiness range (`PersonGenerator`) | — | 0.65 … 0.85 | — |
+| Arrival nausea | — | 0 | — |
+
 ## Loss-model coefficients
 
 Not fixed by the plan — picked to give the sanity-check behaviour below and locked in as the

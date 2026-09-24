@@ -209,6 +209,10 @@ public sealed class Ride : DomainModel
     /// restraint-close delay is drawn from <paramref name="restraintCloseDelay"/>.
     /// Boarding moves the ride into <see cref="RideState.Loading"/>.
     /// </summary>
+    /// <param name="members">
+    /// The passengers to seat, constructed by the caller with their weight and rider
+    /// profile so a member boards with exactly the mood the queue reported for them.
+    /// </param>
     /// <param name="selectGondolas">
     /// Chooses which of the empty gondolas the group takes: given the number of empty
     /// gondolas and the number required, it returns that many distinct indices into
@@ -221,7 +225,7 @@ public sealed class Ride : DomainModel
     /// have <c>ceil(N / 2)</c> empty gondolas to seat every member.
     /// </exception>
     public void BoardGroup(
-        IReadOnlyList<PassengerWeight> members,
+        IReadOnlyList<Passenger> members,
         Func<TimeSpan> restraintCloseDelay,
         Func<int, int, IReadOnlyList<int>>? selectGondolas = null)
     {
@@ -231,6 +235,14 @@ public sealed class Ride : DomainModel
         if (members.Count == 0)
         {
             throw new DomainValidationException("A boarding group must have at least one member.");
+        }
+
+        for (var i = 0; i < members.Count; i++)
+        {
+            if (members[i] is null)
+            {
+                throw new DomainValidationException("A boarding group cannot contain a missing member.");
+            }
         }
 
         if (_state is not (RideState.Idle or RideState.Loading))
@@ -254,10 +266,10 @@ public sealed class Ride : DomainModel
         foreach (var index in picks)
         {
             var gondola = empty[index];
-            gondola.Board(SeatPosition.Left, new Passenger(members[member++]), restraintCloseDelay());
+            gondola.Board(SeatPosition.Left, members[member++], restraintCloseDelay());
             if (member < members.Count)
             {
-                gondola.Board(SeatPosition.Right, new Passenger(members[member++]), restraintCloseDelay());
+                gondola.Board(SeatPosition.Right, members[member++], restraintCloseDelay());
             }
         }
 
@@ -349,14 +361,22 @@ public sealed class Ride : DomainModel
     /// <summary>
     /// Advances the whole simulation one fixed step: state-dependent natural passenger
     /// behaviour, the automatic (condition-driven) transitions, and — while in
-    /// motion — the physics.
+    /// motion — the physics (which is also when the riders' mood evolves; a
+    /// stationary ride leaves it untouched, docs/06 §6.2).
     /// </summary>
-    public void Advance(TimeSpan dt)
+    /// <returns>
+    /// The passengers who left the ride during this step, carrying their final
+    /// happiness and nausea — empty on every tick but the offloading one, without
+    /// allocating, so the 120 Hz caller pays nothing for it.
+    /// </returns>
+    public IReadOnlyList<Passenger> Advance(TimeSpan dt)
     {
         if (dt <= TimeSpan.Zero)
         {
             throw new DomainValidationException("The simulation step must be positive.");
         }
+
+        IReadOnlyList<Passenger> departed = [];
 
         // 1. Natural behaviour depends on the lifecycle state: while loading, seated
         //    passengers secure their restraints; while offloading, they leave.
@@ -367,7 +387,14 @@ public sealed class Ride : DomainModel
                 _mill.AdvanceNaturalBehavior(dt);
                 break;
             case RideState.Offloading:
-                _mill.Offload();
+                var aboard = _mill.BoardedPassengerCount;
+                if (aboard > 0)
+                {
+                    var leaving = new List<Passenger>(aboard);
+                    _mill.Offload(leaving);
+                    departed = leaving;
+                }
+
                 break;
         }
 
@@ -399,6 +426,7 @@ public sealed class Ride : DomainModel
 
         _simulationTimeSeconds += dt.TotalSeconds;
         MarkChanged();
+        return departed;
     }
 
     /// <summary>Builds an immutable snapshot of the whole ride.</summary>
@@ -427,6 +455,7 @@ public sealed class Ride : DomainModel
             reason,
             AvailableTransitions,
             _mill.BoardedPassengerCount,
+            _mill.RiderMood(),
             _mill.BrakesEngaged,
             _mill.ToTelemetry(),
             hubs,

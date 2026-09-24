@@ -18,6 +18,10 @@ namespace FourDotnet.BoogaBooster.DigitalTwin.Abstractions;
 /// How many passengers are currently seated on the ride — the number of occupied
 /// seats across all sixteen gondolas.
 /// </param>
+/// <param name="Riders">
+/// The rider-mood roll-up: the seated passengers' count and their average happiness
+/// and nausea (the averages absent when nobody is seated).
+/// </param>
 /// <param name="BrakesEngaged">
 /// <c>true</c> while the engine brake is engaged (drive power cut and a strong
 /// braking torque applied to the mill and hubs), whether commanded by the operator
@@ -33,6 +37,7 @@ public sealed record RideTelemetry(
     RideSafetyReason SafetyReason,
     IReadOnlyList<RideState> AvailableTransitions,
     int BoardedPassengerCount,
+    RiderMoodTelemetry Riders,
     bool BrakesEngaged,
     MillTelemetry Mill,
     IReadOnlyList<HubTelemetry> Hubs,

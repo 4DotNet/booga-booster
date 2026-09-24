@@ -20,6 +20,7 @@ describe('QueueStateService', () => {
     expect(service.isReady()).toBe(false);
     expect(service.groupCount()).toBe(0);
     expect(service.peopleWaiting()).toBe(0);
+    expect(service.averageHappiness()).toBeNull();
   });
 
   it('projects the group and people counts once ready', () => {
@@ -31,6 +32,15 @@ describe('QueueStateService', () => {
     expect(service.peopleWaiting()).toBe(34);
     expect(service.summary()).toContain('12 groups queued');
     expect(service.summary()).toContain('34 people waiting');
+  });
+
+  it('projects average happiness once ready, and null when the queue reports none', () => {
+    source.setStatus('ready');
+    source.setQueue(createQueueStatus({ averageHappiness: 0.72 }));
+    expect(service.averageHappiness()).toBe(0.72);
+
+    source.setQueue(createQueueStatus({ averageHappiness: null }));
+    expect(service.averageHappiness()).toBeNull();
   });
 
   it('pluralizes a single group and a single person correctly', () => {

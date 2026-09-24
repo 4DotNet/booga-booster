@@ -48,8 +48,8 @@ public interface IRideStore
 
     /// <summary>
     /// Boards a passenger into a seat. When <paramref name="weight"/> is
-    /// <c>null</c> a random weight is drawn; the natural restraint-close delay is
-    /// always drawn from the sampler.
+    /// <c>null</c> a random weight is drawn; the rider profile and the natural
+    /// restraint-close delay are always drawn from the sampler.
     /// </summary>
     RideTelemetry BoardPassenger(int hubIndex, int gondolaIndex, SeatPosition seat, PassengerWeight? weight);
 
@@ -57,9 +57,10 @@ public interface IRideStore
     /// Boards a whole group as a unit (idle/loading only), seating its members two
     /// per gondola with an odd member alone. The group boards only when the ride has
     /// <c>ceil(N / 2)</c> empty gondolas; otherwise the domain rejects it and nobody
-    /// is seated. Each member's natural restraint-close delay is drawn from the sampler.
+    /// is seated. The caller constructs each member with their weight and rider
+    /// profile; each member's natural restraint-close delay is drawn from the sampler.
     /// </summary>
-    RideTelemetry BoardGroup(IReadOnlyList<PassengerWeight> members);
+    RideTelemetry BoardGroup(IReadOnlyList<Passenger> members);
 
     /// <summary>Engages or releases a specific gondola's yaw brake.</summary>
     RideTelemetry SetGondolaBrake(int hubIndex, int gondolaIndex, GondolaBrakeState brake);

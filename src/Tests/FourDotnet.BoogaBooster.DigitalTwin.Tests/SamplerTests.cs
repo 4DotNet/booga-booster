@@ -31,12 +31,39 @@ public sealed class SamplerTests
     }
 
     [Fact]
+    public void Sampled_rider_profiles_stay_within_the_arrival_ranges_with_no_nausea()
+    {
+        var sampler = new RandomRideEventSampler(seed: 7);
+
+        for (var i = 0; i < 1000; i++)
+        {
+            var profile = sampler.NextRiderProfile();
+
+            Assert.InRange(profile.PreferredIntensity, RiderProfile.MinPreferredIntensity, RiderProfile.MaxPreferredIntensity);
+            Assert.InRange(profile.Happiness, RideParameters.MinBoardingHappiness, RideParameters.MaxBoardingHappiness);
+            Assert.Equal(0d, profile.Nausea);
+        }
+    }
+
+    [Fact]
+    public void Sampled_rider_profiles_spread_across_the_preference_range()
+    {
+        var sampler = new RandomRideEventSampler(seed: 7);
+        var profiles = Enumerable.Range(0, 1000).Select(_ => sampler.NextRiderProfile()).ToArray();
+
+        // A uniform draw over [0.1, 1] lands in both halves; a constant would not.
+        Assert.Contains(profiles, p => p.PreferredIntensity < 0.55);
+        Assert.Contains(profiles, p => p.PreferredIntensity > 0.55);
+    }
+
+    [Fact]
     public void The_same_seed_produces_the_same_sequence()
     {
         var a = new RandomRideEventSampler(seed: 42);
         var b = new RandomRideEventSampler(seed: 42);
 
         Assert.Equal(a.NextPassengerWeight().Kilograms, b.NextPassengerWeight().Kilograms);
+        Assert.Equal(a.NextRiderProfile(), b.NextRiderProfile());
         Assert.Equal(a.NextRestraintCloseDelay(), b.NextRestraintCloseDelay());
     }
 

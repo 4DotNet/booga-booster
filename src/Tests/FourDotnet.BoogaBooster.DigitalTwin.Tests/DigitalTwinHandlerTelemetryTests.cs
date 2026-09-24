@@ -2,6 +2,7 @@ using System.Diagnostics;
 using FourDotnet.BoogaBooster.Core.Observability;
 using FourDotnet.BoogaBooster.DigitalTwin.Abstractions;
 using FourDotnet.BoogaBooster.DigitalTwin.Application;
+using FourDotnet.BoogaBooster.DigitalTwin.Domain;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.BoardPassenger;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.BrakeEngines;
 using FourDotnet.BoogaBooster.DigitalTwin.Features.GetRideTelemetry;
@@ -41,6 +42,8 @@ public sealed class DigitalTwinHandlerTelemetryTests : IDisposable
     private const string BoardedTag = "ride.passengers.boarded";
     private const string MillRpmTag = "ride.mill.rpm";
     private const string WeightSuppliedTag = "ride.passenger.weight_supplied";
+    private const string RidersHappinessTag = "ride.riders.happiness.average";
+    private const string RidersNauseaTag = "ride.riders.nausea.average";
 
     private readonly TelemetryRecorder _telemetry = new();
 
@@ -354,6 +357,65 @@ public sealed class DigitalTwinHandlerTelemetryTests : IDisposable
             tag => Assert.False(
                 tag.Value is System.Collections.IEnumerable and not string,
                 $"{tag.Key} carries a collection; span attributes must be scalars."));
+    }
+
+    [Fact]
+    public async Task GetRideTelemetry_TagsTheAverageRiderMood_WhenPassengersAreAboard()
+    {
+        var store = NewStore();
+        store.BoardGroup(
+        [
+            new Passenger(new PassengerWeight(70d), new RiderProfile(0.5, 0.6, 0.2)),
+            new Passenger(new PassengerWeight(70d), new RiderProfile(0.5, 0.8, 0.4)),
+        ]);
+
+        using (_telemetry.Scope())
+        {
+            await new GetRideTelemetryQueryHandler(store).HandleAsync(new GetRideTelemetryQuery(), Ct);
+        }
+
+        var activity = _telemetry.Activity("GetRideTelemetry");
+        var happiness = Assert.IsType<double>(activity.GetTagItem(RidersHappinessTag));
+        var nausea = Assert.IsType<double>(activity.GetTagItem(RidersNauseaTag));
+        Assert.Equal(0.7, happiness, 9);
+        Assert.Equal(0.3, nausea, 9);
+    }
+
+    [Fact]
+    public async Task GetRideTelemetry_OmitsTheMoodAttributes_WhenNobodyIsAboard()
+    {
+        var store = NewStore();
+
+        using (_telemetry.Scope())
+        {
+            await new GetRideTelemetryQueryHandler(store).HandleAsync(new GetRideTelemetryQuery(), Ct);
+        }
+
+        var activity = _telemetry.Activity("GetRideTelemetry");
+        Assert.Null(activity.GetTagItem(RidersHappinessTag));
+        Assert.Null(activity.GetTagItem(RidersNauseaTag));
+    }
+
+    [Fact]
+    public async Task GetRideTelemetry_PutsNoIndividualRiderOnTheSpan()
+    {
+        var store = NewStore();
+        store.BoardGroup(
+        [
+            new Passenger(new PassengerWeight(70d), new RiderProfile(0.5, 0.61, 0.11)),
+            new Passenger(new PassengerWeight(70d), new RiderProfile(0.5, 0.89, 0.39)),
+        ]);
+
+        using (_telemetry.Scope())
+        {
+            await new GetRideTelemetryQueryHandler(store).HandleAsync(new GetRideTelemetryQuery(), Ct);
+        }
+
+        // Only the aggregates: no tag carries either rider's own happiness or nausea,
+        // and nothing under "seat", "gondola" or "name" points at one person.
+        var activity = _telemetry.Activity("GetRideTelemetry");
+        Assert.DoesNotContain(activity.TagObjects, tag => tag.Value is double v && (v == 0.61 || v == 0.89 || v == 0.11 || v == 0.39));
+        Assert.All(activity.TagObjects, tag => Assert.DoesNotContain("name", tag.Key, StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

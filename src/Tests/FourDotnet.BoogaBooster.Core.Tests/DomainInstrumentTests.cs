@@ -48,6 +48,8 @@ public sealed class DomainInstrumentTests : IDisposable
         ("boogabooster.ride.simulation.tick.duration", "ms", nameof(BoogaBoosterTelemetry.SimulationTickDuration)),
         ("boogabooster.ride.passengers.boarded", "{passenger}", nameof(BoogaBoosterTelemetry.PassengersBoarded)),
         ("boogabooster.ride.state.transitions", "{transition}", nameof(BoogaBoosterTelemetry.RideStateTransitions)),
+        ("boogabooster.ride.rider.happiness.final", "1", nameof(BoogaBoosterTelemetry.RiderFinalHappiness)),
+        ("boogabooster.ride.rider.nausea.final", "1", nameof(BoogaBoosterTelemetry.RiderFinalNausea)),
         ("boogabooster.queue.groups.queued", "{group}", nameof(BoogaBoosterTelemetry.QueueGroupsQueued)),
         ("boogabooster.queue.people.queued", "{person}", nameof(BoogaBoosterTelemetry.QueuePeopleQueued)),
         ("boogabooster.weather.disturbances", "{disturbance}", nameof(BoogaBoosterTelemetry.WeatherDisturbances)),
@@ -119,6 +121,16 @@ public sealed class DomainInstrumentTests : IDisposable
         BoogaBoosterTelemetry.SimulationTickDuration.Record(8.25);
 
         Assert.Contains(("boogabooster.ride.simulation.tick.duration", 8.25), Recorded());
+    }
+
+    [Fact]
+    public void TheRiderMoodHistograms_ReachAListenerOnTheSharedMeter()
+    {
+        BoogaBoosterTelemetry.RiderFinalHappiness.Record(0.7125);
+        BoogaBoosterTelemetry.RiderFinalNausea.Record(0.0625);
+
+        Assert.Contains(("boogabooster.ride.rider.happiness.final", 0.7125), Recorded());
+        Assert.Contains(("boogabooster.ride.rider.nausea.final", 0.0625), Recorded());
     }
 
     [Fact]

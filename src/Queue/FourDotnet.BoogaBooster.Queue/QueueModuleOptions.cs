@@ -67,6 +67,21 @@ public sealed class QueueModuleOptions
     public int MaxBoardableGroupSize { get; set; } = 32;
 
     /// <summary>
+    /// How long a group may wait before its members start losing happiness. Up to
+    /// and including this wait a person's reported happiness equals the value they
+    /// arrived with. Defaults to five minutes.
+    /// </summary>
+    public TimeSpan GrumpinessOnset { get; set; } = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// Happiness lost per minute waited beyond <see cref="GrumpinessOnset"/>, on the
+    /// <c>[0, 1]</c> happiness scale, floored at <c>0</c>. Defaults to <c>0.01</c>,
+    /// so a forty-five-minute wait costs <c>0.4</c>. The stored arrival happiness is
+    /// never rewritten; the erosion is computed from the wait whenever the line is read.
+    /// </summary>
+    public double GrumpinessRatePerMinute { get; set; } = 0.01;
+
+    /// <summary>
     /// Optional fixed seed for the arrival randomness. Set for deterministic
     /// behaviour (tests); leave null to use a time-varying source in production.
     /// </summary>

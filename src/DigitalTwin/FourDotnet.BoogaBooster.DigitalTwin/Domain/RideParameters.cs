@@ -114,6 +114,50 @@ public static class RideParameters
     /// <summary>Latest a seated passenger pulls their restraint down.</summary>
     public static readonly TimeSpan MaxRestraintCloseDelay = TimeSpan.FromSeconds(10);
 
+    // --- Rider experience (docs/06-rider-experience.md) ---
+    // A gondola's intensity is its felt horizontal G over MaxGForce (docs/06 §6.1), so
+    // it shares the rider preference's [0, 1] scale by construction. Everything below
+    // is a tuning value: retune here, and nowhere else.
+
+    /// <summary>
+    /// How far a gondola's intensity may sit from a rider's preferred intensity and
+    /// still count as a match (docs/06 §6.2). Symmetric: <c>|intensity − preferred| ≤ tol</c>.
+    /// </summary>
+    public const double IntensityMatchTolerance = 0.1d;
+
+    /// <summary>Happiness a matched rider gains per second of simulated time (docs/06 §6.2).</summary>
+    public const double HappinessGainPerSecond = 0.1d;
+
+    /// <summary>Happiness a rider on a too-intense ride loses per second (docs/06 §6.2).</summary>
+    public const double HappinessLossPerSecond = 0.1d;
+
+    /// <summary>Nausea a rider on a too-intense ride gains per second (docs/06 §6.2).</summary>
+    public const double NauseaGainPerSecond = 0.2d;
+
+    /// <summary>
+    /// How long a gondola must sit continuously at <see cref="MaxGForce"/> before the
+    /// one-off sustained-G nausea penalty fires (docs/06 §6.3).
+    /// </summary>
+    public const double SustainedGLimitSeconds = 2d;
+
+    /// <summary>
+    /// The nausea added, once per episode at the limit, to every rider in a gondola that
+    /// has been at <see cref="MaxGForce"/> for <see cref="SustainedGLimitSeconds"/> (docs/06 §6.3).
+    /// </summary>
+    public const double SustainedGLimitNauseaPenalty = 0.5d;
+
+    /// <summary>The preferred intensity of a rider created without a profile — the middle of the scale (docs/06 §6.4).</summary>
+    public const double DefaultPreferredIntensity = 0.5d;
+
+    /// <summary>The happiness of a rider created without a profile — the centre of the arrival range (docs/06 §6.4).</summary>
+    public const double DefaultHappiness = 0.75d;
+
+    /// <summary>Lowest happiness a rider boarded through the manual command arrives with (docs/06 §6.4).</summary>
+    public const double MinBoardingHappiness = 0.65d;
+
+    /// <summary>Highest happiness a rider boarded through the manual command arrives with (docs/06 §6.4).</summary>
+    public const double MaxBoardingHappiness = 0.85d;
+
     // --- Ride layout ---
     public const int HubCount = 4;
     public const int GondolasPerHub = 4;
