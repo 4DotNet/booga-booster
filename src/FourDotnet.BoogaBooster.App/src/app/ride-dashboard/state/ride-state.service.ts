@@ -7,7 +7,6 @@ import {
   LoadBalanceState,
   Mill,
   MotorDirection,
-  RiderMood,
   RideState,
   SecurityState,
   clampPower,
@@ -98,9 +97,6 @@ export class RideStateService {
    * brake torque is applied, bringing the ride to a fast, complete stop.
    */
   readonly brakesEngaged: Signal<boolean> = computed(() => this.telemetry().brakesEngaged);
-
-  /** Rider-mood roll-up (count, average happiness, average nausea) over every seated passenger. */
-  readonly riderMood: Signal<RiderMood> = computed(() => this.telemetry().riderMood);
 
   /** Set the central mill power; value is clamped to 0–100 before dispatch. */
   setMillPower(value: number): void {

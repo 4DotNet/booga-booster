@@ -27,9 +27,6 @@ public sealed class Seat : DomainModel
     /// <summary><c>true</c> when a passenger is boarded.</summary>
     public bool IsOccupied => _occupant is not null;
 
-    /// <summary>The seated passenger, or <c>null</c> when the seat is empty.</summary>
-    public Passenger? Occupant => _occupant;
-
     /// <summary>Weight measured by the load cell (0 when empty).</summary>
     public double OccupiedKg => _occupant?.Weight.Kilograms ?? 0d;
 
@@ -70,17 +67,12 @@ public sealed class Seat : DomainModel
         MarkChanged();
     }
 
-    /// <summary>
-    /// Removes the passenger and resets the restraint. Requires the bar to be open.
-    /// Returns the passenger who left — carrying their final happiness and nausea —
-    /// or <c>null</c> when the seat was already empty.
-    /// </summary>
-    public Passenger? Unboard()
+    /// <summary>Removes the passenger and resets the restraint. Requires the bar to be open.</summary>
+    public void Unboard()
     {
-        var leaving = _occupant;
-        if (leaving is null)
+        if (!IsOccupied)
         {
-            return null;
+            return;
         }
 
         if (_restraint != RestraintState.Open)
@@ -92,7 +84,6 @@ public sealed class Seat : DomainModel
         _occupant = null;
         _restraintCloseCountdown = TimeSpan.Zero;
         MarkChanged();
-        return leaving;
     }
 
     /// <summary>Pulls the restraint bar down (Open → Closed). Requires an occupant.</summary>

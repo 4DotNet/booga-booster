@@ -92,7 +92,6 @@ export function createTelemetry(overrides: Partial<RideTelemetry> = {}): RideTel
     gondolas: createGondolas(),
     gondolaBrakeEngaged: false,
     brakesEngaged: false,
-    riderMood: { riderCount: 0, averageHappiness: null, averageNausea: null },
     ...overrides,
   };
 }

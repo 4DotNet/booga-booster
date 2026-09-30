@@ -73,11 +73,10 @@ public sealed class RideStateMachineTests
         Assert.Equal(RideState.Safe, ride.CurrentState);
 
         // Empty an entire hub so the load becomes badly unbalanced.
-        var departed = new List<Passenger>();
         foreach (var gondola in ride.Mill.GetHub(0).Gondolas)
         {
             gondola.ReleaseRestraints();
-            gondola.Offload(departed);
+            gondola.Offload();
         }
 
         ride.Advance(TestHelpers.Dt);

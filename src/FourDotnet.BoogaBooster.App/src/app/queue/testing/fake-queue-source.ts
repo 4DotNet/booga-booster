@@ -35,7 +35,6 @@ export function createQueueStatus(overrides: Partial<QueueStatus> = {}): QueueSt
   return {
     groupCount: 12,
     peopleWaiting: 34,
-    averageHappiness: 0.72,
     ...overrides,
   };
 }
