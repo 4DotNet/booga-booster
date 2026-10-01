@@ -54,13 +54,48 @@ export const MAX_POWER = 100;
  */
 export const MAX_SAFE_ECCENTRICITY = 0.35;
 
+/** The mood of the guest seated in a seat (the seat is empty when there is none). */
+export interface SeatRider {
+  /** Identifier shared with the same guest while they queued; `null` for a hand-boarded rider. */
+  readonly guestNumber: number | null;
+  /** Happiness, 0–100. */
+  readonly happiness: number;
+  /** The felt G the rider enjoys most, in g. */
+  readonly preferredG: number;
+  /** Nausea, 0–100. */
+  readonly nausea: number;
+}
+
 /** A single passenger seat. */
 export interface Seat {
   readonly id: number;
   readonly state: SeatState;
   /** Weight measured by the seat's load cell, in kg (0 when empty). */
   readonly occupiedKg: number;
+  /** The seated guest's mood; `null`/absent when the seat is empty. */
+  readonly rider?: SeatRider | null;
 }
+
+/** A rider who just left the ride, as captured at the last offload. */
+export interface OffloadedRider {
+  /** `null` for a rider boarded by hand rather than from the queue. */
+  readonly guestNumber: number | null;
+  readonly happiness: number;
+  readonly nausea: number;
+}
+
+/**
+ * Snapshot of the most recent offload. `counter` increases by one per
+ * offload (0 before the first), so consumers react to a change in `counter`
+ * rather than to an event.
+ */
+export interface LastOffload {
+  readonly counter: number;
+  readonly riders: readonly OffloadedRider[];
+}
+
+/** The offload snapshot before any offload has happened. */
+export const NO_OFFLOAD: LastOffload = { counter: 0, riders: [] };
 
 /**
  * G-forces experienced by a gondola, in g. Both values are signed: a positive
@@ -94,6 +129,8 @@ export interface Gondola {
   readonly gForce: GForce;
   /** Current angular position of the gondola around its hub, in degrees. */
   readonly angleDegrees: number;
+  /** Total G felt by the riders, gravity included (≥ 1 g); absent on older frames. */
+  readonly feltG?: number;
 }
 
 /** A full snapshot of ride telemetry. */
@@ -119,6 +156,8 @@ export interface RideTelemetry {
    * it is absent (see `RideStateService.occupiedSeats`).
    */
   readonly boardedPassengerCount?: number;
+  /** The last offload's riders and counter; absent on older frames. */
+  readonly lastOffload?: LastOffload;
 }
 
 /**
@@ -191,6 +230,11 @@ export interface RideTelemetrySeatStreamDto {
   readonly restraint: number | string;
   readonly isOccupied: boolean;
   readonly isSecured: boolean;
+  /** Mood fields; `null` when the seat is empty, absent from older backends. */
+  readonly guestNumber?: number | null;
+  readonly happiness?: number | null;
+  readonly preferredG?: number | null;
+  readonly nausea?: number | null;
 }
 
 /**
@@ -206,6 +250,7 @@ export interface RideTelemetryGondolaStreamDto {
   readonly rpm: number;
   readonly lateralG: number;
   readonly forwardG: number;
+  readonly feltG?: number;
   readonly loadKg: number;
   readonly isSafeToDispatch: boolean;
   readonly seats: readonly RideTelemetrySeatStreamDto[];
@@ -234,6 +279,14 @@ export interface RideTelemetryStreamDto {
   readonly gondolas: readonly RideTelemetryGondolaStreamDto[];
   readonly boardedPassengerCount: number;
   readonly brakesEngaged?: boolean;
+  readonly lastOffload?: {
+    readonly counter?: number;
+    readonly riders?: readonly {
+      readonly guestNumber: number | null;
+      readonly happiness?: number;
+      readonly nausea?: number;
+    }[];
+  };
 }
 
 /** The backend's `GondolaBrakeState` names in index order (`0=Engaged, 1=Released`). */
@@ -301,6 +354,38 @@ function seatState(
 }
 
 /**
+ * Maps the seat's optional mood fields onto a {@link SeatRider}; `null` when
+ * the seat is empty. A hand-boarded rider has mood but no guest number.
+ */
+function seatRider(seat: RideTelemetrySeatStreamDto): SeatRider | null {
+  const anyMood = [seat.guestNumber, seat.happiness, seat.preferredG, seat.nausea];
+  if (anyMood.every((value) => value == null)) {
+    return null;
+  }
+  return {
+    guestNumber: seat.guestNumber ?? null,
+    happiness: seat.happiness ?? 0,
+    preferredG: seat.preferredG ?? 0,
+    nausea: seat.nausea ?? 0,
+  };
+}
+
+/** Maps the optional wire `lastOffload` onto {@link LastOffload}, defaulting to none. */
+function mapLastOffload(dto: RideTelemetryStreamDto['lastOffload']): LastOffload {
+  if (!dto) {
+    return NO_OFFLOAD;
+  }
+  return {
+    counter: dto.counter ?? 0,
+    riders: (dto.riders ?? []).map((rider) => ({
+      guestNumber: rider.guestNumber ?? null,
+      happiness: rider.happiness ?? 0,
+      nausea: rider.nausea ?? 0,
+    })),
+  };
+}
+
+/**
  * Lossy conversion: the backend reports absolute motor power in watts, but
  * the UI models power as a percent of a fixed maximum. Rounds to the nearest
  * whole percent and clamps into `[0, 100]`.
@@ -330,10 +415,12 @@ export function mapRideTelemetry(dto: RideTelemetryStreamDto): RideTelemetry {
     // The backend's `forwardG`/`lateralG` map onto the frontend's
     // `vertical`/`lateral` g-force axes respectively.
     gForce: { vertical: round(gondola.forwardG, 1), lateral: round(gondola.lateralG, 1) },
+    feltG: gondola.feltG ?? 1,
     seats: gondola.seats.map((seat) => ({
       id: seatPositionIndex(seat.position) + 1,
       occupiedKg: round(seat.occupiedKg),
       state: seatState(seat.occupiedKg, seat.restraint, seat.isOccupied, seat.isSecured),
+      rider: seatRider(seat),
     })),
   }));
 
@@ -363,6 +450,7 @@ export function mapRideTelemetry(dto: RideTelemetryStreamDto): RideTelemetry {
     })),
     gondolas,
     boardedPassengerCount,
+    lastOffload: mapLastOffload(dto.lastOffload),
     // The backend engages/releases all gondola brakes together; the frontend
     // models one flag, so it is true only when every gondola reports engaged.
     gondolaBrakeEngaged: dto.gondolas.every((gondola) => brakeEngaged(gondola.brake)),

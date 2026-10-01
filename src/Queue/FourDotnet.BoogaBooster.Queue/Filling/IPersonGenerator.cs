@@ -4,7 +4,7 @@ namespace FourDotnet.BoogaBooster.Queue.Filling;
 
 /// <summary>
 /// Produces the actual people who arrive at a ride: each with a process-unique
-/// number, a generated name and a realistically distributed weight.
+/// number, a generated name, a realistically distributed weight and an initial mood.
 /// </summary>
 public interface IPersonGenerator
 {

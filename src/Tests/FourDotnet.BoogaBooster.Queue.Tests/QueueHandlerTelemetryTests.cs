@@ -45,7 +45,7 @@ public sealed class QueueHandlerTelemetryTests : IDisposable
     public async Task GetQueueStatus_TagsTheRide_AndTheLineItRead()
     {
         var rideId = Guid.NewGuid();
-        var person = new PersonDto(1, "Person 1", 80);
+        var person = new PersonDto(1, "Person 1", 80, 75, 3, 0);
         var snapshot = new GetQueueStatusResponse(
             rideId,
             GroupCount: 1,

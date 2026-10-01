@@ -9,6 +9,19 @@ internal static class TestHelpers
 {
     public static readonly TimeSpan Dt = RideParameters.TimeStep;
 
+    /// <summary>An anonymous boarding seed of the given weight with the default mood.</summary>
+    public static PassengerSeed Seed(double kilograms = RideParameters.DefaultPassengerKg) =>
+        PassengerSeed.Anonymous(new PassengerWeight(kilograms));
+
+    /// <summary>A boarding seed for a queued guest with the given identity and mood.</summary>
+    public static PassengerSeed Guest(
+        long guestNumber,
+        double happiness = 75d,
+        double preferredG = 3d,
+        double nausea = 0d,
+        double kilograms = RideParameters.DefaultPassengerKg) =>
+        new(guestNumber, new PassengerWeight(kilograms), happiness, preferredG, nausea);
+
     /// <summary>Boards both seats of every gondola on a hub with equal-weight passengers.</summary>
     public static void FillHub(Hub hub, double kilograms)
     {

@@ -84,22 +84,24 @@ public sealed class RideQueue : DomainModel
 
     /// <summary>
     /// Appends <paramref name="arrival"/> as a single contiguous group at the back
-    /// of the queue and marks the aggregate <see cref="DomainModelState.Modified"/>.
+    /// of the queue, stamped as joining at <paramref name="enqueuedAt"/>, and marks
+    /// the aggregate <see cref="DomainModelState.Modified"/>.
     /// </summary>
     /// <exception cref="DomainValidationException">
     /// Adding the group would exceed <see cref="MaxPeople"/>, or the group is larger
     /// than <see cref="MaxBoardableGroupSize"/> and so could never board.
     /// </exception>
-    public QueuedGroup Enqueue(GroupArrival arrival)
+    public QueuedGroup Enqueue(GroupArrival arrival, DateTimeOffset enqueuedAt)
     {
         ArgumentNullException.ThrowIfNull(arrival);
 
-        return EnqueueAll([arrival])[0];
+        return EnqueueAll([arrival], enqueuedAt)[0];
     }
 
     /// <summary>
     /// Appends every arrival in <paramref name="arrivals"/> as adjacent contiguous
-    /// groups, in order, and marks the aggregate
+    /// groups, in order, all stamped as joining at <paramref name="enqueuedAt"/>, and
+    /// marks the aggregate
     /// <see cref="DomainModelState.Modified"/>. The whole batch is applied under a
     /// single lock and is all-or-nothing: if the arrivals together would overrun
     /// <see cref="MaxPeople"/>, none of them are enqueued. This is what keeps a
@@ -110,7 +112,7 @@ public sealed class RideQueue : DomainModel
     /// The arrivals together would exceed <see cref="MaxPeople"/>, or one of them is
     /// larger than <see cref="MaxBoardableGroupSize"/> and so could never board.
     /// </exception>
-    public IReadOnlyList<QueuedGroup> EnqueueAll(IReadOnlyList<GroupArrival> arrivals)
+    public IReadOnlyList<QueuedGroup> EnqueueAll(IReadOnlyList<GroupArrival> arrivals, DateTimeOffset enqueuedAt)
     {
         ArgumentNullException.ThrowIfNull(arrivals);
 
@@ -150,7 +152,7 @@ public sealed class RideQueue : DomainModel
             var groups = new List<QueuedGroup>(arrivals.Count);
             foreach (var arrival in arrivals)
             {
-                var group = new QueuedGroup(arrival);
+                var group = new QueuedGroup(arrival, enqueuedAt);
                 _groups.AddLast(group);
                 groups.Add(group);
             }

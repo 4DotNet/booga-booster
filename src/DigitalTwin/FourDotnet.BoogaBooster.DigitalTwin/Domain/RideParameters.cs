@@ -114,6 +114,49 @@ public static class RideParameters
     /// <summary>Latest a seated passenger pulls their restraint down.</summary>
     public static readonly TimeSpan MaxRestraintCloseDelay = TimeSpan.FromSeconds(10);
 
+    // --- Rider mood (docs/06-rider-mood.md) ---
+    /// <summary>The lowest a mood value (happiness or nausea) may be.</summary>
+    public const double MinMood = 0d;
+
+    /// <summary>The highest a mood value (happiness or nausea) may be.</summary>
+    public const double MaxMood = 100d;
+
+    /// <summary>The lowest preferred G a rider may have: half the safe limit (g).</summary>
+    public const double MinPreferredG = MaxGForce / 2d;
+
+    /// <summary>The highest preferred G a rider may have: the safe limit itself (g).</summary>
+    public const double MaxPreferredG = MaxGForce;
+
+    /// <summary>
+    /// Happiness of a rider boarded without a queue identity (a manual boarding):
+    /// the middle of the queue's starting range of 65–85.
+    /// </summary>
+    public const double DefaultPassengerHappiness = 75d;
+
+    /// <summary>Preferred G of a rider boarded without a queue identity: the middle of the preferred-G range (g).</summary>
+    public const double DefaultPassengerPreferredG = (MinPreferredG + MaxPreferredG) / 2d;
+
+    /// <summary>Happiness gained per second by a rider whose felt G exactly matches their preference.</summary>
+    public const double HappinessGainPerSecond = 2d;
+
+    /// <summary>How far (g) felt G may be from the preference and still be fun; the gain falls linearly to 0 at this distance.</summary>
+    public const double FunBand = 1d;
+
+    /// <summary>How far above their preference, as a fraction of <see cref="MaxGForce"/>, felt G must be before a rider gets nauseous.</summary>
+    public const double NauseaToleranceFraction = 0.3d;
+
+    /// <summary>Exponential growth rate of nausea while overshooting (1/s).</summary>
+    public const double NauseaGrowthRate = 0.1d;
+
+    /// <summary>Offset that lets nausea grow from 0: growth is <c>rate × (nausea + seed)</c> per second.</summary>
+    public const double NauseaSeed = 5d;
+
+    /// <summary>How long (s) a gondola must stay at or above <see cref="MaxGForce"/> before its riders take the penalty.</summary>
+    public const double MaxGPenaltySeconds = 1d;
+
+    /// <summary>Nausea added once per continuous stretch at or above <see cref="MaxGForce"/> longer than <see cref="MaxGPenaltySeconds"/>.</summary>
+    public const double MaxGNauseaPenalty = 25d;
+
     // --- Ride layout ---
     public const int HubCount = 4;
     public const int GondolasPerHub = 4;

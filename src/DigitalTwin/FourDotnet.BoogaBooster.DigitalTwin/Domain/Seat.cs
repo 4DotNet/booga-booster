@@ -27,6 +27,9 @@ public sealed class Seat : DomainModel
     /// <summary><c>true</c> when a passenger is boarded.</summary>
     public bool IsOccupied => _occupant is not null;
 
+    /// <summary>The seated passenger, or <c>null</c> when the seat is empty.</summary>
+    public Passenger? Occupant => _occupant;
+
     /// <summary>Weight measured by the load cell (0 when empty).</summary>
     public double OccupiedKg => _occupant?.Weight.Kilograms ?? 0d;
 
@@ -153,6 +156,15 @@ public sealed class Seat : DomainModel
         SecureRestraint();
     }
 
-    /// <summary>Projects the seat's sensors onto the telemetry DTO.</summary>
-    public SeatTelemetry ToTelemetry() => new(Position, OccupiedKg, _restraint, IsOccupied, IsSecured);
+    /// <summary>Projects the seat's sensors and its rider's identity and mood onto the telemetry DTO.</summary>
+    public SeatTelemetry ToTelemetry() => new(
+        Position,
+        OccupiedKg,
+        _restraint,
+        IsOccupied,
+        IsSecured,
+        _occupant?.GuestNumber,
+        _occupant?.Happiness,
+        _occupant?.PreferredG,
+        _occupant?.Nausea);
 }

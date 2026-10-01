@@ -40,6 +40,29 @@ number buried in the physics.
 | Wind cutoff | `windMax` | 18 | m/s |
 | E-stop decel ramp | — | 8 | s |
 
+## Rider mood
+
+Derivations in [06-rider-mood.md](06-rider-mood.md). Queue values live in the Queue
+module (`Person`, `PersonGenerator`, `QueueWaitDecay`); ride values in `RideParameters`.
+
+| Parameter | Symbol | Default | Unit |
+|-----------|--------|--------:|------|
+| Mood range (happiness, nausea) | — | 0 – 100 | pts |
+| Starting happiness | `H₀` | uniform 65 – 85 | pts |
+| Preferred G | `P` | uniform `G_max/2` – `G_max` = 2.25 – 4.5 | g |
+| Starting nausea | `N₀` | 0 | pts |
+| Manual-boarding default happiness / preferred G | — | 75 / 3.375 | pts / g |
+| Queue grace period | — | 5 | min |
+| Queue decay scale | — | 5 | pts |
+| Queue decay time constant | — | 5 | min |
+| Happiness gain at a perfect match | `k_H` | 2 | pts/s |
+| Fun band | `B` | 1.0 | g |
+| Nausea tolerance | `f` | 0.3 × `G_max` = 1.35 | g |
+| Nausea growth rate | `r` | 0.1 | 1/s |
+| Nausea seed | `s` | 5 | pts |
+| Max-G penalty stretch | — | > 1 | s |
+| Max-G nausea penalty | — | +25 | pts |
+
 ## Loss-model coefficients
 
 Not fixed by the plan — picked to give the sanity-check behaviour below and locked in as the

@@ -65,7 +65,7 @@ internal sealed class RideQueueService : IRideQueueService
         // Admit the whole party in one step so a split arrival is never half-admitted
         // when the line is nearly full.
         var arrivals = sizes.Select(_personGenerator.CreateGroup).ToArray();
-        var groups = queue.EnqueueAll(arrivals);
+        var groups = queue.EnqueueAll(arrivals, _timeProvider.GetUtcNow());
 
         var enqueued = new List<QueuedGroupDto>(groups.Count);
 
@@ -141,10 +141,22 @@ internal sealed class RideQueueService : IRideQueueService
         return Task.FromResult<QueuedGroupDto?>(ToDto(removed));
     }
 
-    private static QueuedGroupDto ToDto(QueuedGroup group)
+    /// <summary>
+    /// Projects a group onto its DTO, reporting each member's happiness with the
+    /// queue-wait decay applied as of now — so a boarding group carries the
+    /// happiness its members had at the moment they left the line.
+    /// </summary>
+    private QueuedGroupDto ToDto(QueuedGroup group)
     {
+        var waited = _timeProvider.GetUtcNow() - group.EnqueuedAt;
         var people = group.Members
-            .Select(p => new PersonDto(p.Number, p.Name, p.WeightInKilograms))
+            .Select(p => new PersonDto(
+                p.Number,
+                p.Name,
+                p.WeightInKilograms,
+                QueueWaitDecay.Apply(p.Happiness, waited),
+                p.PreferredG,
+                p.Nausea))
             .ToArray();
 
         return new QueuedGroupDto(group.GroupId, people);

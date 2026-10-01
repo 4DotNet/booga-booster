@@ -10,15 +10,19 @@ public sealed class QueuedGroup
 {
     private readonly List<Person> _members;
 
-    internal QueuedGroup(GroupArrival arrival)
+    internal QueuedGroup(GroupArrival arrival, DateTimeOffset enqueuedAt)
     {
         ArgumentNullException.ThrowIfNull(arrival);
 
         GroupId = arrival.GroupId;
+        EnqueuedAt = enqueuedAt;
         _members = [.. arrival.Members];
     }
 
     public Guid GroupId { get; private set; }
+
+    /// <summary>When the group joined the line — the start of every member's wait.</summary>
+    public DateTimeOffset EnqueuedAt { get; private set; }
 
     public IReadOnlyList<Person> Members => _members;
 

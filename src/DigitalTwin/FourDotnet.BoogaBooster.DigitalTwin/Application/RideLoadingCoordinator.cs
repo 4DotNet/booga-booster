@@ -96,8 +96,15 @@ public sealed class RideLoadingCoordinator
                     continue; // The group was already gone; re-read the line and retry.
                 }
 
+                // Each rider keeps their guest number and the mood they had at the
+                // moment the group left the line (the queue applies the wait decay).
                 var members = taken.People
-                    .Select(person => new PassengerWeight(person.WeightInKilograms))
+                    .Select(person => new PassengerSeed(
+                        person.Number,
+                        new PassengerWeight(person.WeightInKilograms),
+                        person.Happiness,
+                        person.PreferredG,
+                        person.Nausea))
                     .ToArray();
                 _store.BoardGroup(members);
 

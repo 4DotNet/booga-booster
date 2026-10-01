@@ -17,6 +17,10 @@ namespace FourDotnet.BoogaBooster.DigitalTwin.Abstractions;
 /// <c>true</c> when every occupied seat's restraint is secured.
 /// </param>
 /// <param name="Seats">Per-seat sensor readings.</param>
+/// <param name="FeltG">
+/// Total felt load on the riders in g, gravity included
+/// (<c>√(1 + ForwardG² + LateralG²)</c>, docs §5.1) — 1.0 at rest.
+/// </param>
 public sealed record GondolaTelemetry(
     int HubIndex,
     int Index,
@@ -27,4 +31,5 @@ public sealed record GondolaTelemetry(
     double ForwardG,
     double LoadKg,
     bool IsSafeToDispatch,
-    IReadOnlyList<SeatTelemetry> Seats);
+    IReadOnlyList<SeatTelemetry> Seats,
+    double FeltG);

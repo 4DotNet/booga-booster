@@ -165,13 +165,93 @@ describe('mapRideTelemetry', () => {
     const model = mapRideTelemetry({ ...dto, gondolas });
 
     expect(model.gondolas[0].seats).toEqual([
-      { id: 1, state: 'empty', occupiedKg: 0 },
-      { id: 2, state: 'occupied-unsecured', occupiedKg: 65 },
+      { id: 1, state: 'empty', occupiedKg: 0, rider: null },
+      { id: 2, state: 'occupied-unsecured', occupiedKg: 65, rider: null },
     ]);
     expect(model.gondolas[1].seats).toEqual([
-      { id: 1, state: 'secured', occupiedKg: 80 },
-      { id: 2, state: 'empty', occupiedKg: 0 },
+      { id: 1, state: 'secured', occupiedKg: 80, rider: null },
+      { id: 2, state: 'empty', occupiedKg: 0, rider: null },
     ]);
+  });
+
+  it('maps seat mood, gondola felt G and the last offload', () => {
+    const dto = buildDto();
+    const gondolas = dto.gondolas.slice();
+    gondolas[0] = gondolaDto(0, 0, {
+      feltG: 2.4,
+      seats: [
+        {
+          position: 0,
+          occupiedKg: 70,
+          restraint: 2,
+          isOccupied: true,
+          isSecured: true,
+          guestNumber: 7,
+          happiness: 55,
+          preferredG: 3.1,
+          nausea: 12,
+        },
+        { position: 1, occupiedKg: 0, restraint: 0, isOccupied: false, isSecured: false },
+      ],
+    });
+
+    const model = mapRideTelemetry({
+      ...dto,
+      gondolas,
+      lastOffload: { counter: 3, riders: [{ guestNumber: 4, happiness: 20, nausea: 90 }] },
+    });
+
+    expect(model.gondolas[0].feltG).toBe(2.4);
+    expect(model.gondolas[0].seats[0].rider).toEqual({
+      guestNumber: 7,
+      happiness: 55,
+      preferredG: 3.1,
+      nausea: 12,
+    });
+    expect(model.gondolas[0].seats[1].rider).toBeNull();
+    expect(model.lastOffload).toEqual({
+      counter: 3,
+      riders: [{ guestNumber: 4, happiness: 20, nausea: 90 }],
+    });
+  });
+
+  it('keeps a hand-boarded rider with a null guest number', () => {
+    const dto = buildDto();
+    const gondolas = dto.gondolas.slice();
+    gondolas[0] = gondolaDto(0, 0, {
+      seats: [
+        {
+          position: 0,
+          occupiedKg: 70,
+          restraint: 2,
+          isOccupied: true,
+          isSecured: true,
+          guestNumber: null,
+          happiness: 50,
+          preferredG: 2,
+          nausea: 0,
+        },
+        { position: 1, occupiedKg: 0, restraint: 0, isOccupied: false, isSecured: false },
+      ],
+    });
+
+    const model = mapRideTelemetry({
+      ...dto,
+      gondolas,
+      lastOffload: { counter: 1, riders: [{ guestNumber: null, happiness: 40, nausea: 80 }] },
+    });
+
+    expect(model.gondolas[0].seats[0].rider?.guestNumber).toBeNull();
+    expect(model.gondolas[0].seats[0].rider?.happiness).toBe(50);
+    expect(model.lastOffload?.riders[0].guestNumber).toBeNull();
+  });
+
+  it('falls back defensively when an older backend omits the mood fields', () => {
+    const model = mapRideTelemetry(buildDto());
+
+    expect(model.gondolas[0].feltG).toBe(1);
+    expect(model.gondolas[0].seats[0].rider).toBeNull();
+    expect(model.lastOffload).toEqual({ counter: 0, riders: [] });
   });
 
   it('rounds occupiedKg to the nearest whole kilogram', () => {

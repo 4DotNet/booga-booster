@@ -117,7 +117,7 @@ public sealed class RideStore : IRideStore, IRideTelemetryProvider
         }
     }
 
-    public RideTelemetry BoardGroup(IReadOnlyList<PassengerWeight> members)
+    public RideTelemetry BoardGroup(IReadOnlyList<PassengerSeed> members)
     {
         ArgumentNullException.ThrowIfNull(members);
 

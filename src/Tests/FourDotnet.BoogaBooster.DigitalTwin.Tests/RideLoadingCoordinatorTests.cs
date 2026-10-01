@@ -41,7 +41,13 @@ public sealed class RideLoadingCoordinatorTests
     private static QueuedGroupDto MakeGroup(int size)
     {
         var people = Enumerable.Range(0, size)
-            .Select(_ => new PersonDto(_nextPersonNumber++, Faker.Name.FullName(), Faker.Random.Int(30, 150)))
+            .Select(_ => new PersonDto(
+                _nextPersonNumber++,
+                Faker.Name.FullName(),
+                Faker.Random.Int(30, 150),
+                Faker.Random.Double(65, 85),
+                Faker.Random.Double(2.25, 4.5),
+                0))
             .ToArray();
         return new QueuedGroupDto(Guid.NewGuid(), people);
     }
@@ -50,7 +56,7 @@ public sealed class RideLoadingCoordinatorTests
     private static void LeaveEmptyGondolas(RideStore store, int desiredEmpty)
     {
         var seats = (TotalGondolas - desiredEmpty) * RideParameters.SeatsPerGondola;
-        var members = Enumerable.Range(0, seats).Select(_ => new PassengerWeight(75d)).ToArray();
+        var members = Enumerable.Range(0, seats).Select(_ => TestHelpers.Seed()).ToArray();
         store.BoardGroup(members);
         Assert.Equal(desiredEmpty, store.EmptyGondolaCount);
     }
@@ -71,6 +77,25 @@ public sealed class RideLoadingCoordinatorTests
 
         Assert.Empty(queue.Groups);
         Assert.Equal(TotalGondolas - 3, store.EmptyGondolaCount);
+    }
+
+    [Fact]
+    public async Task RunLoadingPass_SeatsRidersWithTheirQueueIdentityAndMood()
+    {
+        var (coordinator, store, queue, rideId) = Loading();
+        var group = queue.Enqueue(new QueuedGroupDto(
+            Guid.NewGuid(),
+            [new PersonDto(42, "Ada", 70, Happiness: 71.4, PreferredG: 3.1, Nausea: 0)]));
+
+        await coordinator.RunLoadingPassAsync(rideId, Ct);
+
+        var seat = store.GetTelemetry().Gondolas.SelectMany(g => g.Seats).Single(s => s.IsOccupied);
+        Assert.Equal(42L, seat.GuestNumber);
+        Assert.Equal(71.4, seat.Happiness);
+        Assert.Equal(3.1, seat.PreferredG);
+        Assert.Equal(0d, seat.Nausea);
+        Assert.Equal(70d, seat.OccupiedKg);
+        Assert.DoesNotContain(queue.Groups, g => g.GroupId == group.GroupId);
     }
 
     [Fact]

@@ -11,7 +11,9 @@ import {
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
-import { MotorDirection } from '../models/ride.models';
+import { QueueGuest } from '../../queue/models/queue.models';
+import { Gondola, LastOffload, MotorDirection } from '../models/ride.models';
+import { ParkSceneView } from './park-scene-view';
 
 /** Ride geometry (metres) — mirrors the reference model's parameter set. */
 const P = {
@@ -132,6 +134,12 @@ export class RideVisualization {
   readonly hubSpeedRpm = input.required<number>();
   readonly hubDirection = input.required<MotorDirection>();
   readonly gondolaBrakeEngaged = input.required<boolean>();
+  /** Telemetry gondolas; their seated riders are drawn in the scene's pods. */
+  readonly gondolas = input<readonly Gondola[]>([]);
+  /** The whole queue in order; the first 60 are drawn on the switchback. */
+  readonly queuedGuests = input<readonly QueueGuest[]>([]);
+  /** The latest offload snapshot, `null` until a real frame has arrived. */
+  readonly lastOffload = input<LastOffload | null>(null);
 
   private readonly hostRef = viewChild.required<ElementRef<HTMLDivElement>>('host');
   private readonly destroyRef = inject(DestroyRef);
@@ -189,6 +197,9 @@ export class RideVisualization {
     const reducedMotion =
       typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+    const park = new ParkSceneView(scene, reducedMotion);
+    const podNodes = gondolas.map((gondola) => gondola.obj);
+
     const clock = new THREE.Clock();
     let mainA = 0;
     let hubA = 0;
@@ -224,6 +235,18 @@ export class RideVisualization {
           gondola.obj.rotation.y = finiteOrZero(gondola.obj.rotation.y + delta);
         }
       }
+
+      // Pod world matrices must be current before riders are seated on them.
+      scene.updateMatrixWorld();
+      park.update(
+        dt,
+        {
+          queue: this.queuedGuests(),
+          gondolas: this.gondolas(),
+          lastOffload: this.lastOffload(),
+        },
+        podNodes,
+      );
 
       controls.update();
       renderer.render(scene, camera);
@@ -404,11 +427,12 @@ export class RideVisualization {
     scene.traverse((object) => {
       const mesh = object as Partial<THREE.Mesh>;
       mesh.geometry?.dispose();
+      (object as Partial<THREE.InstancedMesh>).dispose?.();
       const material = mesh.material;
-      if (Array.isArray(material)) {
-        material.forEach((m) => m.dispose());
-      } else {
-        material?.dispose();
+      for (const m of Array.isArray(material) ? material : material ? [material] : []) {
+        // Textures (striped roofs, the +N label) are not freed by the material.
+        (m as THREE.Material & { map?: THREE.Texture | null }).map?.dispose();
+        m.dispose();
       }
     });
   }

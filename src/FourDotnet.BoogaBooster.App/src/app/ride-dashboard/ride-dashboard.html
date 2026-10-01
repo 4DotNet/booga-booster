@@ -29,6 +29,9 @@
       [hubSpeedRpm]="ride.hubSpeedRpm()"
       [hubDirection]="ride.hubDirection()"
       [gondolaBrakeEngaged]="ride.gondolaBrakeEngaged()"
+      [gondolas]="ride.gondolas()"
+      [queuedGuests]="waitingGuests()"
+      [lastOffload]="ride.lastOffload()"
     />
   </section>
 
@@ -46,6 +49,13 @@
     </div>
     <div class="panel">
       <bb-gondola-panel [gondolas]="ride.gondolas()" />
+    </div>
+    <div class="panel">
+      <bb-rider-experience-panel
+        [queuedGuests]="waitingGuests()"
+        [riders]="ride.riders()"
+        [lastOffload]="ride.lastOffload()"
+      />
     </div>
   </section>
 </main>

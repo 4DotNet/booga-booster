@@ -41,6 +41,18 @@ describe('HttpQueueSource', () => {
     expect(source.status()).toBe('ready');
   });
 
+  it('maps queued groups and guests from the response', () => {
+    const source = TestBed.inject(HttpQueueSource);
+
+    http.expectOne(QUEUE_URL).flush({
+      ...DTO,
+      groups: [{ groupId: 'g', people: [{ number: 9, name: 'Bo', happiness: 40 }] }],
+    });
+
+    expect(source.queue()?.groups[0].guests[0].guestNumber).toBe(9);
+    expect(source.queue()?.groups[0].guests[0].happiness).toBe(40);
+  });
+
   it('re-fetches on the polling interval', () => {
     TestBed.inject(HttpQueueSource);
     http.expectOne(QUEUE_URL).flush(DTO); // init

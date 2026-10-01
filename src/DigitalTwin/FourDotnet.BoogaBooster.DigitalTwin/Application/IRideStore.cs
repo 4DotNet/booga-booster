@@ -57,9 +57,10 @@ public interface IRideStore
     /// Boards a whole group as a unit (idle/loading only), seating its members two
     /// per gondola with an odd member alone. The group boards only when the ride has
     /// <c>ceil(N / 2)</c> empty gondolas; otherwise the domain rejects it and nobody
-    /// is seated. Each member's natural restraint-close delay is drawn from the sampler.
+    /// is seated. Each member keeps the identity and mood of their seed; their natural
+    /// restraint-close delay is drawn from the sampler.
     /// </summary>
-    RideTelemetry BoardGroup(IReadOnlyList<PassengerWeight> members);
+    RideTelemetry BoardGroup(IReadOnlyList<PassengerSeed> members);
 
     /// <summary>Engages or releases a specific gondola's yaw brake.</summary>
     RideTelemetry SetGondolaBrake(int hubIndex, int gondolaIndex, GondolaBrakeState brake);

@@ -1,13 +1,16 @@
 import { Injectable, Signal, computed, inject } from '@angular/core';
 
+import { seatedRiders } from '../../mood/mood.models';
 import { RIDE_TELEMETRY_SOURCE } from '../data/ride-telemetry-source';
 import {
   Gondola,
   Hub,
+  LastOffload,
   LoadBalanceState,
   Mill,
   MotorDirection,
   RideState,
+  SeatRider,
   SecurityState,
   clampPower,
   loadBalanceState,
@@ -38,6 +41,17 @@ export class RideStateService {
 
   /** Every gondola with its seats and g-forces. */
   readonly gondolas: Signal<readonly Gondola[]> = computed(() => this.telemetry().gondolas);
+
+  /** Every seated rider with their mood (empty seats skipped). */
+  readonly riders: Signal<readonly SeatRider[]> = computed(() => seatedRiders(this.gondolas()));
+
+  /**
+   * The most recent offload snapshot, or `null` until a real telemetry frame
+   * has arrived (the at-rest seed carries none).
+   */
+  readonly lastOffload: Signal<LastOffload | null> = computed(
+    () => this.telemetry().lastOffload ?? null,
+  );
 
   /**
    * Total number of occupied seats across all gondolas. Prefers the

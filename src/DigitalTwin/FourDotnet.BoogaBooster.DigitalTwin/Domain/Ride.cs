@@ -52,6 +52,7 @@ public sealed class Ride : DomainModel
     private readonly GreatMill _mill = new();
     private RideState _state = RideState.Idle;
     private double _simulationTimeSeconds;
+    private LastOffloadTelemetry _lastOffload = LastOffloadTelemetry.None;
 
     private Ride()
         : base(isNew: true)
@@ -66,6 +67,12 @@ public sealed class Ride : DomainModel
 
     /// <summary>Simulated time elapsed since the twin started (seconds).</summary>
     public double SimulationTimeSeconds => _simulationTimeSeconds;
+
+    /// <summary>
+    /// The most recent offload: the riders who left and the mood they left in, numbered
+    /// by a counter that increases by one per offload.
+    /// </summary>
+    public LastOffloadTelemetry LastOffload => _lastOffload;
 
     /// <summary>The central mill (and, through it, the hubs and gondolas).</summary>
     public GreatMill Mill => _mill;
@@ -205,7 +212,8 @@ public sealed class Ride : DomainModel
     /// ride alone — members of a group are never split across a boarding, and a
     /// group never shares a gondola with anyone else. The group boards only when the
     /// ride has enough spare capacity for all of them (<c>ceil(N / 2)</c> empty
-    /// gondolas); otherwise nobody is seated. Each seated member's natural
+    /// gondolas); otherwise nobody is seated. Every member keeps the identity and mood
+    /// carried by their <see cref="PassengerSeed"/>. Each seated member's natural
     /// restraint-close delay is drawn from <paramref name="restraintCloseDelay"/>.
     /// Boarding moves the ride into <see cref="RideState.Loading"/>.
     /// </summary>
@@ -221,7 +229,7 @@ public sealed class Ride : DomainModel
     /// have <c>ceil(N / 2)</c> empty gondolas to seat every member.
     /// </exception>
     public void BoardGroup(
-        IReadOnlyList<PassengerWeight> members,
+        IReadOnlyList<PassengerSeed> members,
         Func<TimeSpan> restraintCloseDelay,
         Func<int, int, IReadOnlyList<int>>? selectGondolas = null)
     {
@@ -359,7 +367,8 @@ public sealed class Ride : DomainModel
         }
 
         // 1. Natural behaviour depends on the lifecycle state: while loading, seated
-        //    passengers secure their restraints; while offloading, they leave.
+        //    passengers secure their restraints; while offloading, they leave — and
+        //    who left, and how they felt, is recorded first.
         switch (_state)
         {
             case RideState.Loading:
@@ -367,6 +376,7 @@ public sealed class Ride : DomainModel
                 _mill.AdvanceNaturalBehavior(dt);
                 break;
             case RideState.Offloading:
+                RecordOffload();
                 _mill.Offload();
                 break;
         }
@@ -430,7 +440,41 @@ public sealed class Ride : DomainModel
             _mill.BrakesEngaged,
             _mill.ToTelemetry(),
             hubs,
-            gondolas);
+            gondolas,
+            _lastOffload);
+    }
+
+    /// <summary>
+    /// Captures the seated riders into <see cref="LastOffload"/> just before they
+    /// leave. Does nothing when nobody is aboard, so an empty offload never bumps the
+    /// counter.
+    /// </summary>
+    private void RecordOffload()
+    {
+        var riders = new List<OffloadedRiderTelemetry>();
+        foreach (var hub in _mill.Hubs)
+        {
+            foreach (var gondola in hub.Gondolas)
+            {
+                AddRider(riders, gondola.GetSeat(SeatPosition.Left).Occupant);
+                AddRider(riders, gondola.GetSeat(SeatPosition.Right).Occupant);
+            }
+        }
+
+        if (riders.Count == 0)
+        {
+            return;
+        }
+
+        _lastOffload = new LastOffloadTelemetry(_lastOffload.Counter + 1, riders);
+
+        static void AddRider(List<OffloadedRiderTelemetry> riders, Passenger? rider)
+        {
+            if (rider is not null)
+            {
+                riders.Add(new OffloadedRiderTelemetry(rider.GuestNumber, rider.Happiness, rider.Nausea));
+            }
+        }
     }
 
     /// <summary>Runs the entry side-effects for the state being entered.</summary>

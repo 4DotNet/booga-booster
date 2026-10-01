@@ -8,7 +8,10 @@ namespace FourDotnet.BoogaBooster.Queue.Filling;
 
 /// <summary>
 /// Default <see cref="IPersonGenerator"/>. Hands out ever-increasing unique person
-/// numbers, generates full names with Bogus, and draws each weight from a normal
+/// numbers, generates full names with Bogus, draws a starting happiness uniformly from
+/// <c>[65, 85]</c> and a preferred G uniformly from
+/// <c>[<see cref="Person.MinPreferredG"/>, <see cref="Person.MaxPreferredG"/>]</c>
+/// (nausea starts at zero), and draws each weight from a normal
 /// distribution centred in the typical 70–100 kg band so most guests are average
 /// while lighter and heavier exceptions still occur across the full
 /// <c>[<see cref="Person.MinWeightInKilograms"/>, <see cref="Person.MaxWeightInKilograms"/>]</c>
@@ -22,6 +25,11 @@ internal sealed class PersonGenerator : IPersonGenerator
     // of the mass yet the clamped tails still reach 30 kg and 150 kg on occasion.
     private const double MeanWeightInKilograms = 85.0;
     private const double WeightStandardDeviation = 12.0;
+
+    // A newly arrived guest is in a reasonably good mood: comfortably above the
+    // dashboard's "mad" threshold, but with room to get happier on the ride.
+    private const double MinStartingHappiness = 65.0;
+    private const double MaxStartingHappiness = 85.0;
 
     private readonly Faker _faker;
     private long _lastNumber;
@@ -42,8 +50,10 @@ internal sealed class PersonGenerator : IPersonGenerator
         var number = Interlocked.Increment(ref _lastNumber);
         var name = _faker.Name.FullName();
         var weight = NextWeight();
+        var happiness = _faker.Random.Double(MinStartingHappiness, MaxStartingHappiness);
+        var preferredG = _faker.Random.Double(Person.MinPreferredG, Person.MaxPreferredG);
 
-        return new Person(number, name, weight);
+        return new Person(number, name, weight, happiness, preferredG, nausea: Person.MinMood);
     }
 
     public GroupArrival CreateGroup(int size)

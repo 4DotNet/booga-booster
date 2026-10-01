@@ -8,7 +8,8 @@ namespace FourDotnet.BoogaBooster.DigitalTwin.Domain;
 /// It has no motor: with the brake released it swings under the centrifugal field
 /// as a driven pendulum, its motion set entirely by who is seated where. It owns
 /// two <see cref="Seat"/>s, a yaw brake, and its emergent rotation state, and it
-/// emits the rider-felt lateral/forward G-forces.
+/// emits the rider-felt lateral/forward G-forces and the total felt G. Each physics
+/// step it also advances its riders' mood from that felt G (<c>docs/06-rider-mood.md</c>).
 /// </summary>
 public sealed class Gondola : DomainModel
 {
@@ -22,6 +23,8 @@ public sealed class Gondola : DomainModel
     private double _omega;       // ω_cart — emergent yaw rate (rad/s)
     private double _lateralG;
     private double _forwardG;
+    private double _feltG = 1d;
+    private double _overLimitSeconds; // continuous time at or above MaxGForce (s)
 
     public Gondola(int hubIndex, int index)
         : base(isNew: true)
@@ -65,6 +68,12 @@ public sealed class Gondola : DomainModel
 
     /// <summary>Fore/aft specific force felt by riders (g). Updated each physics tick.</summary>
     public double ForwardG => _forwardG;
+
+    /// <summary>
+    /// Total felt load on the riders (g), gravity included (docs §5.1): the magnitude
+    /// of the specific force, <c>√(1 + ForwardG² + LateralG²)</c>. 1.0 at rest.
+    /// </summary>
+    public double FeltG => _feltG;
 
     /// <summary>Total measured passenger weight in the gondola.</summary>
     public double PassengerLoadKg => _left.OccupiedKg + _right.OccupiedKg;
@@ -149,6 +158,7 @@ public sealed class Gondola : DomainModel
         var worldFacing = millAngle + hubAngle + RideKinematics.MountAngle(Index) + _angle;
 
         UpdateGForces(field, worldFacing, comAngle, comDistance);
+        AdvanceRiderMood(dt);
 
         if (_brake == GondolaBrakeState.Engaged)
         {
@@ -183,7 +193,8 @@ public sealed class Gondola : DomainModel
         _forwardG,
         PassengerLoadKg,
         IsSafeToDispatch,
-        [_left.ToTelemetry(), _right.ToTelemetry()]);
+        [_left.ToTelemetry(), _right.ToTelemetry()],
+        _feltG);
 
     /// <summary>
     /// The world direction the gondola's back (its centre of mass) currently points.
@@ -209,6 +220,78 @@ public sealed class Gondola : DomainModel
 
         _forwardG = specific.Dot(forwardHat) / RideParameters.Gravity;
         _lateralG = specific.Dot(lateralHat) / RideParameters.Gravity;
+        _feltG = FeltGFrom(_forwardG, _lateralG);
+    }
+
+    /// <summary>
+    /// The felt G for the given horizontal components: the vertical 1 g from the seat
+    /// holding the rider up against gravity, combined with the horizontal load.
+    /// </summary>
+    internal static double FeltGFrom(double forwardG, double lateralG) =>
+        Math.Sqrt(1d + (forwardG * forwardG) + (lateralG * lateralG));
+
+    /// <summary>
+    /// Advances every seated rider's mood by <paramref name="dt"/> seconds at the
+    /// gondola's current <see cref="FeltG"/>: happiness grows the closer felt G is to
+    /// the rider's preference, nausea grows exponentially while felt G overshoots it,
+    /// and a continuous stretch at or above <see cref="RideParameters.MaxGForce"/>
+    /// longer than <see cref="RideParameters.MaxGPenaltySeconds"/> adds a one-off
+    /// nausea penalty. A pure function of state and <paramref name="dt"/>.
+    /// </summary>
+    internal void AdvanceRiderMood(double dt) => AdvanceRiderMood(_feltG, dt);
+
+    /// <inheritdoc cref="AdvanceRiderMood(double)"/>
+    /// <remarks>Takes the felt G explicitly so the rules can be tested at a held load.</remarks>
+    internal void AdvanceRiderMood(double feltG, double dt)
+    {
+        var penalty = AdvanceOverLimit(feltG, dt);
+
+        AdvanceRiderMood(_left.Occupant, feltG, dt, penalty);
+        AdvanceRiderMood(_right.Occupant, feltG, dt, penalty);
+    }
+
+    /// <summary>
+    /// Tracks the continuous stretch at or above the safe limit and reports whether
+    /// it crossed <see cref="RideParameters.MaxGPenaltySeconds"/> during this step —
+    /// true at most once per stretch.
+    /// </summary>
+    private bool AdvanceOverLimit(double feltG, double dt)
+    {
+        if (feltG < RideParameters.MaxGForce)
+        {
+            _overLimitSeconds = 0d;
+            return false;
+        }
+
+        var before = _overLimitSeconds;
+        _overLimitSeconds += dt;
+        return before <= RideParameters.MaxGPenaltySeconds
+            && _overLimitSeconds > RideParameters.MaxGPenaltySeconds;
+    }
+
+    private static void AdvanceRiderMood(Passenger? rider, double feltG, double dt, bool penalty)
+    {
+        if (rider is null)
+        {
+            return;
+        }
+
+        var distance = Math.Abs(feltG - rider.PreferredG);
+        if (distance < RideParameters.FunBand)
+        {
+            rider.GainHappiness(RideParameters.HappinessGainPerSecond * (1d - (distance / RideParameters.FunBand)) * dt);
+        }
+
+        var overshoot = feltG - rider.PreferredG;
+        if (overshoot > RideParameters.NauseaToleranceFraction * RideParameters.MaxGForce)
+        {
+            rider.GainNausea(RideParameters.NauseaGrowthRate * (rider.Nausea + RideParameters.NauseaSeed) * dt);
+        }
+
+        if (penalty)
+        {
+            rider.GainNausea(RideParameters.MaxGNauseaPenalty);
+        }
     }
 
     /// <summary>

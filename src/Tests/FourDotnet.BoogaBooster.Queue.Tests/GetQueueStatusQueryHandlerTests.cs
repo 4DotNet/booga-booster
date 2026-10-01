@@ -16,7 +16,7 @@ public sealed class GetQueueStatusQueryHandlerTests
     private static GetQueueStatusResponse SnapshotFor(Guid rideId, int groupSize)
     {
         var people = Enumerable.Range(1, groupSize)
-            .Select(n => new PersonDto(n, $"Person {n}", 80))
+            .Select(n => new PersonDto(n, $"Person {n}", 80, 75, 3, 0))
             .ToArray();
         var groups = new[] { new QueuedGroupDto(Guid.NewGuid(), people) };
 
