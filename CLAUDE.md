@@ -188,7 +188,11 @@ Features are not written straight into code. They go through `openspec/`:
 1. `/opsx:explore` — think the idea through and clarify requirements.
 2. `/opsx:propose` — generate a change folder with `proposal.md`, `design.md`,
    per-capability `specs/*/spec.md`, and `tasks.md`.
-3. `/opsx:apply` — work the task list, tests included.
+3. `/opsx:apply` — work the task list, tests included. **Never on `main`:** the
+   `git-change-workflow` skill first creates a worktree (`.claude/worktrees/<change>`)
+   and a `<type>/<change>` branch from `origin/main`, the work lands as logical
+   Conventional Commits, and when every task is done the branch is pushed and a PR
+   into `main` is opened with `gh`. The PR is never merged by the agent.
 4. `/opsx:archive` — publish capability specs into `openspec/specs/` and move the
    change into `openspec/changes/archive/`.
 
@@ -299,7 +303,8 @@ reviewers: one model catching a MUST violation alone still fails the check.
   ADR-driven) and `angular-architect` (anything under the Angular app; zoneless,
   signal-first, PrimeNG-aware).
 - **Skills** — `dto-organization` (DTO placement), `test-coverage` (≥ 80 % backend line
-  coverage), and the `openspec-*` change-workflow skills.
+  coverage), `git-change-workflow` (worktree + branch → logical commits → push → PR
+  for every OpenSpec change), and the `openspec-*` change-workflow skills.
 
 **Rules when adding tooling:**
 

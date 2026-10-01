@@ -430,3 +430,6 @@ FodyWeavers.xsd
 
 # Copilot CLI code-review scratch output (see .github/workflows/code-quality-check.yml)
 .code-review/
+
+# Git worktrees for in-flight changes (see .claude/skills/git-change-workflow)
+.claude/worktrees/

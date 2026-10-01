@@ -24,6 +24,12 @@ Implement tasks from an OpenSpec change.
 
    Always announce: "Using change: <name>" and how to override (e.g., `/opsx:apply <other>`).
 
+   **Then set up git before anything else:** follow the `git-change-workflow` skill
+   (`.claude/skills/git-change-workflow/SKILL.md`) — create or resume the change's
+   worktree and branch from `origin/main`, and do all further work inside that
+   worktree. Commit logically while implementing, and when every task is complete,
+   push the branch and open a pull request into `main` as that skill describes.
+
 2. **Check status to understand the schema**
    ```bash
    openspec status --change "<name>" --json

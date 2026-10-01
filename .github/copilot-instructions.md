@@ -187,6 +187,12 @@ behavioural contract** and read the relevant one before changing a feature.
 Copilot CLI runs the workflow through the prompts in `.github/prompts/`
 (`opsx-explore`, `opsx-propose`, `opsx-apply`, `opsx-archive`).
 
+**Apply never happens on `main`.** The `git-change-workflow` skill
+(`.claude/skills/git-change-workflow/SKILL.md`) first creates a worktree
+(`.claude/worktrees/<change>`) and a `<type>/<change>` branch from `origin/main`; the work
+lands as logical Conventional Commits; when every task is done the branch is pushed and a
+PR into `main` is opened with `gh`. The agent never merges the PR.
+
 ## Known style-guide discrepancies
 
 Do not copy these; fix them when you touch the surrounding code.
