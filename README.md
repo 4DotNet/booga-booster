@@ -382,19 +382,24 @@ OpenAPI is exposed at `/openapi/v1.json` in Development, and
 
 ## Working with AI in this repo
 
-This is the part worth studying. Claude Code and GitHub Copilot CLI **share the same
-tooling**: `.claude/` is the single source of truth, and Copilot CLI reads it natively.
+This is the part worth studying. Claude Code and GitHub Copilot — CLI, VS Code and
+Visual Studio — **share the same tooling**: `.claude/` is the single source of truth,
+and where a product cannot read it a mirror is generated from it.
 
-| Asset | Lives in | Claude Code | Copilot CLI | Copilot in the IDE |
-| --- | --- | :-: | :-: | :-: |
-| MCP servers | `.mcp.json` | project scope | workspace scope | — |
-| Agents | `.claude/agents/*.md` | ✅ | ✅ | — |
-| Skills | `.claude/skills/<name>/SKILL.md` | ✅ | ✅ (also `.github/skills/`) | — |
-| Instructions | `CLAUDE.md` (canonical) | ✅ | ✅ | — |
-| Instructions | `.github/copilot-instructions.md` (mirror) | — | — | ✅ |
-| Slash commands | `.claude/commands/` | ✅ | — | — |
-| Slash commands | `.github/prompts/*.prompt.md` | — | ✅ | — |
-| CI code review | `.github/code-review/` + `.github/workflows/code-quality-check.yml` | — | ✅ headless | — |
+| Asset | Lives in | Claude Code | Copilot CLI | VS Code | Visual Studio |
+| --- | --- | :-: | :-: | :-: | :-: |
+| MCP servers | `.mcp.json` | ✅ | ✅ | ✅ | — |
+| MCP servers | `src/.mcp.json` (generated mirror) | — | — | — | ✅ |
+| Agents | `.claude/agents/*.md` | ✅ | ✅ | ✅ | — |
+| Skills | `.claude/skills/<name>/SKILL.md` | ✅ | ✅ | ✅ | — |
+| Instructions | `CLAUDE.md` (canonical) | ✅ | ✅ | — | — |
+| Instructions | `.github/copilot-instructions.md` (mirror) | — | — | ✅ | ✅ |
+| Slash commands | `.claude/commands/` | ✅ | — | — | — |
+| Slash commands | `.github/prompts/*.prompt.md` (generated mirror) | — | ✅ | ✅ | — |
+| CI code review | `.github/code-review/` + `.github/workflows/code-quality-check.yml` | — | ✅ headless | — | — |
+
+The `ai-tooling-sync` skill keeps the two sides together:
+`node .claude/skills/ai-tooling-sync/scripts/sync-ai-tooling.mjs` reports drift, and `--fix` regenerates the mirrors.
 
 The last row is the one that runs without a human: every pull request into `main` is
 reviewed by Copilot CLI in `-p` mode against the rules in the rows above it. See

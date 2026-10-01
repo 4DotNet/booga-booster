@@ -240,18 +240,23 @@ npx vitest run path/to/file.spec.ts   # run a single test file
 
 Detailed frontend rules live in `src/FourDotnet.BoogaBooster.App/.claude/CLAUDE.md` and are authoritative when working in the Angular app. Key points: standalone components (do **not** set `standalone: true` — it is the v20+ default), signals for state (`signal`/`computed`/`update`/`set`, never `mutate`), `input()`/`output()` functions over decorators, `inject()` over constructor injection, `OnPush` change detection, native control flow (`@if`/`@for`/`@switch`), and host bindings in the `host` object rather than `@HostBinding`/`@HostListener`. Accessibility must pass AXE / WCAG AA.
 
-## AI tooling (Claude Code + GitHub Copilot CLI)
+## AI tooling (Claude Code + GitHub Copilot)
 
-This repo is set up so **Claude Code and GitHub Copilot CLI share the same MCP servers, agents and skills**. Copilot CLI natively reads Claude's directories, so `.claude/` is the single source of truth for almost everything:
+This repo is set up so **Claude Code and GitHub Copilot (CLI, VS Code and Visual Studio) share the same MCP servers, agents, skills and commands**. Every asset has one canonical source under `.claude/` (or `.mcp.json` / `CLAUDE.md`); where a product cannot read it, a mirror is derived from it:
 
-| Asset | Lives in | Claude Code | Copilot CLI |
-| --- | --- | --- | --- |
-| MCP servers | `.mcp.json` (repo root) | project scope | workspace scope |
-| Agents | `.claude/agents/*.md` | ✅ | ✅ |
-| Skills | `.claude/skills/<name>/SKILL.md` | ✅ | ✅ (also scans `.github/skills/`) |
-| Instructions | `CLAUDE.md` **and** `.github/copilot-instructions.md` | `CLAUDE.md` | `CLAUDE.md` |
-| Slash commands | `.claude/commands/` **and** `.github/prompts/*.prompt.md` | `.claude/commands/` only | `.github/prompts/` only |
-| CI code review | `.github/code-review/` + `.github/workflows/code-quality-check.yml` | — | ✅ (headless, in Actions) |
+| Asset | Canonical source | Claude Code | Copilot CLI | VS Code | Visual Studio | Mirror |
+| --- | --- | :-: | :-: | :-: | :-: | --- |
+| MCP servers | `.mcp.json` (repo root) | ✅ | ✅ | ✅ | — | `src/.mcp.json` (`servers` key, solution dir) |
+| Agents | `.claude/agents/*.md` | ✅ | ✅ | ✅ | — | — |
+| Skills | `.claude/skills/<name>/SKILL.md` | ✅ | ✅ | ✅ | — | `.github/skills/` (OpenSpec-generated twins only) |
+| Instructions | `CLAUDE.md` | ✅ | ✅ | — | — | `.github/copilot-instructions.md` (condensed, by hand) |
+| Slash commands | `.claude/commands/<ns>/<name>.md` | ✅ | — | — | — | `.github/prompts/<ns>-<name>.prompt.md` |
+| CI code review | `.github/code-review/` + `.github/workflows/code-quality-check.yml` | — | ✅ (headless, in Actions) | — | — | — |
+
+**Keep them in sync with the `ai-tooling-sync` skill.** After touching any agent, skill,
+command, MCP server, the plugin or either instruction file, run
+`node .claude/skills/ai-tooling-sync/scripts/sync-ai-tooling.mjs` (add `--fix` to regenerate the mechanical mirrors). It must report no errors
+before you commit.
 
 ### MCP servers available
 
@@ -302,9 +307,13 @@ reviewers: one model catching a MUST violation alone still fails the check.
 - **Agents** — `csharp-expert` (any `.cs`/`.csproj`/`.slnx` work; style-guide and
   ADR-driven) and `angular-architect` (anything under the Angular app; zoneless,
   signal-first, PrimeNG-aware).
-- **Skills** — `dto-organization` (DTO placement), `test-coverage` (≥ 80 % backend line
-  coverage), `git-change-workflow` (worktree + branch → logical commits → push → PR
-  for every OpenSpec change), and the `openspec-*` change-workflow skills.
+- **Skills** — the C# style-guide set (`csharp-solution-structure`,
+  `csharp-feature-slices`, `csharp-minimal-api-endpoints`, `csharp-domain-model`,
+  `csharp-observability`, `csharp-aspire`, `csharp-unit-testing`), `dto-organization`
+  (DTO placement), `test-coverage` (≥ 80 % backend line coverage),
+  `git-change-workflow` (worktree + branch → logical commits → push → PR for every
+  OpenSpec change), `ai-tooling-sync` (Claude ⇄ Copilot parity for all of the
+  above), and the `openspec-*` change-workflow skills.
 
 **Rules when adding tooling:**
 
@@ -314,7 +323,8 @@ reviewers: one model catching a MUST violation alone still fails the check.
 - **Repo-wide instructions** → also written twice: this file (canonical, read by Claude
   Code and Copilot CLI) and `.github/copilot-instructions.md` (condensed mirror, read by
   Copilot in the IDE). Keep the two in sync.
-- **Agent `tools:` lists** → the two tools use different tool vocabularies (`Read`/`Bash`/`mcp__server__tool` vs. `read`/`shell`/`server/*`). Unknown names are ignored by both, so list **both** vocabularies on the `tools:` line; otherwise the agent ends up with no tools in one of them.
+- **Agent `tools:` lists** → the two tools use different tool vocabularies (`Read`/`Bash`/`mcp__server__tool` vs. `read`/`execute`/`server/*`). Unknown names are ignored by both, so list **both** vocabularies on the `tools:` line, use the project server name from `.mcp.json` (never a personal plugin's `mcp__plugin_…` prefix), and check every `mcp__<server>__<tool>` against the live server; otherwise the agent silently loses tools in one of them.
+- **Then run the sync check** → `node .claude/skills/ai-tooling-sync/scripts/sync-ai-tooling.mjs`. It must report no errors.
 
 **First run of Copilot CLI in this repo:** start it interactively once and trust the folder. Workspace configuration (`.mcp.json`) is only loaded for trusted folders — until then `copilot mcp list` shows user-scoped servers only.
 

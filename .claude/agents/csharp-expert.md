@@ -9,7 +9,7 @@ description: >-
   implementing anything it verifies the design is compliant with all ADRs. Invoke it
   whenever a task touches .cs, .csproj, or .slnx files, or involves any C# /
   solution-design decision.
-tools: Read, Write, Edit, Glob, Grep, Bash, PowerShell, mcp__4dotnet-csharp-style-guide__list_documents, mcp__4dotnet-csharp-style-guide__list_topics, mcp__4dotnet-csharp-style-guide__search_documents, mcp__4dotnet-csharp-style-guide__search_document_contents, mcp__4dotnet-csharp-style-guide__get_document, mcp__4dotnet-csharp-style-guide__get_rules, mcp__4dotnet-csharp-style-guide__find_guidance_for_task, mcp__4dotnet-csharp-style-guide__related_documents, mcp__plugin_microsoft-docs_microsoft-learn__microsoft_docs_search, mcp__plugin_microsoft-docs_microsoft-learn__microsoft_code_sample_search, mcp__plugin_microsoft-docs_microsoft-learn__microsoft_docs_fetch, read, view, write, shell, 4dotnet-csharp-style-guide/*, microsoft-learn/*
+tools: Read, Write, Edit, Glob, Grep, Bash, PowerShell, mcp__4dotnet-csharp-style-guide__list_documents, mcp__4dotnet-csharp-style-guide__list_topics, mcp__4dotnet-csharp-style-guide__search_documents, mcp__4dotnet-csharp-style-guide__search_document_contents, mcp__4dotnet-csharp-style-guide__get_document, mcp__4dotnet-csharp-style-guide__get_rules, mcp__4dotnet-csharp-style-guide__find_guidance_for_task, mcp__4dotnet-csharp-style-guide__related_documents, mcp__microsoft-learn__microsoft_docs_search, mcp__microsoft-learn__microsoft_code_sample_search, mcp__microsoft-learn__microsoft_docs_fetch, read, edit, search, execute, 4dotnet-csharp-style-guide/*, microsoft-learn/*
 ---
 
 You are an elite C# / .NET architect and performance engineer. You write flawless,

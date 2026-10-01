@@ -243,6 +243,22 @@ and `copilot mcp list` shows user-scoped servers only.
 | `primeng` | PrimeNG 22 component API, props, events, theming, accessibility. |
 | `microsoft-learn` | Official Microsoft/Azure docs and code samples. |
 
+## Agents and skills
+
+Shared with Claude Code from `.claude/`; Copilot CLI and VS Code read them natively.
+
+- **Agents** — `csharp-expert` (any `.cs`/`.csproj`/`.slnx` work; style-guide and
+  ADR-driven) and `angular-architect` (anything under the Angular app; zoneless,
+  signal-first, PrimeNG-aware).
+- **Skills** — the C# style-guide set (`csharp-solution-structure`,
+  `csharp-feature-slices`, `csharp-minimal-api-endpoints`, `csharp-domain-model`,
+  `csharp-observability`, `csharp-aspire`, `csharp-unit-testing`), `dto-organization`,
+  `test-coverage`, `git-change-workflow`, `ai-tooling-sync`, and the `openspec-*`
+  change-workflow skills.
+
+Visual Studio only reads MCP servers from the solution directory, so `src/.mcp.json`
+mirrors the root `.mcp.json` (with a `servers` key). It is generated — edit the root file.
+
 ## Adding tooling
 
 - **MCP server** → root `.mcp.json`. Never machine-local (`copilot mcp add`), or
@@ -257,5 +273,8 @@ and `copilot mcp list` shows user-scoped servers only.
 - **CI review assets** → `.github/code-review/`. Deliberately *not* a discovery path, so
   the prompt does not surface as a bogus slash command or skill.
 - **Agent `tools:` lists** → list **both** tool vocabularies (`Read`/`Bash`/
-  `mcp__server__tool` *and* `read`/`shell`/`server/*`). Unknown names are ignored by
-  both tools; omitting one leaves the agent tool-less in that tool.
+  `mcp__server__tool` *and* `read`/`execute`/`server/*`), using the server names from
+  `.mcp.json`. Unknown names are ignored by both tools; omitting one leaves the agent
+  tool-less in that tool.
+- **After any of the above** → follow the `ai-tooling-sync` skill and run
+  `node .claude/skills/ai-tooling-sync/scripts/sync-ai-tooling.mjs` (`--fix` regenerates the mirrors). It must report no errors.
