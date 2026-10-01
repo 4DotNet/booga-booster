@@ -1,4 +1,4 @@
-namespace FourDotnet.BoogaBooster.DigitalTwin.Abstractions;
+namespace FourDotnet.BoogaBooster.DigitalTwin.Abstractions.DataTransferObjects;
 
 /// <summary>
 /// The experience of the people currently on the ride, averaged over every occupied

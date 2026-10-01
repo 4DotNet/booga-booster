@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using FourDotnet.BoogaBooster.DigitalTwin.Abstractions;
+using FourDotnet.BoogaBooster.DigitalTwin.Abstractions.DataTransferObjects;
 using FourDotnet.BoogaBooster.DigitalTwin.Application;
 using FourDotnet.BoogaBooster.DigitalTwin.Domain;
 using Microsoft.AspNetCore.Http;

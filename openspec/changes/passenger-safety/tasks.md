@@ -2,7 +2,7 @@
 
 - [ ] 1.1 Add `StressLevel { Safe, Warning, Failure }` enum (Safe = index 0, ordered worst-last) to `DigitalTwin.Abstractions/StressLevel.cs`
 - [ ] 1.2 Add rpm limits to `Domain/RideParameters.cs`: `MillWarnRpm = 15`, `MillSafetyRpm = 18`, `HubWarnRpm = 26`, `HubSafetyRpm = 32`
-- [ ] 1.3 Add `StressLevel Stress` to `Abstractions/MillTelemetry.cs` and `Abstractions/HubTelemetry.cs` (with XML doc)
+- [ ] 1.3 Add `StressLevel Stress` to `Abstractions/DataTransferObjects/MillTelemetry.cs` and `Abstractions/DataTransferObjects/HubTelemetry.cs` (with XML doc)
 
 ## 2. Backend — domain classification
 

@@ -24,7 +24,7 @@ The mill and hubs can be driven past the rotation speeds their arms are built to
   - `Domain/RideParameters.cs` — new mill/hub warn and safety rpm constants.
   - `Domain/GreatMill.cs`, `Domain/Hub.cs` — stress classification per component and a ride-wide roll-up.
   - `Domain/Ride.cs` — automatic over-speed trip into `EmergencyStop` from the running physics step.
-  - `Abstractions/MillTelemetry.cs`, `Abstractions/HubTelemetry.cs`, new `Abstractions/StressLevel.cs` — carry the stress reading on the wire.
+  - `Abstractions/DataTransferObjects/MillTelemetry.cs`, `Abstractions/DataTransferObjects/HubTelemetry.cs`, new `Abstractions/StressLevel.cs` — carry the stress reading on the wire.
 - **Frontend (`FourDotnet.BoogaBooster.App`)**
   - `ride-dashboard/models/ride.models.ts` — `StressLevel` type, mirrored rpm-limit constants, stress-derivation helpers, mapping the new telemetry field.
   - `panels/speed-panel` — per-value warn/failure indication.

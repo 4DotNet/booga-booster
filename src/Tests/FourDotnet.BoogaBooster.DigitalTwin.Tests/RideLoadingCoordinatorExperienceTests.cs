@@ -1,4 +1,5 @@
 using FourDotnet.BoogaBooster.DigitalTwin.Abstractions;
+using FourDotnet.BoogaBooster.DigitalTwin.Abstractions.DataTransferObjects;
 using FourDotnet.BoogaBooster.DigitalTwin.Application;
 using FourDotnet.BoogaBooster.Queue.Abstractions;
 using FourDotnet.BoogaBooster.Queue.Abstractions.DataTransferObjects;
