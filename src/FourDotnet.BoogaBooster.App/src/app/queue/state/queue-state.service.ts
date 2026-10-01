@@ -27,6 +27,9 @@ export class QueueStateService {
   /** Number of individual people currently waiting. */
   readonly peopleWaiting = computed(() => this.queue()?.peopleWaiting ?? 0);
 
+  /** Average happiness (0-100) of the queue; `null` when the queue is empty or unknown. */
+  readonly averageHappiness = computed(() => this.queue()?.averageHappiness ?? null);
+
   /** A worded, one-line summary for a live region. */
   readonly summary = computed(() => summaryText(this.queue()));
 

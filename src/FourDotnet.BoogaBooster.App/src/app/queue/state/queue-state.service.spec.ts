@@ -48,6 +48,16 @@ describe('QueueStateService', () => {
     expect(service.isReady()).toBe(false);
   });
 
+  it('projects the average happiness, and null when unknown or empty', () => {
+    expect(service.averageHappiness()).toBeNull();
+
+    source.setQueue(createQueueStatus({ averageHappiness: 72 }));
+    expect(service.averageHappiness()).toBe(72);
+
+    source.setQueue(createQueueStatus({ averageHappiness: null }));
+    expect(service.averageHappiness()).toBeNull();
+  });
+
   it('delegates refresh to the source', () => {
     service.refresh();
 

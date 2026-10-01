@@ -114,6 +114,80 @@ public static class RideParameters
     /// <summary>Latest a seated passenger pulls their restraint down.</summary>
     public static readonly TimeSpan MaxRestraintCloseDelay = TimeSpan.FromSeconds(10);
 
+    // --- Passenger experience (docs/06-passenger-experience.md) ---
+    /// <summary>
+    /// The lowest value any experience rating (happiness, preferred intensity, nausea)
+    /// may take. See <c>docs/06-passenger-experience.md</c> §6.1.
+    /// </summary>
+    public const double MinExperienceRating = 0d;
+
+    /// <summary>
+    /// The highest value any experience rating (happiness, preferred intensity, nausea)
+    /// may take. See <c>docs/06-passenger-experience.md</c> §6.1.
+    /// </summary>
+    public const double MaxExperienceRating = 100d;
+
+    /// <summary>
+    /// <c>k_h</c> — the rate (points per second) at which a rider's happiness rises when
+    /// the experienced intensity exactly matches their preference. See
+    /// <c>docs/06-passenger-experience.md</c> §6.4.
+    /// </summary>
+    public const double HappinessGainRate = 1.5d;
+
+    /// <summary>
+    /// <c>σ_h</c> — the Gaussian width (rating points) of the happiness gain
+    /// <c>k_h·e^(−(Δ/σ_h)²)</c>; at a 30-point mismatch the gain is ≈0.2 % of peak. See
+    /// <c>docs/06-passenger-experience.md</c> §6.4.
+    /// </summary>
+    public const double HappinessMatchWidth = 12d;
+
+    /// <summary>
+    /// <c>Δ_n</c> — how far (rating points) the experienced intensity must exceed a rider's
+    /// preference before their nausea starts growing. See
+    /// <c>docs/06-passenger-experience.md</c> §6.5.
+    /// </summary>
+    public const double NauseaExcessThreshold = 30d;
+
+    /// <summary>
+    /// <c>r_n</c> — the nausea growth rate (points per second) at zero nausea, so growth
+    /// starts even though every guest boards at nausea 0. See
+    /// <c>docs/06-passenger-experience.md</c> §6.5.
+    /// </summary>
+    public const double NauseaBaseRate = 1d;
+
+    /// <summary>
+    /// <c>λ_n</c> — the self-reinforcing nausea growth rate (per second) in
+    /// <c>dN/dt = r_n + λ_n·N</c>. See <c>docs/06-passenger-experience.md</c> §6.5.
+    /// </summary>
+    public const double NauseaGrowthRate = 0.15d;
+
+    /// <summary>
+    /// <c>T_ep</c> — how long a gondola must stay continuously at or above
+    /// <see cref="MaxGForce"/> before its riders suffer <see cref="MaxGNauseaPenalty"/>.
+    /// See <c>docs/06-passenger-experience.md</c> §6.6.
+    /// </summary>
+    public static readonly TimeSpan MaxGEpisodeDuration = TimeSpan.FromSeconds(1);
+
+    /// <summary>
+    /// <c>P_ep</c> — the nausea points each rider gains, once per sustained max-G episode.
+    /// See <c>docs/06-passenger-experience.md</c> §6.6.
+    /// </summary>
+    public const double MaxGNauseaPenalty = 25d;
+
+    /// <summary>
+    /// Happiness of a passenger boarded directly by an operator, without a queue record —
+    /// the mean of the queue's arrival distribution <c>U[65, 85]</c>
+    /// (<c>docs/06-passenger-experience.md</c> §6.1).
+    /// </summary>
+    public const double DefaultRiderHappiness = 75d;
+
+    /// <summary>
+    /// Preferred intensity of a passenger boarded directly by an operator, without a queue
+    /// record — the mean of the queue's arrival distribution <c>U[50, 100]</c>
+    /// (<c>docs/06-passenger-experience.md</c> §6.1).
+    /// </summary>
+    public const double DefaultRiderPreferredIntensity = 75d;
+
     // --- Ride layout ---
     public const int HubCount = 4;
     public const int GondolasPerHub = 4;

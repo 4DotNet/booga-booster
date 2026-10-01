@@ -96,6 +96,24 @@ export interface Gondola {
   readonly angleDegrees: number;
 }
 
+/**
+ * Average rider experience across everyone currently on the ride, each on a
+ * 0-100 scale. A value is `null` when nobody is on the ride (no data), which
+ * is distinct from a genuine average of 0.
+ */
+export interface RiderExperience {
+  readonly averageHappiness: number | null;
+  readonly averagePreferredIntensity: number | null;
+  readonly averageNausea: number | null;
+}
+
+/** The "no data" rider experience: nobody on the ride, or an older backend. */
+export const NO_RIDER_EXPERIENCE: RiderExperience = {
+  averageHappiness: null,
+  averagePreferredIntensity: null,
+  averageNausea: null,
+};
+
 /** A full snapshot of ride telemetry. */
 export interface RideTelemetry {
   readonly state: RideState;
@@ -119,6 +137,11 @@ export interface RideTelemetry {
    * it is absent (see `RideStateService.occupiedSeats`).
    */
   readonly boardedPassengerCount?: number;
+  /**
+   * Average rider experience. Optional so older frames/fixtures still type
+   * check; consumers should treat absence as {@link NO_RIDER_EXPERIENCE}.
+   */
+  readonly riderExperience?: RiderExperience;
 }
 
 /**
@@ -234,6 +257,8 @@ export interface RideTelemetryStreamDto {
   readonly gondolas: readonly RideTelemetryGondolaStreamDto[];
   readonly boardedPassengerCount: number;
   readonly brakesEngaged?: boolean;
+  /** Optional on older backends; {@link mapRideTelemetry} defaults it to all-null. */
+  readonly riderExperience?: Partial<RiderExperience> | null;
 }
 
 /** The backend's `GondolaBrakeState` names in index order (`0=Engaged, 1=Released`). */
@@ -368,6 +393,11 @@ export function mapRideTelemetry(dto: RideTelemetryStreamDto): RideTelemetry {
     gondolaBrakeEngaged: dto.gondolas.every((gondola) => brakeEngaged(gondola.brake)),
     // Defaults to released for an older frame that doesn't carry the field.
     brakesEngaged: dto.brakesEngaged ?? false,
+    riderExperience: {
+      averageHappiness: dto.riderExperience?.averageHappiness ?? null,
+      averagePreferredIntensity: dto.riderExperience?.averagePreferredIntensity ?? null,
+      averageNausea: dto.riderExperience?.averageNausea ?? null,
+    },
   };
 }
 

@@ -116,7 +116,7 @@ public class OversizedGroupSplittingTests
     {
         var queue = new RideQueue(Guid.NewGuid(), maxPeople: 500, maxBoardableGroupSize: RideSeatCapacity);
 
-        Assert.Throws<DomainValidationException>(() => queue.Enqueue(QueueTestData.Group(33)));
+        Assert.Throws<DomainValidationException>(() => queue.Enqueue(QueueTestData.Group(33), QueueTestData.JoinedAt));
         Assert.Equal(0, queue.GroupCount);
     }
 
@@ -125,7 +125,7 @@ public class OversizedGroupSplittingTests
     {
         var queue = new RideQueue(Guid.NewGuid(), maxPeople: 500, maxBoardableGroupSize: RideSeatCapacity);
 
-        queue.Enqueue(QueueTestData.Group(RideSeatCapacity));
+        queue.Enqueue(QueueTestData.Group(RideSeatCapacity), QueueTestData.JoinedAt);
 
         Assert.Equal(1, queue.GroupCount);
         Assert.Equal(RideSeatCapacity, queue.PeopleWaiting);
@@ -143,7 +143,7 @@ public class OversizedGroupSplittingTests
     {
         var queue = new RideQueue(Guid.NewGuid(), maxPeople: 500, maxBoardableGroupSize: RideSeatCapacity);
 
-        var groups = queue.EnqueueAll([QueueTestData.Group(20), QueueTestData.Group(20)]);
+        var groups = queue.EnqueueAll([QueueTestData.Group(20), QueueTestData.Group(20)], QueueTestData.JoinedAt);
 
         Assert.Equal(2, groups.Count);
         Assert.Equal(2, queue.GroupCount);
@@ -160,7 +160,7 @@ public class OversizedGroupSplittingTests
         var queue = new RideQueue(Guid.NewGuid(), maxPeople: 10, maxBoardableGroupSize: RideSeatCapacity);
 
         Assert.Throws<DomainValidationException>(
-            () => queue.EnqueueAll([QueueTestData.Group(6), QueueTestData.Group(6)]));
+            () => queue.EnqueueAll([QueueTestData.Group(6), QueueTestData.Group(6)], QueueTestData.JoinedAt));
 
         // All-or-nothing: the first arrival must not have slipped in on its own.
         Assert.Equal(0, queue.GroupCount);
@@ -172,7 +172,7 @@ public class OversizedGroupSplittingTests
     {
         var queue = new RideQueue(Guid.NewGuid(), maxPeople: 10, maxBoardableGroupSize: RideSeatCapacity);
 
-        Assert.Throws<DomainValidationException>(() => queue.EnqueueAll([]));
+        Assert.Throws<DomainValidationException>(() => queue.EnqueueAll([], QueueTestData.JoinedAt));
     }
 
     // --- RideQueueService ------------------------------------------------------------

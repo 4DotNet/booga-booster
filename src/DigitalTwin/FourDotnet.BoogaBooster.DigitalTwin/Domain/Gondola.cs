@@ -22,6 +22,12 @@ public sealed class Gondola : DomainModel
     private double _omega;       // ω_cart — emergent yaw rate (rad/s)
     private double _lateralG;
     private double _forwardG;
+    private double _experiencedIntensity;
+
+    // The current sustained-max-G episode (docs/06 §6.6): how long the felt G has stayed
+    // at or above MaxGForce, and whether this episode has already been penalised.
+    private TimeSpan _maxGEpisodeElapsed = TimeSpan.Zero;
+    private bool _maxGPenaltyApplied;
 
     public Gondola(int hubIndex, int index)
         : base(isNew: true)
@@ -65,6 +71,13 @@ public sealed class Gondola : DomainModel
 
     /// <summary>Fore/aft specific force felt by riders (g). Updated each physics tick.</summary>
     public double ForwardG => _forwardG;
+
+    /// <summary>
+    /// The intensity (0–100) the gondola's riders experience: its horizontal felt G as a
+    /// percentage of <see cref="RideParameters.MaxGForce"/>, capped at 100
+    /// (<c>docs/06-passenger-experience.md</c> §6.3). Updated each physics tick.
+    /// </summary>
+    public double ExperiencedIntensity => _experiencedIntensity;
 
     /// <summary>Total measured passenger weight in the gondola.</summary>
     public double PassengerLoadKg => _left.OccupiedKg + _right.OccupiedKg;
@@ -136,8 +149,9 @@ public sealed class Gondola : DomainModel
 
     /// <summary>
     /// Advances the gondola's swing by <paramref name="dt"/> seconds, given the
-    /// mill's and its hub's current angles and speeds. Updates the felt G-forces
-    /// every call; integrates the pendulum only when the brake is released.
+    /// mill's and its hub's current angles and speeds. Updates the felt G-forces and
+    /// the riders' experience every call; integrates the pendulum only when the brake
+    /// is released.
     /// </summary>
     public void AdvancePhysics(double millAngle, double millOmega, double hubAngle, double hubOmega, double dt)
     {
@@ -149,6 +163,7 @@ public sealed class Gondola : DomainModel
         var worldFacing = millAngle + hubAngle + RideKinematics.MountAngle(Index) + _angle;
 
         UpdateGForces(field, worldFacing, comAngle, comDistance);
+        UpdateRiderExperience(dt);
 
         if (_brake == GondolaBrakeState.Engaged)
         {
@@ -209,6 +224,40 @@ public sealed class Gondola : DomainModel
 
         _forwardG = specific.Dot(forwardHat) / RideParameters.Gravity;
         _lateralG = specific.Dot(lateralHat) / RideParameters.Gravity;
+    }
+
+    /// <summary>
+    /// Turns this step's felt G into the riders' experience (<c>docs/06</c> §6.3–6.6):
+    /// derives the experienced intensity, advances the sustained-max-G episode
+    /// (penalising each occupant once when it outlasts
+    /// <see cref="RideParameters.MaxGEpisodeDuration"/>), then lets each occupant ride
+    /// the step at that intensity.
+    /// </summary>
+    private void UpdateRiderExperience(double dt)
+    {
+        var feltG = Math.Sqrt((_forwardG * _forwardG) + (_lateralG * _lateralG));
+        _experiencedIntensity = Math.Min(
+            RideParameters.MaxExperienceRating,
+            RideParameters.MaxExperienceRating * feltG / RideParameters.MaxGForce);
+
+        if (feltG >= RideParameters.MaxGForce)
+        {
+            _maxGEpisodeElapsed += TimeSpan.FromSeconds(dt);
+            if (_maxGEpisodeElapsed > RideParameters.MaxGEpisodeDuration && !_maxGPenaltyApplied)
+            {
+                _left.Occupant?.SufferSustainedMaxG();
+                _right.Occupant?.SufferSustainedMaxG();
+                _maxGPenaltyApplied = true;
+            }
+        }
+        else
+        {
+            _maxGEpisodeElapsed = TimeSpan.Zero;
+            _maxGPenaltyApplied = false;
+        }
+
+        _left.Occupant?.ExperienceRideStep(_experiencedIntensity, dt);
+        _right.Occupant?.ExperienceRideStep(_experiencedIntensity, dt);
     }
 
     /// <summary>

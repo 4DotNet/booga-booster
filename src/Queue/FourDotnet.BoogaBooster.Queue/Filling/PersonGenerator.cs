@@ -12,7 +12,8 @@ namespace FourDotnet.BoogaBooster.Queue.Filling;
 /// distribution centred in the typical 70–100 kg band so most guests are average
 /// while lighter and heavier exceptions still occur across the full
 /// <c>[<see cref="Person.MinWeightInKilograms"/>, <see cref="Person.MaxWeightInKilograms"/>]</c>
-/// range. Registered as a singleton so the unique-number counter is shared; its
+/// range. Each guest also gets uniformly drawn arrival happiness and preferred ride
+/// intensity, and no nausea. Registered as a singleton so the unique-number counter is shared; its
 /// randomness honours <see cref="QueueModuleOptions.RandomSeed"/> for deterministic tests.
 /// </summary>
 internal sealed class PersonGenerator : IPersonGenerator
@@ -22,6 +23,24 @@ internal sealed class PersonGenerator : IPersonGenerator
     // of the mass yet the clamped tails still reach 30 kg and 150 kg on occasion.
     private const double MeanWeightInKilograms = 85.0;
     private const double WeightStandardDeviation = 12.0;
+
+    // Initial experience ratings on arrival (docs/06-passenger-experience.md §6.1):
+    // guests arrive fairly to quite happy, all came for a proper ride, none nauseous.
+
+    /// <summary>The lowest happiness a guest arrives with.</summary>
+    internal const double MinArrivalHappiness = 65.0;
+
+    /// <summary>The highest happiness a guest arrives with.</summary>
+    internal const double MaxArrivalHappiness = 85.0;
+
+    /// <summary>The lowest ride intensity a guest prefers.</summary>
+    internal const double MinArrivalPreferredIntensity = 50.0;
+
+    /// <summary>The highest ride intensity a guest prefers.</summary>
+    internal const double MaxArrivalPreferredIntensity = 100.0;
+
+    /// <summary>The nausea every guest arrives with.</summary>
+    internal const double ArrivalNausea = 0.0;
 
     private readonly Faker _faker;
     private long _lastNumber;
@@ -42,8 +61,10 @@ internal sealed class PersonGenerator : IPersonGenerator
         var number = Interlocked.Increment(ref _lastNumber);
         var name = _faker.Name.FullName();
         var weight = NextWeight();
+        var happiness = NextUniform(MinArrivalHappiness, MaxArrivalHappiness);
+        var preferredIntensity = NextUniform(MinArrivalPreferredIntensity, MaxArrivalPreferredIntensity);
 
-        return new Person(number, name, weight);
+        return new Person(number, name, weight, happiness, preferredIntensity, ArrivalNausea);
     }
 
     public GroupArrival CreateGroup(int size)
@@ -78,4 +99,10 @@ internal sealed class PersonGenerator : IPersonGenerator
 
         return (int)Math.Round(clamped);
     }
+
+    /// <summary>
+    /// Draws uniformly from [<paramref name="min"/>, <paramref name="max"/>] through the
+    /// seeded randomizer, so a given seed always yields the same ratings.
+    /// </summary>
+    private double NextUniform(double min, double max) => min + ((max - min) * _faker.Random.Double());
 }

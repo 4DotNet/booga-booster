@@ -57,6 +57,41 @@ toward Coulomb/viscous friction (which govern the low-speed tail) over aerodynam
 
 Units: `C_coulomb` in N·m, `C_viscous` in N·m·s/rad, `k_aero` in N·m·s²/rad².
 
+## Passenger experience
+
+Derived in [doc 6](06-passenger-experience.md). Ratings are on a 0–100 scale
+(`MinExperienceRating = 0`, `MaxExperienceRating = 100`). The queue-side constants live on a
+`QueuePatience` domain service; the ride-side constants live in `RideParameters`.
+
+| Parameter | Symbol | Default | Unit | Lives in |
+|-----------|--------|--------:|------|----------|
+| Queue patience grace period | `w_g` | 5 | min | `QueuePatience.GracePeriod` |
+| Queue patience time constant | `τ_q` | 10 | min | `QueuePatience.DecayTimeConstant` |
+| Intensity reference / episode threshold | `G_max` | 4.5 | g | `RideParameters.MaxGForce` |
+| Happiness peak gain rate | `k_h` | 1.5 | pt/s | `RideParameters` |
+| Happiness match width (Gaussian σ) | `σ_h` | 12 | pt | `RideParameters` |
+| Nausea excess threshold | `Δ_n` | 30 | pt | `RideParameters` |
+| Nausea base rate | `r_n` | 1 | pt/s | `RideParameters` |
+| Nausea growth rate | `λ_n` | 0.15 | 1/s | `RideParameters` |
+| Max-G episode duration | `T_ep` | 1 | s | `RideParameters` |
+| Max-G nausea penalty | `P_ep` | 25 | pt | `RideParameters` |
+| Initial happiness | `H₀` | U[65, 85] | pt | Queue (generator) |
+| Initial preferred intensity | `P` | U[50, 100] | pt | Queue (generator) |
+| Initial nausea | `N₀` | 0 | pt | Queue (generator) |
+| Operator-boarded happiness | — | 75 | pt | `RideParameters.DefaultRiderHappiness` |
+| Operator-boarded preferred intensity | — | 75 | pt | `RideParameters.DefaultRiderPreferredIntensity` |
+
+### Sanity check
+
+- A guest who waits **15 min** keeps `e^(−1) ≈ 37 %` of their arrival happiness (80 → 29).
+- A rider at a **perfect intensity match** climbs from happiness 75 to 100 in
+  `25 / 1.5 ≈ 17 s`.
+- At a 30-point mismatch the happiness gain is `e^(−6.25) ≈ 0.2 %` of peak — negligible.
+- A rider under **sustained excess** goes from nausea 0 to 100 in
+  `(1/λ_n)·ln((100 + r_n/λ_n)/(r_n/λ_n)) = 6.67 · ln 16 ≈ 18.5 s`.
+- At the hub speed cap (5 rad/s) the hub alone gives `2 m × (5 rad/s)² / 9.81 ≈ 5.1 g`, so max-G episodes
+  are reachable.
+
 ## Sanity check
 
 With these parameters, a **full ride** (~2.4 t of carts + people orbiting at 6 m):

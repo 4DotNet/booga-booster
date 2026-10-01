@@ -13,13 +13,13 @@ public class QueueDomainTests
     [Fact]
     public void Person_WithNonPositiveNumber_Throws()
     {
-        Assert.Throws<DomainValidationException>(() => new Person(0, "Alice", 80));
+        Assert.Throws<DomainValidationException>(() => new Person(0, "Alice", 80, 75d, 75d, 0d));
     }
 
     [Fact]
     public void Person_WithBlankName_Throws()
     {
-        Assert.Throws<DomainValidationException>(() => new Person(1, "  ", 80));
+        Assert.Throws<DomainValidationException>(() => new Person(1, "  ", 80, 75d, 75d, 0d));
     }
 
     [Theory]
@@ -27,17 +27,20 @@ public class QueueDomainTests
     [InlineData(Person.MaxWeightInKilograms + 1)]
     public void Person_WithWeightOutOfRange_Throws(int weight)
     {
-        Assert.Throws<DomainValidationException>(() => new Person(1, "Alice", weight));
+        Assert.Throws<DomainValidationException>(() => new Person(1, "Alice", weight, 75d, 75d, 0d));
     }
 
     [Fact]
     public void Person_WithValidValues_HasIdentityAndStartsNew()
     {
-        var person = new Person(42, "Alice", 80);
+        var person = new Person(42, "Alice", 80, 70d, 60d, 5d);
 
         Assert.Equal(42, person.Number);
         Assert.Equal("Alice", person.Name);
         Assert.Equal(80, person.WeightInKilograms);
+        Assert.Equal(70d, person.Happiness);
+        Assert.Equal(60d, person.PreferredIntensity);
+        Assert.Equal(5d, person.Nausea);
         Assert.Equal(DomainModelState.New, person.State);
     }
 
@@ -115,6 +118,6 @@ public class QueueDomainTests
     {
         var queue = new RideQueue(Guid.NewGuid(), maxPeople: 10, maxBoardableGroupSize: 32);
 
-        Assert.Throws<ArgumentNullException>(() => queue.Enqueue(null!));
+        Assert.Throws<ArgumentNullException>(() => queue.Enqueue(null!, QueueTestData.JoinedAt));
     }
 }

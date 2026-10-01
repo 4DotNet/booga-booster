@@ -27,6 +27,13 @@ public sealed class Seat : DomainModel
     /// <summary><c>true</c> when a passenger is boarded.</summary>
     public bool IsOccupied => _occupant is not null;
 
+    /// <summary>
+    /// The seated passenger, or <c>null</c> when empty. Internal so the owning
+    /// <see cref="Gondola"/> and <see cref="Ride"/> can evolve and summarise the rider,
+    /// while the occupant stays off the module's public surface.
+    /// </summary>
+    internal Passenger? Occupant => _occupant;
+
     /// <summary>Weight measured by the load cell (0 when empty).</summary>
     public double OccupiedKg => _occupant?.Weight.Kilograms ?? 0d;
 

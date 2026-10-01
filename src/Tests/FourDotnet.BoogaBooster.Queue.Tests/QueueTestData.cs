@@ -11,9 +11,21 @@ namespace FourDotnet.BoogaBooster.Queue.Tests;
 /// </summary>
 internal static class QueueTestData
 {
+    /// <summary>A fixed, arbitrary join time for tests that do not care about waiting.</summary>
+    public static readonly DateTimeOffset JoinedAt = new(2026, 10, 1, 12, 0, 0, TimeSpan.Zero);
+
     /// <summary>A valid person with sensible defaults; override any field as needed.</summary>
-    public static Person Person(long number = 1, string name = "Test Person", int weightInKilograms = 80) =>
-        new(number, name, weightInKilograms);
+    public static Person Person(
+        long number = 1,
+        string name = "Test Person",
+        int weightInKilograms = 80,
+        double happiness = 75d,
+        double preferredIntensity = 75d,
+        double nausea = 0d) =>
+        new(number, name, weightInKilograms, happiness, preferredIntensity, nausea);
+
+    /// <summary>A group arrival made of exactly the given people.</summary>
+    public static GroupArrival Group(params Person[] members) => new(Guid.NewGuid(), members);
 
     /// <summary>A group arrival of <paramref name="size"/> distinct, valid people.</summary>
     public static GroupArrival Group(int size) =>

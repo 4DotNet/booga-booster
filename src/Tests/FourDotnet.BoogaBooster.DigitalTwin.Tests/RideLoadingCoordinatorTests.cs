@@ -41,7 +41,13 @@ public sealed class RideLoadingCoordinatorTests
     private static QueuedGroupDto MakeGroup(int size)
     {
         var people = Enumerable.Range(0, size)
-            .Select(_ => new PersonDto(_nextPersonNumber++, Faker.Name.FullName(), Faker.Random.Int(30, 150)))
+            .Select(_ => new PersonDto(
+                _nextPersonNumber++,
+                Faker.Name.FullName(),
+                Faker.Random.Int(30, 150),
+                Happiness: Faker.Random.Double(0d, 100d),
+                PreferredIntensity: Faker.Random.Double(50d, 100d),
+                Nausea: 0d))
             .ToArray();
         return new QueuedGroupDto(Guid.NewGuid(), people);
     }
@@ -50,7 +56,7 @@ public sealed class RideLoadingCoordinatorTests
     private static void LeaveEmptyGondolas(RideStore store, int desiredEmpty)
     {
         var seats = (TotalGondolas - desiredEmpty) * RideParameters.SeatsPerGondola;
-        var members = Enumerable.Range(0, seats).Select(_ => new PassengerWeight(75d)).ToArray();
+        var members = Enumerable.Range(0, seats).Select(_ => TestHelpers.Boarding()).ToArray();
         store.BoardGroup(members);
         Assert.Equal(desiredEmpty, store.EmptyGondolaCount);
     }
@@ -289,7 +295,7 @@ public sealed class RideLoadingCoordinatorTests
             throw new NotSupportedException();
 
         public GetQueueStatusResponse GetStatus(Guid rideId) =>
-            new(rideId, _groups.Count, _groups.Sum(g => g.Size), [.. _groups]);
+            new(rideId, _groups.Count, _groups.Sum(g => g.Size), [.. _groups], AverageHappiness: null);
 
         public Task<QueuedGroupDto?> TakeGroupAsync(Guid rideId, Guid groupId, CancellationToken cancellationToken)
         {

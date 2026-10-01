@@ -96,9 +96,7 @@ public sealed class RideLoadingCoordinator
                     continue; // The group was already gone; re-read the line and retry.
                 }
 
-                var members = taken.People
-                    .Select(person => new PassengerWeight(person.WeightInKilograms))
-                    .ToArray();
+                var members = ToBoardingPassengers(taken.People);
                 _store.BoardGroup(members);
 
                 activity ??= StartPassActivity(rideId);
@@ -133,6 +131,25 @@ public sealed class RideLoadingCoordinator
                 activity.Dispose();
             }
         }
+    }
+
+    /// <summary>
+    /// Translates the queue's people into the riders the ride seats: each keeps their
+    /// weight, their happiness as eroded by waiting up to the moment they were taken,
+    /// their preferred intensity and their nausea.
+    /// </summary>
+    private static BoardingPassenger[] ToBoardingPassengers(IReadOnlyList<PersonDto> people)
+    {
+        var members = new BoardingPassenger[people.Count];
+        for (var i = 0; i < people.Count; i++)
+        {
+            var person = people[i];
+            members[i] = new BoardingPassenger(
+                new PassengerWeight(person.WeightInKilograms),
+                new PassengerExperience(person.Happiness, person.PreferredIntensity, person.Nausea));
+        }
+
+        return members;
     }
 
     private static Activity? StartPassActivity(Guid rideId)

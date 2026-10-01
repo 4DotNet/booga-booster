@@ -60,6 +60,22 @@ describe('RideDashboard', () => {
     expect(component).toBeInstanceOf(RideDashboard);
   });
 
+  it('places the rider experience panel directly after the gondola panel in the telemetry rail', () => {
+    const fixture = TestBed.createComponent(RideDashboard);
+    http.expectOne(TELEMETRY_URL).flush({
+      state: 'Idle',
+      availableTransitions: [],
+    } satisfies RideTelemetryDto);
+    fixture.detectChanges();
+
+    const rail = (fixture.nativeElement as HTMLElement).querySelector('.rail-right')!;
+    const panels = Array.from(rail.querySelectorAll(':scope > .panel'));
+    const gondola = panels.findIndex((panel) => panel.querySelector('bb-gondola-panel'));
+
+    expect(gondola).toBeGreaterThanOrEqual(0);
+    expect(panels[gondola + 1].querySelector('bb-rider-experience-panel')).not.toBeNull();
+  });
+
   it('summary reflects lifecycle state, occupancy and security', () => {
     source.setTelemetry(createTelemetry({ gondolas: createGondolas(10) }));
     const fixture = TestBed.createComponent(RideDashboard);

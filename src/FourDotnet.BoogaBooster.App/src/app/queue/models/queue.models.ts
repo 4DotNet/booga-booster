@@ -3,12 +3,16 @@ export interface QueueStatusDto {
   readonly rideId: string;
   readonly groupCount: number;
   readonly peopleWaiting: number;
+  /** Average happiness (0-100) of everyone queued; `null`/absent when the queue is empty. */
+  readonly averageHappiness?: number | null;
 }
 
 /** Normalized queue status used across the UI. */
 export interface QueueStatus {
   readonly groupCount: number;
   readonly peopleWaiting: number;
+  /** Average happiness (0-100) of everyone queued; `null` when there is no data. */
+  readonly averageHappiness: number | null;
 }
 
 /** Projects the raw server DTO onto the normalized {@link QueueStatus}. */
@@ -16,6 +20,7 @@ export function toQueueStatus(dto: QueueStatusDto): QueueStatus {
   return {
     groupCount: dto.groupCount,
     peopleWaiting: dto.peopleWaiting,
+    averageHappiness: dto.averageHappiness ?? null,
   };
 }
 

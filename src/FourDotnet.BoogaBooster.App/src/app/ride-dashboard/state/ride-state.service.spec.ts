@@ -117,6 +117,19 @@ describe('RideStateService', () => {
     expect(service.loadBalanceState()).toBe('safe');
   });
 
+  it('exposes the rider experience, defaulting to all-null when absent', () => {
+    expect(service.riderExperience().averageHappiness).toBeNull();
+
+    const riderExperience = {
+      averageHappiness: 81,
+      averagePreferredIntensity: 74,
+      averageNausea: 12,
+    };
+    source.setTelemetry(createTelemetry({ riderExperience }));
+
+    expect(service.riderExperience()).toEqual(riderExperience);
+  });
+
   it('reports an unsafe load balance for a lopsided load', () => {
     // Only the first gondola carries any weight, so the load is entirely on
     // one side of the mill.

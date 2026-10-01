@@ -45,12 +45,13 @@ public sealed class QueueHandlerTelemetryTests : IDisposable
     public async Task GetQueueStatus_TagsTheRide_AndTheLineItRead()
     {
         var rideId = Guid.NewGuid();
-        var person = new PersonDto(1, "Person 1", 80);
+        var person = new PersonDto(1, "Person 1", 80, Happiness: 72.5d, PreferredIntensity: 90d, Nausea: 0d);
         var snapshot = new GetQueueStatusResponse(
             rideId,
             GroupCount: 1,
             PeopleWaiting: 1,
-            Groups: [new QueuedGroupDto(Guid.NewGuid(), [person])]);
+            Groups: [new QueuedGroupDto(Guid.NewGuid(), [person])],
+            AverageHappiness: 72.5d);
         var service = new Mock<IRideQueueService>();
         service.Setup(s => s.GetStatus(rideId)).Returns(snapshot);
 
@@ -62,9 +63,26 @@ public sealed class QueueHandlerTelemetryTests : IDisposable
         Assert.Equal(rideId, activity.GetTagItem("queue.ride.id"));
         Assert.Equal(1, activity.GetTagItem("queue.group.count"));
         Assert.Equal(1, activity.GetTagItem("queue.people.waiting"));
+        Assert.Equal(72.5d, activity.GetTagItem("queue.happiness.average"));
         Assert.DoesNotContain(
             activity.Tags,
             tag => tag.Value is not null && tag.Value.Contains(person.Name, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task GetQueueStatus_ForAnEmptyLine_CarriesNoAverageHappinessTag()
+    {
+        var rideId = Guid.NewGuid();
+        var empty = new GetQueueStatusResponse(rideId, GroupCount: 0, PeopleWaiting: 0, Groups: [], AverageHappiness: null);
+        var service = new Mock<IRideQueueService>();
+        service.Setup(s => s.GetStatus(rideId)).Returns(empty);
+
+        await new GetQueueStatusQueryHandler(service.Object).HandleAsync(
+            new GetQueueStatusQuery(rideId),
+            TestContext.Current.CancellationToken);
+
+        var activity = ActivityFor("GetQueueStatus", "queue.ride.id", rideId);
+        Assert.Null(activity.GetTagItem("queue.happiness.average"));
     }
 
     [Fact]
@@ -90,8 +108,8 @@ public sealed class QueueHandlerTelemetryTests : IDisposable
     {
         lock (_activities)
         {
-            return Assert.Single(_activities.Where(activity =>
-                activity.OperationName == operation && Equals(activity.GetTagItem(tag), expected)));
+            return Assert.Single(_activities, activity =>
+                activity.OperationName == operation && Equals(activity.GetTagItem(tag), expected));
         }
     }
 }

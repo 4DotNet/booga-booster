@@ -110,14 +110,15 @@ public sealed class RideStore : IRideStore, IRideTelemetryProvider
     {
         lock (_gate)
         {
-            var passenger = new Passenger(weight ?? _sampler.NextPassengerWeight());
+            // An operator-boarded passenger has no queue record, so no ratings to carry.
+            var passenger = new Passenger(weight ?? _sampler.NextPassengerWeight(), PassengerExperience.Default);
             var delay = _sampler.NextRestraintCloseDelay();
             _ride.BoardPassenger(hubIndex, gondolaIndex, seat, passenger, delay);
             return _ride.ToTelemetry();
         }
     }
 
-    public RideTelemetry BoardGroup(IReadOnlyList<PassengerWeight> members)
+    public RideTelemetry BoardGroup(IReadOnlyList<BoardingPassenger> members)
     {
         ArgumentNullException.ThrowIfNull(members);
 

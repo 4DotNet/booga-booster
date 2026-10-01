@@ -47,5 +47,11 @@
     <div class="panel">
       <bb-gondola-panel [gondolas]="ride.gondolas()" />
     </div>
+    <div class="panel">
+      <bb-rider-experience-panel
+        [queueHappiness]="queueState.averageHappiness()"
+        [riderExperience]="ride.riderExperience()"
+      />
+    </div>
   </section>
 </main>

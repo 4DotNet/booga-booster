@@ -65,7 +65,8 @@ internal sealed class RideQueueService : IRideQueueService
         // Admit the whole party in one step so a split arrival is never half-admitted
         // when the line is nearly full.
         var arrivals = sizes.Select(_personGenerator.CreateGroup).ToArray();
-        var groups = queue.EnqueueAll(arrivals);
+        var queuedAt = _timeProvider.GetUtcNow();
+        var groups = queue.EnqueueAll(arrivals, queuedAt);
 
         var enqueued = new List<QueuedGroupDto>(groups.Count);
 
@@ -88,11 +89,11 @@ internal sealed class RideQueueService : IRideQueueService
                 RideId: rideId,
                 GroupId: group.GroupId,
                 PeopleCount: group.Size,
-                QueuedAt: _timeProvider.GetUtcNow());
+                QueuedAt: group.QueuedAt);
 
             await _publisher.PublishAsync(integrationEvent, cancellationToken);
 
-            enqueued.Add(ToDto(group));
+            enqueued.Add(ToDto(group, queuedAt));
         }
 
         return enqueued;
@@ -103,18 +104,37 @@ internal sealed class RideQueueService : IRideQueueService
         var queue = _store.Find(rideId);
         if (queue is null)
         {
-            return new GetQueueStatusResponse(rideId, GroupCount: 0, PeopleWaiting: 0, Groups: []);
+            return new GetQueueStatusResponse(rideId, GroupCount: 0, PeopleWaiting: 0, Groups: [], AverageHappiness: null);
         }
 
-        var groups = queue.SnapshotGroups()
-            .Select(ToDto)
-            .ToArray();
+        // One clock read for the whole snapshot, so every person's waited happiness and
+        // the average describe the same instant.
+        var now = _timeProvider.GetUtcNow();
+        var snapshot = queue.SnapshotGroups();
+        var groups = new QueuedGroupDto[snapshot.Count];
+        var peopleWaiting = 0;
+        var happinessSum = 0d;
+
+        for (var i = 0; i < snapshot.Count; i++)
+        {
+            var group = ToDto(snapshot[i], now);
+            groups[i] = group;
+
+            var people = group.People;
+            for (var p = 0; p < people.Count; p++)
+            {
+                happinessSum += people[p].Happiness;
+            }
+
+            peopleWaiting += group.Size;
+        }
 
         return new GetQueueStatusResponse(
             rideId,
             GroupCount: groups.Length,
-            PeopleWaiting: groups.Sum(g => g.Size),
-            Groups: groups);
+            PeopleWaiting: peopleWaiting,
+            Groups: groups,
+            AverageHappiness: peopleWaiting == 0 ? null : happinessSum / peopleWaiting);
     }
 
     public Task<QueuedGroupDto?> TakeGroupAsync(
@@ -138,14 +158,31 @@ internal sealed class RideQueueService : IRideQueueService
             rideId,
             queue!.PeopleWaiting);
 
-        return Task.FromResult<QueuedGroupDto?>(ToDto(removed));
+        // The happiness that boards is the happiness eroded up to the moment of taking.
+        return Task.FromResult<QueuedGroupDto?>(ToDto(removed, _timeProvider.GetUtcNow()));
     }
 
-    private static QueuedGroupDto ToDto(QueuedGroup group)
+    /// <summary>
+    /// Projects a group onto its DTO as of <paramref name="now"/>: each member's
+    /// happiness is their arrival happiness eroded by the group's waiting time.
+    /// </summary>
+    private static QueuedGroupDto ToDto(QueuedGroup group, DateTimeOffset now)
     {
-        var people = group.Members
-            .Select(p => new PersonDto(p.Number, p.Name, p.WeightInKilograms))
-            .ToArray();
+        var waited = group.WaitedAt(now);
+        var members = group.Members;
+        var people = new PersonDto[members.Count];
+
+        for (var i = 0; i < members.Count; i++)
+        {
+            var person = members[i];
+            people[i] = new PersonDto(
+                person.Number,
+                person.Name,
+                person.WeightInKilograms,
+                QueuePatience.HappinessAfter(person.Happiness, waited),
+                person.PreferredIntensity,
+                person.Nausea);
+        }
 
         return new QueuedGroupDto(group.GroupId, people);
     }

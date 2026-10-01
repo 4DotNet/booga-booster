@@ -231,6 +231,49 @@ describe('mapRideTelemetry', () => {
     expect(model.brakesEngaged).toBe(false);
   });
 
+  it('maps riderExperience from the wire field', () => {
+    const model = mapRideTelemetry(
+      buildDto({
+        riderExperience: {
+          averageHappiness: 81,
+          averagePreferredIntensity: 74,
+          averageNausea: 12,
+        },
+      }),
+    );
+    expect(model.riderExperience).toEqual({
+      averageHappiness: 81,
+      averagePreferredIntensity: 74,
+      averageNausea: 12,
+    });
+  });
+
+  it('maps an all-null riderExperience (nobody aboard) without turning nulls into 0', () => {
+    const model = mapRideTelemetry(
+      buildDto({
+        riderExperience: {
+          averageHappiness: null,
+          averagePreferredIntensity: null,
+          averageNausea: null,
+        },
+      }),
+    );
+    expect(model.riderExperience).toEqual({
+      averageHappiness: null,
+      averagePreferredIntensity: null,
+      averageNausea: null,
+    });
+  });
+
+  it('defaults riderExperience to all-null when the wire field is absent', () => {
+    const model = mapRideTelemetry(buildDto());
+    expect(model.riderExperience).toEqual({
+      averageHappiness: null,
+      averagePreferredIntensity: null,
+      averageNausea: null,
+    });
+  });
+
   it('preserves the gondola and seat counts', () => {
     const model = mapRideTelemetry(buildDto());
     expect(model.gondolas).toHaveLength(GONDOLA_COUNT);
