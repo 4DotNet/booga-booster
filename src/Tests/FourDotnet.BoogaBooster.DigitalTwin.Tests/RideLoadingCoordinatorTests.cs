@@ -293,6 +293,23 @@ public sealed class RideLoadingCoordinatorTests
     }
 
     [Fact]
+    public async Task RunLoadingPass_SeatsTheHandedOverExperienceOnTheRide()
+    {
+        var (coordinator, store, queue, rideId) = Loading();
+        queue.Enqueue(new QueuedGroupDto(
+            Guid.NewGuid(),
+            [new PersonDto(1, "Decayed Dana", 80, Happiness: 40, PreferredRideIntensity: 90, Nausea: 12)]));
+
+        await coordinator.RunLoadingPassAsync(rideId, Ct);
+
+        var riders = store.GetTelemetry().RiderExperience;
+        Assert.Equal(1, riders.RiderCount);
+        Assert.Equal(40d, riders.AverageHappiness);
+        Assert.Equal(90d, riders.AveragePreferredIntensity);
+        Assert.Equal(12d, riders.AverageNausea);
+    }
+
+    [Fact]
     public async Task RunLoadingPass_WithAnEmptyQueue_SeatsNoOne()
     {
         var (coordinator, store, _, rideId) = Loading();

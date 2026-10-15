@@ -1,5 +1,6 @@
 using FourDotnet.BoogaBooster.Core;
 using FourDotnet.BoogaBooster.DigitalTwin.Abstractions;
+using FourDotnet.BoogaBooster.DigitalTwin.Abstractions.DataTransferObjects;
 
 namespace FourDotnet.BoogaBooster.DigitalTwin.Domain;
 
@@ -412,12 +413,15 @@ public sealed class Ride : DomainModel
 
         var hubs = new List<HubTelemetry>(RideParameters.HubCount);
         var gondolas = new List<GondolaTelemetry>(RideParameters.HubCount * RideParameters.GondolasPerHub);
+        var riders = new RiderExperienceTally();
         foreach (var hub in _mill.Hubs)
         {
             hubs.Add(hub.ToTelemetry());
             foreach (var gondola in hub.Gondolas)
             {
                 gondolas.Add(gondola.ToTelemetry());
+                riders.Add(gondola.GetSeat(SeatPosition.Left).Experience);
+                riders.Add(gondola.GetSeat(SeatPosition.Right).Experience);
             }
         }
 
@@ -431,7 +435,8 @@ public sealed class Ride : DomainModel
             _mill.BrakesEngaged,
             _mill.ToTelemetry(),
             hubs,
-            gondolas);
+            gondolas,
+            riders.ToTelemetry());
     }
 
     /// <summary>Runs the entry side-effects for the state being entered.</summary>
