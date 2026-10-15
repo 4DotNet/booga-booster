@@ -72,4 +72,4 @@
 ## 11. Wrap-up
 
 - [ ] 11.1 Run the app through Aspire and confirm the queue panel shows a growing single-riders line and that the ride departs with previously stranded seats filled.
-- [ ] 11.2 Re-read the change's specs against the implementation and note any scenario that ended up behaving differently, so the deltas archive accurately.
+- [x] 11.2 Re-read the change's specs against the implementation and note any scenario that ended up behaving differently, so the deltas archive accurately.
