@@ -40,6 +40,29 @@ number buried in the physics.
 | Wind cutoff | `windMax` | 18 | m/s |
 | E-stop decel ramp | — | 8 | s |
 
+## Passenger experience
+
+Derivations in [06-passenger-experience.md](06-passenger-experience.md). All experience values
+share a 0–100 scale (points).
+
+| Parameter | Constant | Default | Unit |
+|-----------|----------|--------:|------|
+| Experience scale | `ExperienceScaleMin` / `ExperienceScaleMax` | 0 / 100 | points |
+| Default rider happiness (seat boarding) | `DefaultRiderHappiness` | 75 | points |
+| Default rider preference (seat boarding) | `DefaultRiderPreferredIntensity` | 75 | points |
+| Happiness match band | `HappinessMatchBand` | 15 | points |
+| Happiness gain rate (exact match) | `HappinessGainRate` | 2 | points/s |
+| Nausea intensity excess | `NauseaIntensityExcess` | 30 | points |
+| Nausea growth rate | `NauseaGrowthRate` | 0.15 | 1/s |
+| Nausea seed | `NauseaSeed` | 1 | points |
+| Over-G dwell | `OverGNauseaDwell` | 1 | s |
+| Over-G penalty | `OverGNauseaPenalty` | 25 | points |
+| Queue grace period | `HappinessGracePeriod` (Queue option) | 5 | min |
+| Queue happiness half-life | `HappinessHalfLife` (Queue option) | 10 | min |
+
+Ride intensity is `100 · G_felt / G_max` with `G_max` from the safety limits above, so at the
+sanity-check ~2 g a ride reads about 45 % intensity.
+
 ## Loss-model coefficients
 
 Not fixed by the plan — picked to give the sanity-check behaviour below and locked in as the

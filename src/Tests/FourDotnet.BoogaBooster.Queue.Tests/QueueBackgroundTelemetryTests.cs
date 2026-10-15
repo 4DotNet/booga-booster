@@ -84,6 +84,7 @@ public sealed class QueueBackgroundTelemetryTests : IDisposable
             QueueTestData.Generator(),
             SucceedingPublisher(),
             new FakeTimeProvider(),
+            Options.Create(new QueueModuleOptions()),
             NullLogger<RideQueueService>.Instance);
 
         var enqueued = await queueService.EnqueueGroupAsync(
@@ -176,6 +177,7 @@ public sealed class QueueBackgroundTelemetryTests : IDisposable
             QueueTestData.Generator(),
             SucceedingPublisher(),
             time,
+            Options.Create(new QueueModuleOptions()),
             NullLogger<RideQueueService>.Instance);
 
         var filler = new RideQueueFillerService(

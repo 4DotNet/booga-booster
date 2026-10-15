@@ -34,12 +34,17 @@ public sealed class GetQueueStatusQueryHandler : QueryHandler<GetQueueStatusQuer
         => activity.SetTag(QueueTelemetryAttributes.RideId, query.RideId);
 
     /// <summary>
-    /// Records how long the line was — counts only, never the queued people
-    /// themselves, so no personal data reaches the span.
+    /// Records how long the line was and how happy it was on average — counts and an
+    /// aggregate only, never the queued people themselves, so no personal data
+    /// reaches the span. An empty line carries no average tag at all.
     /// </summary>
     protected override void EnrichActivityWithResponse(Activity activity, GetQueueStatusResponse response)
     {
         activity.SetTag(QueueTelemetryAttributes.GroupCount, response.GroupCount);
         activity.SetTag(QueueTelemetryAttributes.PeopleWaiting, response.PeopleWaiting);
+        if (response.AverageHappiness is { } averageHappiness)
+        {
+            activity.SetTag(QueueTelemetryAttributes.AverageHappiness, averageHappiness);
+        }
     }
 }

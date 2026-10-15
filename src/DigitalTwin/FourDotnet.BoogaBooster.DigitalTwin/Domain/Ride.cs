@@ -1,5 +1,6 @@
 using FourDotnet.BoogaBooster.Core;
 using FourDotnet.BoogaBooster.DigitalTwin.Abstractions;
+using FourDotnet.BoogaBooster.DigitalTwin.Abstractions.DataTransferObjects;
 
 namespace FourDotnet.BoogaBooster.DigitalTwin.Domain;
 
@@ -205,7 +206,8 @@ public sealed class Ride : DomainModel
     /// ride alone — members of a group are never split across a boarding, and a
     /// group never shares a gondola with anyone else. The group boards only when the
     /// ride has enough spare capacity for all of them (<c>ceil(N / 2)</c> empty
-    /// gondolas); otherwise nobody is seated. Each seated member's natural
+    /// gondolas); otherwise nobody is seated. Each member is seated with their weight
+    /// and the experience they bring from the queue, and their natural
     /// restraint-close delay is drawn from <paramref name="restraintCloseDelay"/>.
     /// Boarding moves the ride into <see cref="RideState.Loading"/>.
     /// </summary>
@@ -221,7 +223,7 @@ public sealed class Ride : DomainModel
     /// have <c>ceil(N / 2)</c> empty gondolas to seat every member.
     /// </exception>
     public void BoardGroup(
-        IReadOnlyList<PassengerWeight> members,
+        IReadOnlyList<PassengerBoarding> members,
         Func<TimeSpan> restraintCloseDelay,
         Func<int, int, IReadOnlyList<int>>? selectGondolas = null)
     {
@@ -254,10 +256,10 @@ public sealed class Ride : DomainModel
         foreach (var index in picks)
         {
             var gondola = empty[index];
-            gondola.Board(SeatPosition.Left, new Passenger(members[member++]), restraintCloseDelay());
+            gondola.Board(SeatPosition.Left, members[member++].ToPassenger(), restraintCloseDelay());
             if (member < members.Count)
             {
-                gondola.Board(SeatPosition.Right, new Passenger(members[member++]), restraintCloseDelay());
+                gondola.Board(SeatPosition.Right, members[member++].ToPassenger(), restraintCloseDelay());
             }
         }
 
@@ -411,12 +413,15 @@ public sealed class Ride : DomainModel
 
         var hubs = new List<HubTelemetry>(RideParameters.HubCount);
         var gondolas = new List<GondolaTelemetry>(RideParameters.HubCount * RideParameters.GondolasPerHub);
+        var riders = new RiderExperienceTally();
         foreach (var hub in _mill.Hubs)
         {
             hubs.Add(hub.ToTelemetry());
             foreach (var gondola in hub.Gondolas)
             {
                 gondolas.Add(gondola.ToTelemetry());
+                riders.Add(gondola.GetSeat(SeatPosition.Left).Experience);
+                riders.Add(gondola.GetSeat(SeatPosition.Right).Experience);
             }
         }
 
@@ -430,7 +435,8 @@ public sealed class Ride : DomainModel
             _mill.BrakesEngaged,
             _mill.ToTelemetry(),
             hubs,
-            gondolas);
+            gondolas,
+            riders.ToTelemetry());
     }
 
     /// <summary>Runs the entry side-effects for the state being entered.</summary>

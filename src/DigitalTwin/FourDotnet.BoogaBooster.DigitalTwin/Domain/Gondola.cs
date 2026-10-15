@@ -1,4 +1,5 @@
 using FourDotnet.BoogaBooster.Core;
+using FourDotnet.BoogaBooster.Core.Observability;
 using FourDotnet.BoogaBooster.DigitalTwin.Abstractions;
 
 namespace FourDotnet.BoogaBooster.DigitalTwin.Domain;
@@ -14,6 +15,9 @@ public sealed class Gondola : DomainModel
 {
     private const double HalfPi = Math.PI / 2d;
 
+    /// <summary><see cref="RideParameters.OverGNauseaDwell"/> in the seconds the tick integrates in.</summary>
+    private static readonly double OverGNauseaDwellSeconds = RideParameters.OverGNauseaDwell.TotalSeconds;
+
     private readonly Seat _left = new(SeatPosition.Left);
     private readonly Seat _right = new(SeatPosition.Right);
 
@@ -22,6 +26,8 @@ public sealed class Gondola : DomainModel
     private double _omega;       // ω_cart — emergent yaw rate (rad/s)
     private double _lateralG;
     private double _forwardG;
+    private double _overGSeconds;       // how long the current over-G episode has lasted (s)
+    private bool _overGPenaltyApplied;  // whether this episode has already cost its nausea
 
     public Gondola(int hubIndex, int index)
         : base(isNew: true)
@@ -65,6 +71,18 @@ public sealed class Gondola : DomainModel
 
     /// <summary>Fore/aft specific force felt by riders (g). Updated each physics tick.</summary>
     public double ForwardG => _forwardG;
+
+    /// <summary>
+    /// The felt G-force: the magnitude of <see cref="ForwardG"/> and <see cref="LateralG"/>
+    /// (docs/06 §6.3). Updated each physics tick.
+    /// </summary>
+    public double FeltG => RideIntensity.FeltG(_forwardG, _lateralG);
+
+    /// <summary>
+    /// How intense the ride feels in this gondola right now, 0–100: the felt G as a
+    /// percentage of the maximum allowed G-force (docs/06 §6.3).
+    /// </summary>
+    public double Intensity => RideIntensity.FromFeltG(FeltG);
 
     /// <summary>Total measured passenger weight in the gondola.</summary>
     public double PassengerLoadKg => _left.OccupiedKg + _right.OccupiedKg;
@@ -149,6 +167,7 @@ public sealed class Gondola : DomainModel
         var worldFacing = millAngle + hubAngle + RideKinematics.MountAngle(Index) + _angle;
 
         UpdateGForces(field, worldFacing, comAngle, comDistance);
+        AdvanceRiderExperience(dt);
 
         if (_brake == GondolaBrakeState.Engaged)
         {
@@ -195,6 +214,54 @@ public sealed class Gondola : DomainModel
         var (_, comAngle) = CentreOfMass();
         return RotationalDynamics.Wrap(
             millAngle + hubAngle + RideKinematics.MountAngle(Index) + _angle + comAngle);
+    }
+
+    /// <summary>
+    /// The riders react to the G-force just computed (docs/06 §6.7, tick step 4a): both
+    /// seats feel the gondola's one intensity.
+    /// </summary>
+    private void AdvanceRiderExperience(double dt)
+    {
+        var intensity = Intensity;
+        _left.AdvanceExperience(intensity, dt);
+        _right.AdvanceExperience(intensity, dt);
+
+        AdvanceOverGEpisode(dt);
+    }
+
+    /// <summary>
+    /// Times the current over-G episode (docs/06 §6.6). While the felt G is at or above
+    /// <see cref="RideParameters.MaxGForce"/> the episode lasts; once it has lasted more
+    /// than <see cref="RideParameters.OverGNauseaDwell"/>, every rider takes
+    /// <see cref="RideParameters.OverGNauseaPenalty"/> nausea — once. Dropping below max G
+    /// ends the episode, so the next one can penalise again.
+    /// </summary>
+    private void AdvanceOverGEpisode(double dt)
+    {
+        if (FeltG < RideParameters.MaxGForce)
+        {
+            _overGSeconds = 0d;
+            _overGPenaltyApplied = false;
+            return;
+        }
+
+        _overGSeconds += dt;
+        if (_overGPenaltyApplied || _overGSeconds <= OverGNauseaDwellSeconds)
+        {
+            return;
+        }
+
+        _overGPenaltyApplied = true;
+        if (IsEmpty)
+        {
+            return; // Nobody aboard to feel it — not a nausea episode.
+        }
+
+        _left.AddNausea(RideParameters.OverGNauseaPenalty);
+        _right.AddNausea(RideParameters.OverGNauseaPenalty);
+
+        // A counter increment is write-only: it never feeds back into the tick.
+        BoogaBoosterTelemetry.OverGNauseaEpisodes.Add(1);
     }
 
     private void UpdateGForces(PlanarVector field, double worldFacing, double comAngle, double comDistance)

@@ -43,7 +43,7 @@ public sealed class RideQueueFillerServiceTests
         weatherInfluence ??= new WeatherInfluence(opts);
 
         var queueService = new RideQueueService(
-            store, QueueTestData.Generator(), publisher.Object, time, NullLogger<RideQueueService>.Instance);
+            store, QueueTestData.Generator(), publisher.Object, time, opts, NullLogger<RideQueueService>.Instance);
         var filler = new RideQueueFillerService(
             queueService, store, weatherInfluence, opts, time, NullLogger<RideQueueFillerService>.Instance);
 
@@ -123,7 +123,7 @@ public sealed class RideQueueFillerServiceTests
         var (filler, store, _) = Create(OptionsFor(rideId, min: 4, max: 8, maxQueue: 4));
 
         // Pre-fill the queue to its maximum before the cycle runs.
-        store.GetOrCreate(rideId).Enqueue(QueueTestData.Group(4));
+        store.GetOrCreate(rideId).Enqueue(QueueTestData.Group(4), QueueTestData.QueuedAt);
 
         await filler.RunFillCycleAsync(CancellationToken.None);
 

@@ -12,8 +12,13 @@ namespace FourDotnet.BoogaBooster.Queue.Filling;
 /// distribution centred in the typical 70–100 kg band so most guests are average
 /// while lighter and heavier exceptions still occur across the full
 /// <c>[<see cref="Person.MinWeightInKilograms"/>, <see cref="Person.MaxWeightInKilograms"/>]</c>
-/// range. Registered as a singleton so the unique-number counter is shared; its
-/// randomness honours <see cref="QueueModuleOptions.RandomSeed"/> for deterministic tests.
+/// range. Every guest also arrives with a uniformly drawn happiness in
+/// <c>[<see cref="MinArrivalHappiness"/>, <see cref="MaxArrivalHappiness"/>]</c>, a
+/// uniformly drawn preferred ride intensity in
+/// <c>[<see cref="MinArrivalPreferredRideIntensity"/>, <see cref="MaxArrivalPreferredRideIntensity"/>]</c>
+/// and no nausea. Registered as a singleton so the unique-number counter is shared;
+/// all of its randomness comes from one source that honours
+/// <see cref="QueueModuleOptions.RandomSeed"/>, so a seed reproduces the same guests.
 /// </summary>
 internal sealed class PersonGenerator : IPersonGenerator
 {
@@ -22,6 +27,24 @@ internal sealed class PersonGenerator : IPersonGenerator
     // of the mass yet the clamped tails still reach 30 kg and 150 kg on occasion.
     private const double MeanWeightInKilograms = 85.0;
     private const double WeightStandardDeviation = 12.0;
+
+    /// <summary>Lowest happiness a guest arrives with: content, not yet worn down by a wait.</summary>
+    internal const double MinArrivalHappiness = 65.0;
+
+    /// <summary>Highest happiness a guest arrives with.</summary>
+    internal const double MaxArrivalHappiness = 85.0;
+
+    /// <summary>
+    /// Lowest preferred ride intensity a guest arrives with — someone queueing for a
+    /// big flat-ride wants at least half of the maximum allowed G.
+    /// </summary>
+    internal const double MinArrivalPreferredRideIntensity = 50.0;
+
+    /// <summary>Highest preferred ride intensity a guest arrives with: the maximum allowed G.</summary>
+    internal const double MaxArrivalPreferredRideIntensity = 100.0;
+
+    /// <summary>Nobody is nauseous before they have ridden.</summary>
+    internal const double ArrivalNausea = 0.0;
 
     private readonly Faker _faker;
     private long _lastNumber;
@@ -42,8 +65,12 @@ internal sealed class PersonGenerator : IPersonGenerator
         var number = Interlocked.Increment(ref _lastNumber);
         var name = _faker.Name.FullName();
         var weight = NextWeight();
+        var happiness = _faker.Random.Double(MinArrivalHappiness, MaxArrivalHappiness);
+        var preferredRideIntensity = _faker.Random.Double(
+            MinArrivalPreferredRideIntensity,
+            MaxArrivalPreferredRideIntensity);
 
-        return new Person(number, name, weight);
+        return new Person(number, name, weight, happiness, preferredRideIntensity, ArrivalNausea);
     }
 
     public GroupArrival CreateGroup(int size)

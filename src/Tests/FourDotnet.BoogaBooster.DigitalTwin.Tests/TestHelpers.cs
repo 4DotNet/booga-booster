@@ -9,6 +9,10 @@ internal static class TestHelpers
 {
     public static readonly TimeSpan Dt = RideParameters.TimeStep;
 
+    /// <summary>A group member of the given weight boarding with the default rider experience.</summary>
+    public static PassengerBoarding Boarding(double kilograms = 75d) =>
+        new(new PassengerWeight(kilograms), RiderExperience.Default);
+
     /// <summary>Boards both seats of every gondola on a hub with equal-weight passengers.</summary>
     public static void FillHub(Hub hub, double kilograms)
     {

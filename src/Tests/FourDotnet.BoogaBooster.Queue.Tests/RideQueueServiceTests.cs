@@ -1,8 +1,11 @@
+using FourDotnet.BoogaBooster.Core;
 using FourDotnet.BoogaBooster.IntegrationMessages;
 using FourDotnet.BoogaBooster.IntegrationMessages.Events.Queue;
+using FourDotnet.BoogaBooster.Queue.Domain;
 using FourDotnet.BoogaBooster.Queue.Infrastructure;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 
@@ -10,7 +13,9 @@ namespace FourDotnet.BoogaBooster.Queue.Tests;
 
 public class RideQueueServiceTests
 {
-    private static (RideQueueService service, Mock<IIntegrationEventPublisher> publisher, IRideQueueStore store) CreateService(int maxQueueLength = 100)
+    private static (RideQueueService service, Mock<IIntegrationEventPublisher> publisher, IRideQueueStore store) CreateService(
+        int maxQueueLength = 100,
+        TimeProvider? timeProvider = null)
     {
         var options = Options.Create(new QueueModuleOptions { MaxQueueLength = maxQueueLength });
         var store = new InMemoryRideQueueStore(options);
@@ -23,7 +28,8 @@ public class RideQueueServiceTests
             store,
             QueueTestData.Generator(),
             publisher.Object,
-            TimeProvider.System,
+            timeProvider ?? TimeProvider.System,
+            options,
             NullLogger<RideQueueService>.Instance);
 
         return (service, publisher, store);
@@ -141,6 +147,137 @@ public class RideQueueServiceTests
     }
 
     [Fact]
+    public async Task EnqueueGroupAsync_StampsTheGroupWithTheTimeProvidersNow()
+    {
+        var time = new FakeTimeProvider(QueueTestData.QueuedAt);
+        var (service, publisher, store) = CreateService(timeProvider: time);
+        var rideId = Guid.NewGuid();
+        time.Advance(TimeSpan.FromMinutes(3));
+
+        var group = (await service.EnqueueGroupAsync(rideId, groupSize: 2, CancellationToken.None)).Single();
+
+        var expected = QueueTestData.QueuedAt.AddMinutes(3);
+        Assert.Equal(expected, store.Find(rideId)!.SnapshotGroups().Single().QueuedAt);
+        publisher.Verify(
+            p => p.PublishAsync(
+                It.Is<GroupQueuedIntegrationEvent>(e => e.GroupId == group.GroupId && e.QueuedAt == expected),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task TakeGroupAsync_AfterFifteenMinutes_CarriesTheDecayedHappiness()
+    {
+        var time = new FakeTimeProvider(QueueTestData.QueuedAt);
+        var (service, _, store) = CreateService(timeProvider: time);
+        var rideId = Guid.NewGuid();
+        var arrival = new GroupArrival(
+            Guid.NewGuid(),
+            [QueueTestData.Person(number: 1, happiness: 80, preferredRideIntensity: 90, nausea: 3)]);
+        store.GetOrCreate(rideId).Enqueue(arrival, time.GetUtcNow());
+        time.Advance(TimeSpan.FromMinutes(15));
+
+        var taken = await service.TakeGroupAsync(rideId, arrival.GroupId, CancellationToken.None);
+
+        var person = Assert.Single(taken!.People);
+        Assert.Equal(40d, person.Happiness, 1e-9);
+        Assert.Equal(90d, person.PreferredRideIntensity);
+        Assert.Equal(3d, person.Nausea);
+    }
+
+    [Theory]
+    [InlineData(4, 80)]
+    [InlineData(15, 40)]
+    [InlineData(25, 20)]
+    public void GetStatus_ReportsEachGuestsCurrentHappiness(int minutesWaited, double expected)
+    {
+        var time = new FakeTimeProvider(QueueTestData.QueuedAt);
+        var (service, _, store) = CreateService(timeProvider: time);
+        var rideId = Guid.NewGuid();
+        store.GetOrCreate(rideId).Enqueue(
+            new GroupArrival(Guid.NewGuid(), [QueueTestData.Person(happiness: 80, preferredRideIntensity: 60)]),
+            time.GetUtcNow());
+        time.Advance(TimeSpan.FromMinutes(minutesWaited));
+
+        var person = service.GetStatus(rideId).Groups.Single().People.Single();
+
+        Assert.Equal(expected, person.Happiness, 1e-9);
+        Assert.Equal(60d, person.PreferredRideIntensity);
+        Assert.Equal(0d, person.Nausea);
+    }
+
+    [Fact]
+    public void GetStatus_ReportsTheAverageCurrentHappinessOfEveryoneWaiting()
+    {
+        var time = new FakeTimeProvider(QueueTestData.QueuedAt);
+        var (service, _, store) = CreateService(timeProvider: time);
+        var rideId = Guid.NewGuid();
+        var queue = store.GetOrCreate(rideId);
+        queue.Enqueue(
+            new GroupArrival(Guid.NewGuid(), [QueueTestData.Person(number: 1, happiness: 60), QueueTestData.Person(number: 2, happiness: 70)]),
+            time.GetUtcNow());
+        queue.Enqueue(new GroupArrival(Guid.NewGuid(), [QueueTestData.Person(number: 3, happiness: 80)]), time.GetUtcNow());
+
+        var status = service.GetStatus(rideId);
+
+        Assert.Equal(70d, status.AverageHappiness!.Value, 1e-9);
+    }
+
+    [Fact]
+    public void GetStatus_AveragesTheDecayedHappiness()
+    {
+        var time = new FakeTimeProvider(QueueTestData.QueuedAt);
+        var (service, _, store) = CreateService(timeProvider: time);
+        var rideId = Guid.NewGuid();
+        store.GetOrCreate(rideId).Enqueue(
+            new GroupArrival(Guid.NewGuid(), [QueueTestData.Person(number: 1, happiness: 80), QueueTestData.Person(number: 2, happiness: 60)]),
+            time.GetUtcNow());
+        time.Advance(TimeSpan.FromMinutes(15)); // one half-life past the grace period
+
+        Assert.Equal(35d, service.GetStatus(rideId).AverageHappiness!.Value, 1e-9);
+    }
+
+    [Fact]
+    public async Task GetStatus_ForAQueueThatHasEmptied_ReportsNoAverageHappiness()
+    {
+        var (service, _, _) = CreateService();
+        var rideId = Guid.NewGuid();
+        var group = (await service.EnqueueGroupAsync(rideId, groupSize: 2, CancellationToken.None)).Single();
+        await service.TakeGroupAsync(rideId, group.GroupId, CancellationToken.None);
+
+        var status = service.GetStatus(rideId);
+
+        Assert.Equal(0, status.PeopleWaiting);
+        Assert.Null(status.AverageHappiness);
+    }
+
+    [Fact]
+    public async Task EnqueueGroupAsync_ReturnsGuestsWithTheirArrivalExperience()
+    {
+        var (service, _, _) = CreateService();
+
+        var group = (await service.EnqueueGroupAsync(Guid.NewGuid(), groupSize: 5, CancellationToken.None)).Single();
+
+        Assert.All(group.People, p => Assert.InRange(p.Happiness, 65d, 85d));
+        Assert.All(group.People, p => Assert.InRange(p.PreferredRideIntensity, 50d, 100d));
+        Assert.All(group.People, p => Assert.Equal(0d, p.Nausea));
+    }
+
+    [Fact]
+    public void Constructor_WithAnInvalidHappinessHalfLife_Throws()
+    {
+        var options = Options.Create(new QueueModuleOptions { HappinessHalfLife = TimeSpan.Zero });
+
+        Assert.Throws<DomainValidationException>(() => new RideQueueService(
+            new InMemoryRideQueueStore(options),
+            QueueTestData.Generator(),
+            new Mock<IIntegrationEventPublisher>().Object,
+            TimeProvider.System,
+            options,
+            NullLogger<RideQueueService>.Instance));
+    }
+
+    [Fact]
     public void GetStatus_ForUnknownRide_ReturnsEmptySnapshot()
     {
         var (service, _, _) = CreateService();
@@ -152,5 +289,6 @@ public class RideQueueServiceTests
         Assert.Equal(0, status.GroupCount);
         Assert.Equal(0, status.PeopleWaiting);
         Assert.Empty(status.Groups);
+        Assert.Null(status.AverageHappiness);
     }
 }

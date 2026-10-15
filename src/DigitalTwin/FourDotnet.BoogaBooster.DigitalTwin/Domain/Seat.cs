@@ -30,6 +30,9 @@ public sealed class Seat : DomainModel
     /// <summary>Weight measured by the load cell (0 when empty).</summary>
     public double OccupiedKg => _occupant?.Weight.Kilograms ?? 0d;
 
+    /// <summary>The seated passenger's current experience, or <c>null</c> when the seat is empty.</summary>
+    public RiderExperience? Experience => _occupant?.Experience;
+
     /// <summary>The restraint lock sensor reading.</summary>
     public RestraintState Restraint => _restraint;
 
@@ -152,6 +155,16 @@ public sealed class Seat : DomainModel
 
         SecureRestraint();
     }
+
+    /// <summary>
+    /// Lets the seated passenger, if any, react to riding for <paramref name="dt"/>
+    /// seconds at the gondola's <paramref name="intensity"/> (docs/06 §6.4–6.5). An
+    /// empty seat has nobody to react.
+    /// </summary>
+    public void AdvanceExperience(double intensity, double dt) => _occupant?.Ride(intensity, dt);
+
+    /// <summary>Makes the seated passenger, if any, <paramref name="points"/> more nauseous.</summary>
+    public void AddNausea(double points) => _occupant?.AddNausea(points);
 
     /// <summary>Projects the seat's sensors onto the telemetry DTO.</summary>
     public SeatTelemetry ToTelemetry() => new(Position, OccupiedKg, _restraint, IsOccupied, IsSecured);

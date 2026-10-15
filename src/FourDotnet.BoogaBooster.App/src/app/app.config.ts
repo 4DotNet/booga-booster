@@ -1,6 +1,8 @@
 import { provideHttpClient, withFetch } from '@angular/common/http';
 import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/core';
 import { provideRouter } from '@angular/router';
+import Aura from '@primeuix/themes/aura';
+import { providePrimeNG } from 'primeng/config';
 
 import { routes } from './app.routes';
 import { HttpQueueSource } from './queue/data/http-queue-source';
@@ -15,6 +17,9 @@ export const appConfig: ApplicationConfig = {
     provideBrowserGlobalErrorListeners(),
     provideRouter(routes),
     provideHttpClient(withFetch()),
+    // Light/dark switching is off: the dashboard is always dark and themes PrimeNG
+    // components through design tokens (see the panels) rather than the OS scheme.
+    providePrimeNG({ theme: { preset: Aura, options: { darkModeSelector: false } } }),
     { provide: RIDE_TELEMETRY_SOURCE, useExisting: SseRideTelemetrySource },
     { provide: WEATHER_SOURCE, useExisting: HttpWeatherSource },
     { provide: QUEUE_SOURCE, useExisting: HttpQueueSource },

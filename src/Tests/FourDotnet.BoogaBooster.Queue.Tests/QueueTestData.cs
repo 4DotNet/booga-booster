@@ -11,9 +11,18 @@ namespace FourDotnet.BoogaBooster.Queue.Tests;
 /// </summary>
 internal static class QueueTestData
 {
+    /// <summary>A fixed enqueue instant for tests that do not care about waiting time.</summary>
+    public static readonly DateTimeOffset QueuedAt = new(2026, 10, 15, 12, 0, 0, TimeSpan.Zero);
+
     /// <summary>A valid person with sensible defaults; override any field as needed.</summary>
-    public static Person Person(long number = 1, string name = "Test Person", int weightInKilograms = 80) =>
-        new(number, name, weightInKilograms);
+    public static Person Person(
+        long number = 1,
+        string name = "Test Person",
+        int weightInKilograms = 80,
+        double happiness = 75,
+        double preferredRideIntensity = 75,
+        double nausea = 0) =>
+        new(number, name, weightInKilograms, happiness, preferredRideIntensity, nausea);
 
     /// <summary>A group arrival of <paramref name="size"/> distinct, valid people.</summary>
     public static GroupArrival Group(int size) =>

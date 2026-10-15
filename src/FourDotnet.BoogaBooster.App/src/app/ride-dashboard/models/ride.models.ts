@@ -96,6 +96,26 @@ export interface Gondola {
   readonly angleDegrees: number;
 }
 
+/**
+ * Summary of how the boarded riders feel, as precomputed by the backend. Every
+ * average is on a 0–100 scale and is `null` when nobody is on board, so
+ * "no riders" is never confused with a genuine 0.
+ */
+export interface RiderExperience {
+  readonly riderCount: number;
+  readonly averageHappiness: number | null;
+  readonly averagePreferredIntensity: number | null;
+  readonly averageNausea: number | null;
+}
+
+/** Rider experience of an empty ride: nobody on board, so no averages. */
+export const NO_RIDER_EXPERIENCE: RiderExperience = {
+  riderCount: 0,
+  averageHappiness: null,
+  averagePreferredIntensity: null,
+  averageNausea: null,
+};
+
 /** A full snapshot of ride telemetry. */
 export interface RideTelemetry {
   readonly state: RideState;
@@ -119,6 +139,12 @@ export interface RideTelemetry {
    * it is absent (see `RideStateService.occupiedSeats`).
    */
   readonly boardedPassengerCount?: number;
+  /**
+   * Average rider experience. Optional so older frames/fixtures without the
+   * field still type check; consumers treat an absent value as
+   * {@link NO_RIDER_EXPERIENCE}.
+   */
+  readonly riderExperience?: RiderExperience;
 }
 
 /**
@@ -234,6 +260,8 @@ export interface RideTelemetryStreamDto {
   readonly gondolas: readonly RideTelemetryGondolaStreamDto[];
   readonly boardedPassengerCount: number;
   readonly brakesEngaged?: boolean;
+  /** Rider-experience summary; absent from an older backend, nullable averages. */
+  readonly riderExperience?: Partial<RiderExperience> | null;
 }
 
 /** The backend's `GondolaBrakeState` names in index order (`0=Engaged, 1=Released`). */
@@ -368,6 +396,20 @@ export function mapRideTelemetry(dto: RideTelemetryStreamDto): RideTelemetry {
     gondolaBrakeEngaged: dto.gondolas.every((gondola) => brakeEngaged(gondola.brake)),
     // Defaults to released for an older frame that doesn't carry the field.
     brakesEngaged: dto.brakesEngaged ?? false,
+    riderExperience: mapRiderExperience(dto.riderExperience),
+  };
+}
+
+/** Maps the wire rider-experience summary; an absent field or average becomes `null`. */
+function mapRiderExperience(dto: RideTelemetryStreamDto['riderExperience']): RiderExperience {
+  if (!dto) {
+    return NO_RIDER_EXPERIENCE;
+  }
+  return {
+    riderCount: dto.riderCount ?? 0,
+    averageHappiness: dto.averageHappiness ?? null,
+    averagePreferredIntensity: dto.averagePreferredIntensity ?? null,
+    averageNausea: dto.averageNausea ?? null,
   };
 }
 
