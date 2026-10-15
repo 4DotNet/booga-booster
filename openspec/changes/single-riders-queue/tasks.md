@@ -1,6 +1,6 @@
 ## 1. Integration message
 
-- [ ] 1.1 Add `SingleRiderQueuedIntegrationEvent(Guid RideId, long PersonNumber, DateTimeOffset QueuedAt)` in `src/Shared/FourDotnet.BoogaBooster.IntegrationMessages/Events/Queue/`, marked `[TopicName("single-rider-queued")]` and implementing `IIntegrationEvent`, mirroring `GroupQueuedIntegrationEvent`.
+- [x] 1.1 Add `SingleRiderQueuedIntegrationEvent(Guid RideId, long PersonNumber, DateTimeOffset QueuedAt)` in `src/Shared/FourDotnet.BoogaBooster.IntegrationMessages/Events/Queue/`, marked `[TopicName("single-rider-queued")]` and implementing `IIntegrationEvent`, mirroring `GroupQueuedIntegrationEvent`.
 
 ## 2. Queue abstractions — DTO layout and contract
 
