@@ -103,7 +103,13 @@ public sealed class Ride : DomainModel
     public int EmptyGondolaCount => _mill.EmptyGondolaCount;
 
     /// <summary>The free seats a boarding group can take — two per empty gondola.</summary>
-    public int FreeSeats => _mill.EmptyGondolaCount * RideParameters.SeatsPerGondola;
+    public int GroupBoardableSeats => _mill.EmptyGondolaCount * RideParameters.SeatsPerGondola;
+
+    /// <summary>
+    /// Every unoccupied seat on the ride, including the free seat beside a lone
+    /// rider — the capacity single riders may fill (see <see cref="SeatSingleRiders"/>).
+    /// </summary>
+    public int FreeSeatCount => _mill.FreeSeatCount;
 
     /// <summary><c>true</c> when the ride is at rest and safe to be loaded/started.</summary>
     public bool IsSafeToStart =>
@@ -259,6 +265,63 @@ public sealed class Ride : DomainModel
             {
                 gondola.Board(SeatPosition.Right, new Passenger(members[member++]), restraintCloseDelay());
             }
+        }
+
+        _state = RideState.Loading;
+        MarkChanged();
+    }
+
+    /// <summary>
+    /// Seats individual riders into any unoccupied seats — including the free seat
+    /// beside a passenger from an earlier group or another single rider — while the
+    /// ride is idle or loading. This is the one deliberate exception to "members of
+    /// different parties never share a gondola": it applies to single riders only,
+    /// and <see cref="BoardGroup"/> still takes whole empty gondolas exclusively.
+    /// Boarding moves the ride into <see cref="RideState.Loading"/>.
+    /// </summary>
+    /// <param name="selectSeats">
+    /// Chooses which free seats the riders take: given the number of free seats and
+    /// the number of riders, it returns that many distinct indices into the free-seat
+    /// list. When omitted the free seats are filled in their natural order.
+    /// </param>
+    /// <exception cref="DomainValidationException">
+    /// There are no riders, the ride is not idle or loading, or there are more riders
+    /// than free seats (nobody is seated in that case).
+    /// </exception>
+    public void SeatSingleRiders(
+        IReadOnlyList<PassengerWeight> riders,
+        Func<TimeSpan> restraintCloseDelay,
+        Func<int, int, IReadOnlyList<int>>? selectSeats = null)
+    {
+        ArgumentNullException.ThrowIfNull(riders);
+        ArgumentNullException.ThrowIfNull(restraintCloseDelay);
+
+        if (riders.Count == 0)
+        {
+            throw new DomainValidationException("At least one single rider is required.");
+        }
+
+        if (_state is not (RideState.Idle or RideState.Loading))
+        {
+            throw new DomainValidationException($"Single riders can only board while the ride is idle or loading (state: {_state}).");
+        }
+
+        var free = _mill.FreeSeats().ToArray();
+        if (riders.Count > free.Length)
+        {
+            throw new DomainValidationException(
+                $"{riders.Count} single rider(s) need as many free seats but only {free.Length} are free.");
+        }
+
+        var picks = selectSeats is null
+            ? Enumerable.Range(0, riders.Count)
+            : selectSeats(free.Length, riders.Count);
+
+        var rider = 0;
+        foreach (var index in picks)
+        {
+            var (gondola, seat) = free[index];
+            gondola.Board(seat, new Passenger(riders[rider++]), restraintCloseDelay());
         }
 
         _state = RideState.Loading;
