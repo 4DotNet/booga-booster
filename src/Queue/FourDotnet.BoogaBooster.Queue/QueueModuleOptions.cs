@@ -96,4 +96,18 @@ public sealed class QueueModuleOptions
     /// <c>1.0</c> to let very nice weather burst arrivals above the base rate.
     /// </summary>
     public double WeatherMultiplierCeiling { get; set; } = 1.0;
+
+    /// <summary>
+    /// How long a guest waits before their happiness starts to drop. Defaults to five
+    /// minutes — a short wait for a big ride is expected and costs nothing. Must not be
+    /// negative.
+    /// </summary>
+    public TimeSpan HappinessGracePeriod { get; set; } = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// How long it takes a waiting guest's happiness to halve once
+    /// <see cref="HappinessGracePeriod"/> is over: happiness decays exponentially with
+    /// the extra waiting time. Defaults to ten minutes. Must be positive.
+    /// </summary>
+    public TimeSpan HappinessHalfLife { get; set; } = TimeSpan.FromMinutes(10);
 }

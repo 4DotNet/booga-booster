@@ -9,7 +9,8 @@ namespace FourDotnet.BoogaBooster.Queue.Domain;
 /// calculations depend on, and three experience attributes on a 0–100 scale:
 /// <see cref="Happiness"/>, <see cref="PreferredRideIntensity"/> and
 /// <see cref="Nausea"/>. All values are validated on construction and never
-/// change afterwards. Instances are produced
+/// change afterwards — happiness lost to waiting is derived from the enqueue time
+/// (<see cref="HappinessAfterWaiting"/>), not written back. Instances are produced
 /// by <see cref="Filling.PersonGenerator"/>, which supplies the unique number, a
 /// generated name, a realistically distributed weight and the starting experience.
 /// </summary>
@@ -87,6 +88,19 @@ public sealed class Person : DomainModel
 
     /// <summary>How nauseous the person is, within [0, 100]: 0 is fine, 100 is extremely nauseous.</summary>
     public double Nausea { get; private set; }
+
+    /// <summary>
+    /// The person's happiness after waiting <paramref name="waited"/> in the queue —
+    /// their arrival <see cref="Happiness"/> worn down by <paramref name="decay"/>.
+    /// The person itself is not changed: queue happiness is always derived from the
+    /// enqueue time, so it is exact at any instant it is read.
+    /// </summary>
+    public double HappinessAfterWaiting(TimeSpan waited, HappinessDecay decay)
+    {
+        ArgumentNullException.ThrowIfNull(decay);
+
+        return decay.Apply(Happiness, waited);
+    }
 
     private static void EnsureRating(double value, string attribute)
     {

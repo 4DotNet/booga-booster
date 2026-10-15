@@ -4,7 +4,7 @@
 
 - [x] 1.1 Add `Happiness`, `PreferredRideIntensity` and `Nausea` to the Queue `Person` (constructor-validated 0–100, `DomainValidationException` when out of range) per `csharp-domain-model`. Verify with `Queue.Tests` covering valid, boundary and out-of-range values.
 - [x] 1.2 Add `QueuedAt` to `QueuedGroup`. Pass the timestamp into `RideQueue.EnqueueAll` from `RideQueueService` using its `TimeProvider`. Verify with tests that use `FakeTimeProvider` and assert the recorded enqueue time.
-- [ ] 1.3 Add `HappinessGracePeriod` (5 min) and `HappinessHalfLife` (10 min) to `QueueModuleOptions`. Implement the decay function `H(w)` from design D2 as a pure domain method. Verify with tests at 4, 6, 10, 15 and 25 minutes (80 → 40 at 15 min), including strict monotonic decrease after the grace period.
+- [x] 1.3 Add `HappinessGracePeriod` (5 min) and `HappinessHalfLife` (10 min) to `QueueModuleOptions`. Implement the decay function `H(w)` from design D2 as a pure domain method. Verify with tests at 4, 6, 10, 15 and 25 minutes (80 → 40 at 15 min), including strict monotonic decrease after the grace period.
 - [x] 1.4 Draw happiness `Uniform[65,85]` and preference `Uniform[50,100]` in `PersonGenerator` from the seeded `_faker.Random`, with nausea 0 and the bounds as named constants. Verify with a range test over ≥ 1 000 people and a same-seed reproducibility test. Update any seed-pinned tests.
 
 ## 2. Queue contracts and status
