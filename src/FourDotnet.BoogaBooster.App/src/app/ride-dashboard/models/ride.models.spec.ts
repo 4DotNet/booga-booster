@@ -8,6 +8,7 @@ import {
   RideTelemetryHubStreamDto,
   RideTelemetryStreamDto,
   SEATS_PER_GONDOLA,
+  NO_RIDER_EXPERIENCE,
   mapRideTelemetry,
 } from './ride.models';
 
@@ -229,6 +230,36 @@ describe('mapRideTelemetry', () => {
     // `buildDto` doesn't set `brakesEngaged`, simulating an older frame.
     const model = mapRideTelemetry(dto);
     expect(model.brakesEngaged).toBe(false);
+  });
+
+  it('maps the rider-experience summary', () => {
+    const riderExperience = {
+      riderCount: 2,
+      averageHappiness: 80,
+      averagePreferredIntensity: 75,
+      averageNausea: 10,
+    };
+    expect(mapRideTelemetry(buildDto({ riderExperience })).riderExperience).toEqual(
+      riderExperience,
+    );
+  });
+
+  it('keeps null averages as null rather than zero', () => {
+    const model = mapRideTelemetry(
+      buildDto({
+        riderExperience: {
+          riderCount: 0,
+          averageHappiness: null,
+          averagePreferredIntensity: null,
+          averageNausea: null,
+        },
+      }),
+    );
+    expect(model.riderExperience).toEqual(NO_RIDER_EXPERIENCE);
+  });
+
+  it('treats an absent riderExperience field as no riders', () => {
+    expect(mapRideTelemetry(buildDto()).riderExperience).toEqual(NO_RIDER_EXPERIENCE);
   });
 
   it('preserves the gondola and seat counts', () => {

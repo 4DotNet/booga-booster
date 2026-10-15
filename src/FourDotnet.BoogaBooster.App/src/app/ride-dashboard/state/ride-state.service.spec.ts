@@ -125,4 +125,21 @@ describe('RideStateService', () => {
 
     expect(service.loadBalanceState()).toBe('unsafe');
   });
+
+  it('exposes the rider experience summary from telemetry', () => {
+    const riderExperience = {
+      riderCount: 2,
+      averageHappiness: 80,
+      averagePreferredIntensity: 75,
+      averageNausea: 10,
+    };
+    source.setTelemetry(createTelemetry({ riderExperience }));
+
+    expect(service.riderExperience()).toEqual(riderExperience);
+  });
+
+  it('reports null averages when the frame has no rider experience', () => {
+    expect(service.riderExperience().averageHappiness).toBeNull();
+    expect(service.riderExperience().riderCount).toBe(0);
+  });
 });

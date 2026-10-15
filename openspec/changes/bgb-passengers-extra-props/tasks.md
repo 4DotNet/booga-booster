@@ -34,7 +34,7 @@
 
 ## 6. Frontend: models and state
 
-- [ ] 6.1 Map the `riderExperience` telemetry field in `models/ride.models.ts`, and expose a `riderExperience` computed signal on `RideStateService`. Verify with Vitest model and service specs, including the `null` case.
+- [x] 6.1 Map the `riderExperience` telemetry field in `models/ride.models.ts`, and expose a `riderExperience` computed signal on `RideStateService`. Verify with Vitest model and service specs, including the `null` case.
 - [ ] 6.2 Map `averageHappiness` in `queue/models/queue.models.ts`, and expose an `averageHappiness` signal on `QueueStateService`. Verify with Vitest specs, including an empty queue.
 
 ## 7. Frontend: Rider Experience panel

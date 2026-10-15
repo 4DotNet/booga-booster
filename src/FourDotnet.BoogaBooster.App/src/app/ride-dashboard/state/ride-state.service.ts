@@ -7,7 +7,9 @@ import {
   LoadBalanceState,
   Mill,
   MotorDirection,
+  NO_RIDER_EXPERIENCE,
   RideState,
+  RiderExperience,
   SecurityState,
   clampPower,
   loadBalanceState,
@@ -52,6 +54,11 @@ export class RideStateService {
         (total, gondola) => total + gondola.seats.filter((seat) => seat.state !== 'empty').length,
         0,
       ),
+  );
+
+  /** Average rider happiness, preferred intensity and nausea; `null` averages when empty. */
+  readonly riderExperience: Signal<RiderExperience> = computed(
+    () => this.telemetry().riderExperience ?? NO_RIDER_EXPERIENCE,
   );
 
   /** Secured only when every occupied seat is secured. */
