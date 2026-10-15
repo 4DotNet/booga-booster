@@ -47,6 +47,7 @@ public sealed class DomainInstrumentTests : IDisposable
         ("boogabooster.ride.simulation.ticks", "{tick}", nameof(BoogaBoosterTelemetry.SimulationTicks)),
         ("boogabooster.ride.simulation.tick.duration", "ms", nameof(BoogaBoosterTelemetry.SimulationTickDuration)),
         ("boogabooster.ride.passengers.boarded", "{passenger}", nameof(BoogaBoosterTelemetry.PassengersBoarded)),
+        ("boogabooster.ride.over_g.nausea_episodes", "{episode}", nameof(BoogaBoosterTelemetry.OverGNauseaEpisodes)),
         ("boogabooster.ride.state.transitions", "{transition}", nameof(BoogaBoosterTelemetry.RideStateTransitions)),
         ("boogabooster.queue.groups.queued", "{group}", nameof(BoogaBoosterTelemetry.QueueGroupsQueued)),
         ("boogabooster.queue.people.queued", "{person}", nameof(BoogaBoosterTelemetry.QueuePeopleQueued)),

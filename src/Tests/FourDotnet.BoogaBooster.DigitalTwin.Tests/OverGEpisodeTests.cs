@@ -19,6 +19,8 @@ public sealed class OverGEpisodeTests
     /// <summary>Puts the pivot in a ~7 g field: comfortably above max G.</summary>
     private const double OverGMillOmega = 3d;
 
+    private const string OverGNauseaEpisodesMetric = "boogabooster.ride.over_g.nausea_episodes";
+
     private static readonly double Dt = TestHelpers.Dt.TotalSeconds;
 
     private static Gondola LoadedGondola()
@@ -111,6 +113,27 @@ public sealed class OverGEpisodeTests
         }
 
         Assert.Equal(0d, NauseaOf(gondola, SeatPosition.Left));
+    }
+
+    [Fact]
+    public void Each_nausea_episode_is_counted_on_the_shared_meter()
+    {
+        using var telemetry = new TelemetryRecorder();
+        var gondola = LoadedGondola();
+
+        Hold(gondola, OverGMillOmega, seconds: 1.5);
+        Hold(gondola, millOmega: 0d, seconds: 0.5);
+        Hold(gondola, OverGMillOmega, seconds: 3);
+
+        // The meter is process-wide, so a sibling test may add measurements of its own;
+        // this gondola's two episodes must be among them, each counted once and untagged.
+        var episodes = telemetry.Measurements(OverGNauseaEpisodesMetric);
+        Assert.True(episodes.Count >= 2, $"Expected at least two episodes, saw {episodes.Count}.");
+        Assert.All(episodes, measurement =>
+        {
+            Assert.Equal(1d, measurement.Value);
+            Assert.Empty(measurement.Tags);
+        });
     }
 
     [Fact]

@@ -1,4 +1,5 @@
 using FourDotnet.BoogaBooster.Core;
+using FourDotnet.BoogaBooster.Core.Observability;
 using FourDotnet.BoogaBooster.DigitalTwin.Abstractions;
 
 namespace FourDotnet.BoogaBooster.DigitalTwin.Domain;
@@ -251,8 +252,16 @@ public sealed class Gondola : DomainModel
         }
 
         _overGPenaltyApplied = true;
+        if (IsEmpty)
+        {
+            return; // Nobody aboard to feel it — not a nausea episode.
+        }
+
         _left.AddNausea(RideParameters.OverGNauseaPenalty);
         _right.AddNausea(RideParameters.OverGNauseaPenalty);
+
+        // A counter increment is write-only: it never feeds back into the tick.
+        BoogaBoosterTelemetry.OverGNauseaEpisodes.Add(1);
     }
 
     private void UpdateGForces(PlanarVector field, double worldFacing, double comAngle, double comDistance)

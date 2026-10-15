@@ -68,6 +68,16 @@ public static class BoogaBoosterTelemetry
         description: "Number of passengers boarded onto a gondola seat.");
 
     /// <summary>
+    /// Counts over-G episodes that lasted long enough to make a gondola's riders
+    /// nauseous (docs/06 §6.6) — one per episode, however long it lasts. Untagged: the
+    /// only distinguishing value would be the gondola, sixteen times every series.
+    /// </summary>
+    public static readonly Counter<long> OverGNauseaEpisodes = Meter.CreateCounter<long>(
+        "boogabooster.ride.over_g.nausea_episodes",
+        unit: "{episode}",
+        description: "Number of over-G episodes long enough to add nausea to a gondola's riders.");
+
+    /// <summary>
     /// Counts ride-state transition requests, tagged by outcome (<c>accepted</c> /
     /// <c>rejected</c>) and by the requested target state — seven values, so a dashboard
     /// can show which transition the lifecycle guard rejects most.
