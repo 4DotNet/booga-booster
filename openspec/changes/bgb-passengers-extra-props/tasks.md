@@ -25,7 +25,7 @@
 
 ## 4. Boarding hand-off
 
-- [ ] 4.1 Introduce the `PassengerBoarding` (weight + experience) input. Change `Ride.BoardGroup` and `RideStore.BoardGroup` to accept it, and map the full `PersonDto` in `RideLoadingCoordinator`. Verify with coordinator tests showing a boarded passenger has the queue's decayed happiness, preference and nausea, and confirm the existing boarding and loading tests still pass.
+- [x] 4.1 Introduce the `PassengerBoarding` (weight + experience) input. Change `Ride.BoardGroup` and `RideStore.BoardGroup` to accept it, and map the full `PersonDto` in `RideLoadingCoordinator`. Verify with coordinator tests showing a boarded passenger has the queue's decayed happiness, preference and nausea, and confirm the existing boarding and loading tests still pass.
 
 ## 5. Telemetry contract
 
