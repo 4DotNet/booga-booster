@@ -27,6 +27,9 @@ export class QueueStateService {
   /** Number of individual people currently waiting. */
   readonly peopleWaiting = computed(() => this.queue()?.peopleWaiting ?? 0);
 
+  /** Number of single riders currently waiting. */
+  readonly singleRidersWaiting = computed(() => this.queue()?.singleRidersWaiting ?? 0);
+
   /** A worded, one-line summary for a live region. */
   readonly summary = computed(() => summaryText(this.queue()));
 

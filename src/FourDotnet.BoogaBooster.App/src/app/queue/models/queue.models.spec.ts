@@ -6,9 +6,10 @@ describe('queue.models', () => {
       rideId: '11111111-1111-1111-1111-111111111111',
       groupCount: 12,
       peopleWaiting: 34,
+      singleRidersWaiting: 5,
     });
 
-    expect(queue).toEqual({ groupCount: 12, peopleWaiting: 34 });
+    expect(queue).toEqual({ groupCount: 12, peopleWaiting: 34, singleRidersWaiting: 5 });
   });
 
   describe('pluralize', () => {
@@ -29,12 +30,15 @@ describe('queue.models', () => {
       expect(summaryText(null)).toBe('Queue status is unavailable.');
     });
 
-    it('summarizes groups and people, pluralized', () => {
-      expect(summaryText({ groupCount: 12, peopleWaiting: 34 })).toBe(
-        '12 groups queued, 34 people waiting.',
+    it('summarizes groups, people and single riders, pluralized', () => {
+      expect(summaryText({ groupCount: 12, peopleWaiting: 34, singleRidersWaiting: 5 })).toBe(
+        '12 groups queued, 34 people waiting, 5 single riders.',
       );
-      expect(summaryText({ groupCount: 1, peopleWaiting: 1 })).toBe(
-        '1 group queued, 1 person waiting.',
+      expect(summaryText({ groupCount: 1, peopleWaiting: 1, singleRidersWaiting: 1 })).toBe(
+        '1 group queued, 1 person waiting, 1 single rider.',
+      );
+      expect(summaryText({ groupCount: 0, peopleWaiting: 0, singleRidersWaiting: 0 })).toBe(
+        '0 groups queued, 0 people waiting, 0 single riders.',
       );
     });
   });

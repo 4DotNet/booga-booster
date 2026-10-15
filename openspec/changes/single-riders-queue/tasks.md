@@ -62,12 +62,12 @@
 
 ## 10. Frontend
 
-- [ ] 10.1 Add `singleRidersWaiting` to `QueueStatusDto` and `QueueStatus` in `queue.models.ts` and map it in `toQueueStatus`.
-- [ ] 10.2 Extend `summaryText` to announce the single riders, pluralized through the existing `pluralize`.
-- [ ] 10.3 Add a `singleRidersWaiting` computed to `QueueStateService`.
-- [ ] 10.4 Add a "Single riders" metric row to `QueuePanel`, matching the existing metric markup and styling.
-- [ ] 10.5 Add `singleRidersWaiting` to `createQueueStatus` in `testing/fake-queue-source.ts`.
-- [ ] 10.6 Extend the model, state, panel and a11y specs for the new figure and summary wording; run `npm test` and confirm the panel still passes the AXE checks.
+- [x] 10.1 Add `singleRidersWaiting` to `QueueStatusDto` and `QueueStatus` in `queue.models.ts` and map it in `toQueueStatus`.
+- [x] 10.2 Extend `summaryText` to announce the single riders, pluralized through the existing `pluralize`.
+- [x] 10.3 Add a `singleRidersWaiting` computed to `QueueStateService`.
+- [x] 10.4 Add a "Single riders" metric row to `QueuePanel`, matching the existing metric markup and styling.
+- [x] 10.5 Add `singleRidersWaiting` to `createQueueStatus` in `testing/fake-queue-source.ts`.
+- [x] 10.6 Extend the model, state, panel and a11y specs for the new figure and summary wording; run `npm test` and confirm the panel still passes the AXE checks.
 
 ## 11. Wrap-up
 

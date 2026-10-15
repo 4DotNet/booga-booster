@@ -26,6 +26,10 @@ import { QueueStateService } from '../state/queue-state.service';
             <dt>People waiting</dt>
             <dd>{{ queue.peopleWaiting() }}</dd>
           </div>
+          <div class="metric">
+            <dt>Single riders</dt>
+            <dd>{{ queue.singleRidersWaiting() }}</dd>
+          </div>
         </dl>
       } @else {
         <p class="unavailable" role="status" aria-live="polite">

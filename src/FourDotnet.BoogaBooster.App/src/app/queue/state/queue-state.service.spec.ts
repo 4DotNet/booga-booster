@@ -20,23 +20,27 @@ describe('QueueStateService', () => {
     expect(service.isReady()).toBe(false);
     expect(service.groupCount()).toBe(0);
     expect(service.peopleWaiting()).toBe(0);
+    expect(service.singleRidersWaiting()).toBe(0);
   });
 
   it('projects the group and people counts once ready', () => {
     source.setStatus('ready');
-    source.setQueue(createQueueStatus({ groupCount: 12, peopleWaiting: 34 }));
+    source.setQueue(createQueueStatus({ groupCount: 12, peopleWaiting: 34, singleRidersWaiting: 5 }));
 
     expect(service.isReady()).toBe(true);
     expect(service.groupCount()).toBe(12);
     expect(service.peopleWaiting()).toBe(34);
+    expect(service.singleRidersWaiting()).toBe(5);
     expect(service.summary()).toContain('12 groups queued');
     expect(service.summary()).toContain('34 people waiting');
+    expect(service.summary()).toContain('5 single riders');
   });
 
   it('pluralizes a single group and a single person correctly', () => {
     source.setStatus('ready');
-    source.setQueue(createQueueStatus({ groupCount: 1, peopleWaiting: 1 }));
+    source.setQueue(createQueueStatus({ groupCount: 1, peopleWaiting: 1, singleRidersWaiting: 1 }));
 
+    expect(service.summary()).toContain('1 single rider.');
     expect(service.summary()).toContain('1 group queued');
     expect(service.summary()).toContain('1 person waiting');
   });
