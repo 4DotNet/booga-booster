@@ -33,6 +33,22 @@ describe('QueueStateService', () => {
     expect(service.summary()).toContain('34 people waiting');
   });
 
+  it('exposes the average happiness of the queue', () => {
+    source.setStatus('ready');
+    source.setQueue(createQueueStatus({ averageHappiness: 72 }));
+
+    expect(service.averageHappiness()).toBe(72);
+  });
+
+  it('reports null average happiness for an empty queue and before the first load', () => {
+    expect(service.averageHappiness()).toBeNull();
+
+    source.setStatus('ready');
+    source.setQueue(createQueueStatus({ groupCount: 0, peopleWaiting: 0, averageHappiness: null }));
+
+    expect(service.averageHappiness()).toBeNull();
+  });
+
   it('pluralizes a single group and a single person correctly', () => {
     source.setStatus('ready');
     source.setQueue(createQueueStatus({ groupCount: 1, peopleWaiting: 1 }));
