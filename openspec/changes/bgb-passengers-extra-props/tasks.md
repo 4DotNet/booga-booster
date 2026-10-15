@@ -21,7 +21,7 @@
 - [x] 3.4 Implement the per-tick happiness gain and exponential nausea growth via `Seat.AdvanceExperience`, called from `Gondola.AdvancePhysics`. Verify with tests: preference 50 at intensity 50 and preference 100 at intensity 100 both gain significantly over 5 s; an exact match beats a 10-point offset; preference 100 at intensity 40 shows no gain; preference 50 at intensity 85 shows growing per-interval nausea; preference 50 at intensity 75 shows no nausea.
 - [x] 3.5 Implement the per-gondola over-G episode timer (+25 nausea once per episode lasting more than 1 s). Verify with tests: 3 s gives +25, 0.5 s gives +0, and two separated episodes give +50.
 - [x] 3.6 Add a domain metric counter for over-G nausea episodes through `BoogaBoosterTelemetry.Meter`. Verify with a `MeterListener`-based test.
-- [ ] 3.7 Add a determinism test: two identically seeded simulations produce identical passenger happiness and nausea after N ticks.
+- [x] 3.7 Add a determinism test: two identically seeded simulations produce identical passenger happiness and nausea after N ticks.
 
 ## 4. Boarding hand-off
 
