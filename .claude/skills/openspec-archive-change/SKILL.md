@@ -24,6 +24,12 @@ Archive a completed change in the experimental workflow.
 
    **IMPORTANT**: Do NOT guess or auto-select a change. Always let the user choose.
 
+   **Then set up git before archiving:** follow the `git-workflow` skill
+   (`.claude/skills/git-workflow/SKILL.md`, sections 0 and 3) — switch the main
+   checkout to an up-to-date `development` branch, archive the change there, commit
+   the spec sync and the archive move as separate logical `docs(openspec): …`
+   commits, and push `development` when done.
+
 2. **Check artifact completion status**
 
    Run `openspec status --change "<name>" --json` to check artifact completion.

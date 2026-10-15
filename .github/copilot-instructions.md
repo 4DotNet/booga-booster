@@ -253,7 +253,7 @@ Shared with Claude Code from `.claude/`; Copilot CLI and VS Code read them nativ
 - **Skills** — the C# style-guide set (`csharp-solution-structure`,
   `csharp-feature-slices`, `csharp-minimal-api-endpoints`, `csharp-domain-model`,
   `csharp-observability`, `csharp-aspire`, `csharp-unit-testing`), `dto-organization`,
-  `test-coverage`, `git-change-workflow`, `ai-tooling-sync`, and the `openspec-*`
+  `test-coverage`, `git-workflow`, `ai-tooling-sync`, and the `openspec-*`
   change-workflow skills.
 
 Visual Studio only reads MCP servers from the solution directory, so `src/.mcp.json`

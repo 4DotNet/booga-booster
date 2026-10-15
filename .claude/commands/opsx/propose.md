@@ -29,6 +29,13 @@ When ready to implement, run /opsx:apply
 
    **IMPORTANT**: Do NOT proceed without understanding what the user wants to build.
 
+   **Then set up git before creating anything:** follow the `git-workflow` skill
+   (`.claude/skills/git-workflow/SKILL.md`, sections 0 and 1) — switch the main
+   checkout to an up-to-date `development` branch (creating it from `main` if it does
+   not exist), write the proposal there, commit the artifacts as logical
+   `docs(openspec): …` commits as they are created, and push `development` when the
+   proposal is complete.
+
 2. **Create the change directory**
    ```bash
    openspec new change "<name>"
