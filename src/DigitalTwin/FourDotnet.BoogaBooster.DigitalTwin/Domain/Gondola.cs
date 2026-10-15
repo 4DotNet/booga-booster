@@ -66,6 +66,18 @@ public sealed class Gondola : DomainModel
     /// <summary>Fore/aft specific force felt by riders (g). Updated each physics tick.</summary>
     public double ForwardG => _forwardG;
 
+    /// <summary>
+    /// The felt G-force: the magnitude of <see cref="ForwardG"/> and <see cref="LateralG"/>
+    /// (docs/06 §6.3). Updated each physics tick.
+    /// </summary>
+    public double FeltG => RideIntensity.FeltG(_forwardG, _lateralG);
+
+    /// <summary>
+    /// How intense the ride feels in this gondola right now, 0–100: the felt G as a
+    /// percentage of the maximum allowed G-force (docs/06 §6.3).
+    /// </summary>
+    public double Intensity => RideIntensity.FromFeltG(FeltG);
+
     /// <summary>Total measured passenger weight in the gondola.</summary>
     public double PassengerLoadKg => _left.OccupiedKg + _right.OccupiedKg;
 
