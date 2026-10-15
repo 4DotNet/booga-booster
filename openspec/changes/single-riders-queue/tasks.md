@@ -47,17 +47,17 @@
 
 ## 8. DigitalTwin application — the top-up phase
 
-- [ ] 8.1 Expose `int FreeSeatCount { get; }` and `RideTelemetry SeatSingleRiders(IReadOnlyList<PassengerWeight> riders)` on `IRideStore`, implementing them in `RideStore` under the existing store lock and drawing the restraint delay and seat selection from `_sampler`.
-- [ ] 8.2 Extend `RideLoadingCoordinator.RunLoadingPassAsync` with the top-up phase after the existing group loop: return unless still `Loading`; read `FreeSeatCount` and return when zero; take up to that many single riders; return when none came back.
-- [ ] 8.3 Clamp the take to `Math.Min(taken.Count, _store.FreeSeatCount)` immediately before seating, and on any failure return the un-seated riders to the front of the line via `RequeueSingleRidersAsync`.
-- [ ] 8.4 Log the top-up outcome (riders seated, seats still free) in the style of the existing group-boarding log, keeping the pass a silent no-op when nothing happens.
-- [ ] 8.5 Leave the group loop's selection, look-ahead window and stop conditions untouched.
+- [x] 8.1 Expose `int FreeSeatCount { get; }` and `RideTelemetry SeatSingleRiders(IReadOnlyList<PassengerWeight> riders)` on `IRideStore`, implementing them in `RideStore` under the existing store lock and drawing the restraint delay and seat selection from `_sampler`.
+- [x] 8.2 Extend `RideLoadingCoordinator.RunLoadingPassAsync` with the top-up phase after the existing group loop: return unless still `Loading`; read `FreeSeatCount` and return when zero; take up to that many single riders; return when none came back.
+- [x] 8.3 Clamp the take to `Math.Min(taken.Count, _store.FreeSeatCount)` immediately before seating, and on any failure return the un-seated riders to the front of the line via `RequeueSingleRidersAsync`.
+- [x] 8.4 Log the top-up outcome (riders seated, seats still free) in the style of the existing group-boarding log, keeping the pass a silent no-op when nothing happens.
+- [x] 8.5 Leave the group loop's selection, look-ahead window and stop conditions untouched.
 
 ## 9. DigitalTwin tests
 
-- [ ] 9.1 Extend `RideLoadingCoordinatorTests`: a fitting group boards before any single rider; the top-up runs only after no group fits; the top-up runs when the group queue is empty; every free seat is filled when riders are available; fewer riders than seats leaves seats free; nothing happens when the ride is full or the singles line is empty.
-- [ ] 9.2 Add tests that no rider is taken or seated while the ride is `Idle`, `Safe` or `Started`.
-- [ ] 9.3 Add a test that a rider joining mid-loading is seated on a subsequent pass, and one that a seating failure returns the riders to the front of the line.
+- [x] 9.1 Extend `RideLoadingCoordinatorTests`: a fitting group boards before any single rider; the top-up runs only after no group fits; the top-up runs when the group queue is empty; every free seat is filled when riders are available; fewer riders than seats leaves seats free; nothing happens when the ride is full or the singles line is empty.
+- [x] 9.2 Add tests that no rider is taken or seated while the ride is `Idle`, `Safe` or `Started`.
+- [x] 9.3 Add a test that a rider joining mid-loading is seated on a subsequent pass, and one that a seating failure returns the riders to the front of the line.
 - [ ] 9.4 Run `dotnet test BoogaBooster.slnx` and confirm the whole solution is green with DigitalTwin coverage at or above 80%.
 
 ## 10. Frontend

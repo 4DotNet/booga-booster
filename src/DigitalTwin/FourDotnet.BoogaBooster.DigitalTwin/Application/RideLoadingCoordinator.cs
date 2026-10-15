@@ -65,6 +65,7 @@ public sealed class RideLoadingCoordinator
         Activity? activity = null;
         var groupsBoarded = 0;
         var passengersBoarded = 0;
+        var singleRidersBoarded = 0;
 
         try
         {
@@ -73,19 +74,19 @@ public sealed class RideLoadingCoordinator
                 var emptyGondolas = _store.EmptyGondolaCount;
                 if (emptyGondolas <= 0)
                 {
-                    return; // The ride is full — no empty gondola left to seat a fresh group.
+                    break; // No whole empty gondola left for a group; single riders may still fill odd seats.
                 }
 
                 var status = _queueService.GetStatus(rideId);
                 if (status.Groups.Count == 0)
                 {
-                    return; // Nobody waiting.
+                    break; // No group waiting.
                 }
 
                 var chosen = FirstFittingGroup(status.Groups, emptyGondolas);
                 if (chosen is null)
                 {
-                    return; // None of the first three waiting groups fit — the ride is full.
+                    break; // None of the first three waiting groups fit — group loading is done.
                 }
 
                 var taken = await _queueService
@@ -114,6 +115,20 @@ public sealed class RideLoadingCoordinator
                     rideId,
                     _store.EmptyGondolaCount);
             }
+
+            // Phase two: only once no waiting group fits any more (or none is waiting),
+            // top up every remaining free seat — including the seat beside a lone rider —
+            // with individuals from the single-riders line.
+            if (!cancellationToken.IsCancellationRequested && _store.CurrentState == RideState.Loading)
+            {
+                var singlesSeated = await TopUpWithSingleRidersAsync(rideId, cancellationToken).ConfigureAwait(false);
+                if (singlesSeated > 0)
+                {
+                    activity ??= StartPassActivity(rideId);
+                    singleRidersBoarded += singlesSeated;
+                    passengersBoarded += singlesSeated;
+                }
+            }
         }
         catch (Exception exception)
         {
@@ -130,9 +145,80 @@ public sealed class RideLoadingCoordinator
             {
                 activity.SetTag(RideTelemetryAttributes.GroupsBoarded, groupsBoarded);
                 activity.SetTag(RideTelemetryAttributes.PassengersBoarded, passengersBoarded);
+                activity.SetTag(RideTelemetryAttributes.SingleRidersBoarded, singleRidersBoarded);
                 activity.Dispose();
             }
         }
+    }
+
+    /// <summary>
+    /// Seats as many waiting single riders as there are free seats. Takes at most the
+    /// free-seat count from the front of the single-riders line, clamps to the live
+    /// free-seat count immediately before seating (the store lock is the arbiter), and
+    /// returns anyone it could not seat to the <em>front</em> of the line so no guest
+    /// is lost. A silent no-op when the ride is full or nobody is waiting.
+    /// </summary>
+    /// <returns>How many single riders were seated.</returns>
+    private async Task<int> TopUpWithSingleRidersAsync(Guid rideId, CancellationToken cancellationToken)
+    {
+        var queueService = _queueService!;
+
+        var freeSeats = _store.FreeSeatCount;
+        if (freeSeats <= 0)
+        {
+            return 0;
+        }
+
+        var taken = await queueService
+            .TakeSingleRidersAsync(rideId, freeSeats, cancellationToken)
+            .ConfigureAwait(false);
+        if (taken.Count == 0)
+        {
+            return 0;
+        }
+
+        var seatable = Math.Min(taken.Count, _store.FreeSeatCount);
+        var seated = 0;
+        try
+        {
+            if (seatable > 0)
+            {
+                var weights = new PassengerWeight[seatable];
+                for (var i = 0; i < weights.Length; i++)
+                {
+                    weights[i] = new PassengerWeight(taken[i].WeightInKilograms);
+                }
+
+                // All-or-nothing: the domain validates capacity before it seats anyone.
+                _store.SeatSingleRiders(weights);
+                seated = seatable;
+            }
+        }
+        finally
+        {
+            if (seated < taken.Count)
+            {
+                // Compensation must not be cancellable, or a shutdown mid-pass would
+                // drop the guests it just took.
+                var unseated = seated == 0 ? taken : [.. taken.Skip(seated)];
+                await queueService
+                    .RequeueSingleRidersAsync(rideId, unseated, CancellationToken.None)
+                    .ConfigureAwait(false);
+            }
+        }
+
+        if (seated > 0)
+        {
+            BoogaBoosterTelemetry.PassengersBoarded.Add(seated);
+
+            _logger.LogInformation(
+                "Seated {Count} single rider(s) onto ride {RideId}; {FreeSeats} seat(s) still free.",
+                seated,
+                rideId,
+                _store.FreeSeatCount);
+        }
+
+        return seated;
     }
 
     private static Activity? StartPassActivity(Guid rideId)

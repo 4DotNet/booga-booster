@@ -59,6 +59,9 @@ internal static class RideTelemetryAttributes
     /// <summary>How many groups a loading pass seated.</summary>
     internal const string GroupsBoarded = "ride.groups.boarded";
 
+    /// <summary>How many single riders a loading pass seated into free seats.</summary>
+    internal const string SingleRidersBoarded = "ride.single_riders.boarded";
+
     /// <summary>The mill's signed rotation speed in revolutions per minute.</summary>
     internal const string MillRpm = "ride.mill.rpm";
 
