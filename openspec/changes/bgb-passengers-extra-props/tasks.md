@@ -30,7 +30,7 @@
 ## 5. Telemetry contract
 
 - [x] 5.1 Add the `RiderExperienceTelemetry(RiderCount, AverageHappiness?, AveragePreferredIntensity?, AverageNausea?)` record to DigitalTwin.Abstractions and the `RiderExperience` property on `RideTelemetry`, populated in `Ride.ToTelemetry()`. Verify with tests for the spec example (70/90, 50/100, 0/20 → 80/75/10) and for an empty ride → `null` averages.
-- [ ] 5.2 Run `dotnet build BoogaBooster.slnx` and `dotnet test BoogaBooster.slnx`, and check the `test-coverage` floor for the DigitalTwin module.
+- [x] 5.2 Run `dotnet build BoogaBooster.slnx` and `dotnet test BoogaBooster.slnx`, and check the `test-coverage` floor for the DigitalTwin module.
 
 ## 6. Frontend: models and state
 
