@@ -114,7 +114,7 @@ internal sealed class RideQueueService : IRideQueueService
         var queue = _store.Find(rideId);
         if (queue is null)
         {
-            return new GetQueueStatusResponse(rideId, GroupCount: 0, PeopleWaiting: 0, Groups: []);
+            return new GetQueueStatusResponse(rideId, GroupCount: 0, PeopleWaiting: 0, Groups: [], AverageHappiness: null);
         }
 
         // One clock reading for the whole snapshot, so every guest's happiness is
@@ -122,16 +122,26 @@ internal sealed class RideQueueService : IRideQueueService
         var now = _timeProvider.GetUtcNow();
         var snapshot = queue.SnapshotGroups();
         var groups = new QueuedGroupDto[snapshot.Count];
+        var peopleWaiting = 0;
+        var totalHappiness = 0d;
         for (var i = 0; i < groups.Length; i++)
         {
-            groups[i] = ToDto(snapshot[i], now);
+            var group = ToDto(snapshot[i], now);
+            groups[i] = group;
+            for (var p = 0; p < group.People.Count; p++)
+            {
+                totalHappiness += group.People[p].Happiness;
+            }
+
+            peopleWaiting += group.Size;
         }
 
         return new GetQueueStatusResponse(
             rideId,
             GroupCount: groups.Length,
-            PeopleWaiting: groups.Sum(g => g.Size),
-            Groups: groups);
+            PeopleWaiting: peopleWaiting,
+            Groups: groups,
+            AverageHappiness: peopleWaiting == 0 ? null : totalHappiness / peopleWaiting);
     }
 
     public Task<QueuedGroupDto?> TakeGroupAsync(

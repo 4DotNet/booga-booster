@@ -50,7 +50,8 @@ public sealed class QueueHandlerTelemetryTests : IDisposable
             rideId,
             GroupCount: 1,
             PeopleWaiting: 1,
-            Groups: [new QueuedGroupDto(Guid.NewGuid(), [person])]);
+            Groups: [new QueuedGroupDto(Guid.NewGuid(), [person])],
+            AverageHappiness: 75);
         var service = new Mock<IRideQueueService>();
         service.Setup(s => s.GetStatus(rideId)).Returns(snapshot);
 
@@ -62,9 +63,27 @@ public sealed class QueueHandlerTelemetryTests : IDisposable
         Assert.Equal(rideId, activity.GetTagItem("queue.ride.id"));
         Assert.Equal(1, activity.GetTagItem("queue.group.count"));
         Assert.Equal(1, activity.GetTagItem("queue.people.waiting"));
+        Assert.Equal(75d, activity.GetTagItem("queue.happiness.average"));
         Assert.DoesNotContain(
             activity.Tags,
             tag => tag.Value is not null && tag.Value.Contains(person.Name, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task GetQueueStatus_ForAnEmptyLine_OmitsTheAverageHappinessTag()
+    {
+        var rideId = Guid.NewGuid();
+        var service = new Mock<IRideQueueService>();
+        service
+            .Setup(s => s.GetStatus(rideId))
+            .Returns(new GetQueueStatusResponse(rideId, GroupCount: 0, PeopleWaiting: 0, Groups: [], AverageHappiness: null));
+
+        await new GetQueueStatusQueryHandler(service.Object).HandleAsync(
+            new GetQueueStatusQuery(rideId),
+            TestContext.Current.CancellationToken);
+
+        var activity = ActivityFor("GetQueueStatus", "queue.ride.id", rideId);
+        Assert.Null(activity.GetTagItem("queue.happiness.average"));
     }
 
     [Fact]

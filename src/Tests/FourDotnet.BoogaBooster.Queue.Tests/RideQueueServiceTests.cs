@@ -207,6 +207,51 @@ public class RideQueueServiceTests
     }
 
     [Fact]
+    public void GetStatus_ReportsTheAverageCurrentHappinessOfEveryoneWaiting()
+    {
+        var time = new FakeTimeProvider(QueueTestData.QueuedAt);
+        var (service, _, store) = CreateService(timeProvider: time);
+        var rideId = Guid.NewGuid();
+        var queue = store.GetOrCreate(rideId);
+        queue.Enqueue(
+            new GroupArrival(Guid.NewGuid(), [QueueTestData.Person(number: 1, happiness: 60), QueueTestData.Person(number: 2, happiness: 70)]),
+            time.GetUtcNow());
+        queue.Enqueue(new GroupArrival(Guid.NewGuid(), [QueueTestData.Person(number: 3, happiness: 80)]), time.GetUtcNow());
+
+        var status = service.GetStatus(rideId);
+
+        Assert.Equal(70d, status.AverageHappiness!.Value, 1e-9);
+    }
+
+    [Fact]
+    public void GetStatus_AveragesTheDecayedHappiness()
+    {
+        var time = new FakeTimeProvider(QueueTestData.QueuedAt);
+        var (service, _, store) = CreateService(timeProvider: time);
+        var rideId = Guid.NewGuid();
+        store.GetOrCreate(rideId).Enqueue(
+            new GroupArrival(Guid.NewGuid(), [QueueTestData.Person(number: 1, happiness: 80), QueueTestData.Person(number: 2, happiness: 60)]),
+            time.GetUtcNow());
+        time.Advance(TimeSpan.FromMinutes(15)); // one half-life past the grace period
+
+        Assert.Equal(35d, service.GetStatus(rideId).AverageHappiness!.Value, 1e-9);
+    }
+
+    [Fact]
+    public async Task GetStatus_ForAQueueThatHasEmptied_ReportsNoAverageHappiness()
+    {
+        var (service, _, _) = CreateService();
+        var rideId = Guid.NewGuid();
+        var group = (await service.EnqueueGroupAsync(rideId, groupSize: 2, CancellationToken.None)).Single();
+        await service.TakeGroupAsync(rideId, group.GroupId, CancellationToken.None);
+
+        var status = service.GetStatus(rideId);
+
+        Assert.Equal(0, status.PeopleWaiting);
+        Assert.Null(status.AverageHappiness);
+    }
+
+    [Fact]
     public async Task EnqueueGroupAsync_ReturnsGuestsWithTheirArrivalExperience()
     {
         var (service, _, _) = CreateService();
@@ -244,5 +289,6 @@ public class RideQueueServiceTests
         Assert.Equal(0, status.GroupCount);
         Assert.Equal(0, status.PeopleWaiting);
         Assert.Empty(status.Groups);
+        Assert.Null(status.AverageHappiness);
     }
 }
