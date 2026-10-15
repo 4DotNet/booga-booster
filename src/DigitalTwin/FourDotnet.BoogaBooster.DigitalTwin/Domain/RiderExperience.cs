@@ -70,6 +70,48 @@ public readonly record struct RiderExperience
         return new RiderExperience(Happiness, PreferredRideIntensity, Clamp(Nausea + points));
     }
 
+    /// <summary>
+    /// Returns this experience after riding for <paramref name="dt"/> seconds at
+    /// <paramref name="intensity"/> (docs/06 §6.4–6.5). With
+    /// <c>Δ = intensity − PreferredRideIntensity</c>:
+    /// <list type="bullet">
+    /// <item>within <see cref="RideParameters.HappinessMatchBand"/> of the preference,
+    /// happiness rises at <see cref="RideParameters.HappinessGainRate"/> scaled by how
+    /// close the match is (<c>1 − |Δ| / band</c>);</item>
+    /// <item>at least <see cref="RideParameters.NauseaIntensityExcess"/> above the
+    /// preference, nausea grows exponentially:
+    /// <c>N += NauseaGrowthRate · (N + NauseaSeed) · dt</c>.</item>
+    /// </list>
+    /// Anything else leaves the experience unchanged. Pure arithmetic on the fixed step:
+    /// no clock, no randomness, no allocation.
+    /// </summary>
+    /// <exception cref="DomainValidationException"><paramref name="dt"/> is not positive.</exception>
+    public RiderExperience AfterRiding(double intensity, double dt)
+    {
+        if (!(dt > 0d))
+        {
+            throw new DomainValidationException("The riding step must be positive.");
+        }
+
+        var excess = intensity - PreferredRideIntensity;
+        var mismatch = Math.Abs(excess);
+
+        var happiness = Happiness;
+        if (mismatch <= RideParameters.HappinessMatchBand)
+        {
+            var closeness = 1d - (mismatch / RideParameters.HappinessMatchBand);
+            happiness = Clamp(happiness + (RideParameters.HappinessGainRate * closeness * dt));
+        }
+
+        var nausea = Nausea;
+        if (excess >= RideParameters.NauseaIntensityExcess)
+        {
+            nausea = Clamp(nausea + (RideParameters.NauseaGrowthRate * (nausea + RideParameters.NauseaSeed) * dt));
+        }
+
+        return new RiderExperience(happiness, PreferredRideIntensity, nausea);
+    }
+
     private static double Clamp(double value) =>
         Math.Clamp(value, RideParameters.ExperienceScaleMin, RideParameters.ExperienceScaleMax);
 

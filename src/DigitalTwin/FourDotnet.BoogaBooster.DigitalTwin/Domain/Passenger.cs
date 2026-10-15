@@ -41,4 +41,10 @@ public sealed class Passenger : DomainModel
     /// is nothing left to check; an unchanged value only touches the model.
     /// </summary>
     public void SetExperience(RiderExperience experience) => ApplyChange(ref _experience, experience);
+
+    /// <summary>
+    /// The passenger reacts to riding for <paramref name="dt"/> seconds at
+    /// <paramref name="intensity"/> (docs/06 §6.4–6.5).
+    /// </summary>
+    public void Ride(double intensity, double dt) => SetExperience(_experience.AfterRiding(intensity, dt));
 }

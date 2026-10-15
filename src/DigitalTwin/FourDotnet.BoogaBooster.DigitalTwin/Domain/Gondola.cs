@@ -161,6 +161,7 @@ public sealed class Gondola : DomainModel
         var worldFacing = millAngle + hubAngle + RideKinematics.MountAngle(Index) + _angle;
 
         UpdateGForces(field, worldFacing, comAngle, comDistance);
+        AdvanceRiderExperience(dt);
 
         if (_brake == GondolaBrakeState.Engaged)
         {
@@ -207,6 +208,17 @@ public sealed class Gondola : DomainModel
         var (_, comAngle) = CentreOfMass();
         return RotationalDynamics.Wrap(
             millAngle + hubAngle + RideKinematics.MountAngle(Index) + _angle + comAngle);
+    }
+
+    /// <summary>
+    /// The riders react to the G-force just computed (docs/06 §6.7, tick step 4a): both
+    /// seats feel the gondola's one intensity.
+    /// </summary>
+    private void AdvanceRiderExperience(double dt)
+    {
+        var intensity = Intensity;
+        _left.AdvanceExperience(intensity, dt);
+        _right.AdvanceExperience(intensity, dt);
     }
 
     private void UpdateGForces(PlanarVector field, double worldFacing, double comAngle, double comDistance)

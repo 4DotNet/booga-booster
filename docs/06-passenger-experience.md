@@ -120,8 +120,8 @@ N(t) = (N₀ + s) · e^{k t} − s
 The seed `s` lets growth start from `N₀ = 0` (pure `dN/dt = kN` would stay at zero for ever),
 and makes each equal interval add more nausea than the one before. From 0, nausea reaches
 100 after `ln(101) / 0.15 ≈ 31 s` of sustained over-intensity. Per tick the growth factor is
-`1 + k·dt = 1.00125`; over one second that compounds to `1.1618`, matching `e^{0.15} = 1.1618`
-to four digits, so the discrete step is a faithful integration at `dt = 1/120 s`.
+`1 + k·dt = 1.00125`; over one second that compounds to `1.1617`, within 0.01 % of `e^{0.15} = 1.1618`,
+so the discrete step is a faithful integration at `dt = 1/120 s` (20 s of growth from 0 lands at 19.05 against the exact 19.09).
 
 Below the threshold intensity adds no nausea. Nausea never decays and does not feed back into
 happiness (non-goals of this change).
