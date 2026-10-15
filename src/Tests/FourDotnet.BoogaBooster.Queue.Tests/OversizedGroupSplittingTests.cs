@@ -42,6 +42,7 @@ public class OversizedGroupSplittingTests
             QueueTestData.Generator(),
             publisher.Object,
             TimeProvider.System,
+            Options.Create(new QueueModuleOptions()),
             NullLogger<RideQueueService>.Instance);
 
         return (service, publisher, store);

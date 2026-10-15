@@ -8,6 +8,7 @@ using FourDotnet.BoogaBooster.Queue.Domain;
 using FourDotnet.BoogaBooster.Queue.Filling;
 using FourDotnet.BoogaBooster.Queue.Infrastructure;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace FourDotnet.BoogaBooster.Queue;
 
@@ -22,19 +23,28 @@ internal sealed class RideQueueService : IRideQueueService
     private readonly IPersonGenerator _personGenerator;
     private readonly IIntegrationEventPublisher _publisher;
     private readonly TimeProvider _timeProvider;
+    private readonly HappinessDecay _happinessDecay;
     private readonly ILogger<RideQueueService> _logger;
 
+    /// <exception cref="Core.DomainValidationException">
+    /// The configured happiness grace period is negative or the half-life is not
+    /// positive — a misconfiguration surfaced at startup rather than on first read.
+    /// </exception>
     public RideQueueService(
         IRideQueueStore store,
         IPersonGenerator personGenerator,
         IIntegrationEventPublisher publisher,
         TimeProvider timeProvider,
+        IOptions<QueueModuleOptions> options,
         ILogger<RideQueueService> logger)
     {
+        ArgumentNullException.ThrowIfNull(options);
+
         _store = store;
         _personGenerator = personGenerator;
         _publisher = publisher;
         _timeProvider = timeProvider;
+        _happinessDecay = new HappinessDecay(options.Value.HappinessGracePeriod, options.Value.HappinessHalfLife);
         _logger = logger;
     }
 
@@ -93,7 +103,7 @@ internal sealed class RideQueueService : IRideQueueService
 
             await _publisher.PublishAsync(integrationEvent, cancellationToken);
 
-            enqueued.Add(ToDto(group));
+            enqueued.Add(ToDto(group, group.QueuedAt));
         }
 
         return enqueued;
@@ -107,9 +117,15 @@ internal sealed class RideQueueService : IRideQueueService
             return new GetQueueStatusResponse(rideId, GroupCount: 0, PeopleWaiting: 0, Groups: []);
         }
 
-        var groups = queue.SnapshotGroups()
-            .Select(ToDto)
-            .ToArray();
+        // One clock reading for the whole snapshot, so every guest's happiness is
+        // evaluated at the same instant.
+        var now = _timeProvider.GetUtcNow();
+        var snapshot = queue.SnapshotGroups();
+        var groups = new QueuedGroupDto[snapshot.Count];
+        for (var i = 0; i < groups.Length; i++)
+        {
+            groups[i] = ToDto(snapshot[i], now);
+        }
 
         return new GetQueueStatusResponse(
             rideId,
@@ -139,14 +155,31 @@ internal sealed class RideQueueService : IRideQueueService
             rideId,
             queue!.PeopleWaiting);
 
-        return Task.FromResult<QueuedGroupDto?>(ToDto(removed));
+        // The happiness a guest boards with is their queue happiness at the moment
+        // they leave the line, decay included.
+        return Task.FromResult<QueuedGroupDto?>(ToDto(removed, _timeProvider.GetUtcNow()));
     }
 
-    private static QueuedGroupDto ToDto(QueuedGroup group)
+    /// <summary>
+    /// Projects <paramref name="group"/> as it stands at <paramref name="now"/>: each
+    /// member's happiness is their arrival happiness decayed by the group's wait.
+    /// </summary>
+    private QueuedGroupDto ToDto(QueuedGroup group, DateTimeOffset now)
     {
-        var people = group.Members
-            .Select(p => new PersonDto(p.Number, p.Name, p.WeightInKilograms))
-            .ToArray();
+        var waited = group.WaitingTimeAt(now);
+        var members = group.Members;
+        var people = new PersonDto[members.Count];
+        for (var i = 0; i < people.Length; i++)
+        {
+            var person = members[i];
+            people[i] = new PersonDto(
+                person.Number,
+                person.Name,
+                person.WeightInKilograms,
+                person.HappinessAfterWaiting(waited, _happinessDecay),
+                person.PreferredRideIntensity,
+                person.Nausea);
+        }
 
         return new QueuedGroupDto(group.GroupId, people);
     }

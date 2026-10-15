@@ -43,7 +43,7 @@ public sealed class RideQueueFillerServiceTests
         weatherInfluence ??= new WeatherInfluence(opts);
 
         var queueService = new RideQueueService(
-            store, QueueTestData.Generator(), publisher.Object, time, NullLogger<RideQueueService>.Instance);
+            store, QueueTestData.Generator(), publisher.Object, time, opts, NullLogger<RideQueueService>.Instance);
         var filler = new RideQueueFillerService(
             queueService, store, weatherInfluence, opts, time, NullLogger<RideQueueFillerService>.Instance);
 
