@@ -20,7 +20,7 @@ public sealed class GetQueueStatusQueryHandlerTests
             .ToArray();
         var groups = new[] { new QueuedGroupDto(Guid.NewGuid(), people) };
 
-        return new GetQueueStatusResponse(rideId, GroupCount: 1, PeopleWaiting: groupSize, Groups: groups);
+        return new GetQueueStatusResponse(rideId, GroupCount: 1, PeopleWaiting: groupSize, Groups: groups, SingleRidersWaiting: 0, SingleRiders: []);
     }
 
     [Fact]
@@ -46,7 +46,7 @@ public sealed class GetQueueStatusQueryHandlerTests
         // The service reports an empty line for an unknown ride rather than failing,
         // and the handler passes that through untouched.
         var rideId = Guid.NewGuid();
-        var empty = new GetQueueStatusResponse(rideId, GroupCount: 0, PeopleWaiting: 0, Groups: []);
+        var empty = new GetQueueStatusResponse(rideId, GroupCount: 0, PeopleWaiting: 0, Groups: [], SingleRidersWaiting: 0, SingleRiders: []);
         var service = new Mock<IRideQueueService>();
         service.Setup(s => s.GetStatus(rideId)).Returns(empty);
         var handler = new GetQueueStatusQueryHandler(service.Object);

@@ -101,20 +101,105 @@ internal sealed class RideQueueService : IRideQueueService
     public GetQueueStatusResponse GetStatus(Guid rideId)
     {
         var queue = _store.Find(rideId);
-        if (queue is null)
-        {
-            return new GetQueueStatusResponse(rideId, GroupCount: 0, PeopleWaiting: 0, Groups: []);
-        }
+        QueuedGroupDto[] groups = queue is null
+            ? []
+            : [.. queue.SnapshotGroups().Select(ToDto)];
 
-        var groups = queue.SnapshotGroups()
-            .Select(ToDto)
-            .ToArray();
+        var singles = _store.FindSingles(rideId);
+        PersonDto[] singleRiders = singles is null
+            ? []
+            : [.. singles.SnapshotPeople().Select(ToDto)];
 
         return new GetQueueStatusResponse(
             rideId,
             GroupCount: groups.Length,
             PeopleWaiting: groups.Sum(g => g.Size),
-            Groups: groups);
+            Groups: groups,
+            SingleRidersWaiting: singleRiders.Length,
+            SingleRiders: singleRiders);
+    }
+
+    public async Task<PersonDto> EnqueueSingleRiderAsync(Guid rideId, CancellationToken cancellationToken)
+    {
+        var line = _store.GetOrCreateSingles(rideId);
+        var person = _personGenerator.Next();
+        line.Enqueue(person);
+
+        _logger.LogInformation(
+            "Single rider {PersonNumber} ({Weight} kg) joined ride {RideId}; {SingleRidersWaiting} now waiting alone.",
+            person.Number,
+            person.WeightInKilograms,
+            rideId,
+            line.PeopleWaiting);
+
+        await _publisher.PublishAsync(
+            new SingleRiderQueuedIntegrationEvent(rideId, person.Number, _timeProvider.GetUtcNow()),
+            cancellationToken);
+
+        return ToDto(person);
+    }
+
+    public Task<IReadOnlyList<PersonDto>> TakeSingleRidersAsync(
+        Guid rideId,
+        int count,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var line = _store.FindSingles(rideId);
+        if (line is null)
+        {
+            return Task.FromResult<IReadOnlyList<PersonDto>>([]);
+        }
+
+        var taken = line.TakeUpTo(count);
+        if (taken.Count == 0)
+        {
+            return Task.FromResult<IReadOnlyList<PersonDto>>([]);
+        }
+
+        _logger.LogInformation(
+            "{Count} single rider(s) left ride {RideId}'s line to board; {SingleRidersWaiting} still waiting.",
+            taken.Count,
+            rideId,
+            line.PeopleWaiting);
+
+        var dtos = new PersonDto[taken.Count];
+        for (var i = 0; i < dtos.Length; i++)
+        {
+            dtos[i] = ToDto(taken[i]);
+        }
+
+        return Task.FromResult<IReadOnlyList<PersonDto>>(dtos);
+    }
+
+    public Task RequeueSingleRidersAsync(
+        Guid rideId,
+        IReadOnlyList<PersonDto> people,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(people);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (people.Count == 0)
+        {
+            return Task.CompletedTask;
+        }
+
+        var restored = new Person[people.Count];
+        for (var i = 0; i < restored.Length; i++)
+        {
+            restored[i] = new Person(people[i].Number, people[i].Name, people[i].WeightInKilograms);
+        }
+
+        _store.GetOrCreateSingles(rideId).RequeueFront(restored);
+
+        _logger.LogInformation(
+            "{Count} single rider(s) returned to the front of ride {RideId}'s line.",
+            restored.Length,
+            rideId);
+
+        return Task.CompletedTask;
     }
 
     public Task<QueuedGroupDto?> TakeGroupAsync(
@@ -141,10 +226,13 @@ internal sealed class RideQueueService : IRideQueueService
         return Task.FromResult<QueuedGroupDto?>(ToDto(removed));
     }
 
+    private static PersonDto ToDto(Person person) =>
+        new(person.Number, person.Name, person.WeightInKilograms);
+
     private static QueuedGroupDto ToDto(QueuedGroup group)
     {
         var people = group.Members
-            .Select(p => new PersonDto(p.Number, p.Name, p.WeightInKilograms))
+            .Select(ToDto)
             .ToArray();
 
         return new QueuedGroupDto(group.GroupId, people);

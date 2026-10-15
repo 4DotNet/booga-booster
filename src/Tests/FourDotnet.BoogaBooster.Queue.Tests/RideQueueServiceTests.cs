@@ -152,5 +152,137 @@ public class RideQueueServiceTests
         Assert.Equal(0, status.GroupCount);
         Assert.Equal(0, status.PeopleWaiting);
         Assert.Empty(status.Groups);
+        Assert.Equal(0, status.SingleRidersWaiting);
+        Assert.Empty(status.SingleRiders);
+    }
+
+    [Fact]
+    public async Task EnqueueSingleRiderAsync_PublishesSingleRiderQueuedEvent()
+    {
+        var (service, publisher, _) = CreateService();
+        var rideId = Guid.NewGuid();
+
+        var person = await service.EnqueueSingleRiderAsync(rideId, CancellationToken.None);
+
+        publisher.Verify(
+            p => p.PublishAsync(
+                It.Is<SingleRiderQueuedIntegrationEvent>(e =>
+                    e.RideId == rideId && e.PersonNumber == person.Number),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task GetStatus_ReportsBothLines_WithGroupFiguresUnaffectedBySingles()
+    {
+        var (service, _, _) = CreateService();
+        var rideId = Guid.NewGuid();
+        await service.EnqueueGroupAsync(rideId, 4, CancellationToken.None);
+        var before = service.GetStatus(rideId);
+
+        await service.EnqueueSingleRiderAsync(rideId, CancellationToken.None);
+        await service.EnqueueSingleRiderAsync(rideId, CancellationToken.None);
+        var after = service.GetStatus(rideId);
+
+        Assert.Equal(before.GroupCount, after.GroupCount);
+        Assert.Equal(before.PeopleWaiting, after.PeopleWaiting);
+        Assert.Equal(4, after.PeopleWaiting);
+        Assert.Equal(2, after.SingleRidersWaiting);
+        Assert.Equal(2, after.SingleRiders.Count);
+        Assert.Equal(6, after.TotalPeopleWaiting);
+    }
+
+    [Fact]
+    public async Task GetStatus_ForAGroupOfOne_DoesNotListItAsASingleRider()
+    {
+        var (service, _, _) = CreateService();
+        var rideId = Guid.NewGuid();
+
+        await service.EnqueueGroupAsync(rideId, 1, CancellationToken.None);
+
+        var status = service.GetStatus(rideId);
+        Assert.Equal(1, status.GroupCount);
+        Assert.Equal(0, status.SingleRidersWaiting);
+    }
+
+    [Fact]
+    public async Task TakeSingleRidersAsync_ReturnsAndRemovesFromTheFront()
+    {
+        var (service, _, _) = CreateService();
+        var rideId = Guid.NewGuid();
+        var first = await service.EnqueueSingleRiderAsync(rideId, CancellationToken.None);
+        var second = await service.EnqueueSingleRiderAsync(rideId, CancellationToken.None);
+        var third = await service.EnqueueSingleRiderAsync(rideId, CancellationToken.None);
+
+        var taken = await service.TakeSingleRidersAsync(rideId, 2, CancellationToken.None);
+
+        Assert.Equal([first.Number, second.Number], taken.Select(p => p.Number));
+        var remaining = Assert.Single(service.GetStatus(rideId).SingleRiders);
+        Assert.Equal(third.Number, remaining.Number);
+    }
+
+    [Fact]
+    public async Task TakeSingleRidersAsync_WithoutALine_ReturnsEmpty()
+    {
+        var (service, _, _) = CreateService();
+
+        var taken = await service.TakeSingleRidersAsync(Guid.NewGuid(), 3, CancellationToken.None);
+
+        Assert.Empty(taken);
+    }
+
+    [Fact]
+    public async Task TakeSingleRidersAsync_FromAnEmptiedLine_ReturnsEmpty()
+    {
+        var (service, _, _) = CreateService();
+        var rideId = Guid.NewGuid();
+        await service.EnqueueSingleRiderAsync(rideId, CancellationToken.None);
+        await service.TakeSingleRidersAsync(rideId, 5, CancellationToken.None);
+
+        Assert.Empty(await service.TakeSingleRidersAsync(rideId, 5, CancellationToken.None));
+        Assert.Empty(await service.TakeSingleRidersAsync(rideId, 0, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task RequeueSingleRidersAsync_RestoresTheFrontOfTheLine()
+    {
+        var (service, _, _) = CreateService();
+        var rideId = Guid.NewGuid();
+        var a = await service.EnqueueSingleRiderAsync(rideId, CancellationToken.None);
+        var b = await service.EnqueueSingleRiderAsync(rideId, CancellationToken.None);
+        var c = await service.EnqueueSingleRiderAsync(rideId, CancellationToken.None);
+        var taken = await service.TakeSingleRidersAsync(rideId, 2, CancellationToken.None);
+
+        await service.RequeueSingleRidersAsync(rideId, taken, CancellationToken.None);
+
+        Assert.Equal(
+            [a.Number, b.Number, c.Number],
+            service.GetStatus(rideId).SingleRiders.Select(p => p.Number));
+    }
+
+    [Fact]
+    public async Task RequeueSingleRidersAsync_WithNobody_IsANoOp()
+    {
+        var (service, _, store) = CreateService();
+        var rideId = Guid.NewGuid();
+
+        await service.RequeueSingleRidersAsync(rideId, [], CancellationToken.None);
+
+        Assert.Null(store.FindSingles(rideId));
+        await Assert.ThrowsAsync<ArgumentNullException>(
+            () => service.RequeueSingleRidersAsync(rideId, null!, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task SingleRiderMethods_HonourCancellation()
+    {
+        var (service, _, _) = CreateService();
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => service.TakeSingleRidersAsync(Guid.NewGuid(), 1, cts.Token));
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => service.RequeueSingleRidersAsync(Guid.NewGuid(), [new Abstractions.DataTransferObjects.PersonDto(1, "A", 80)], cts.Token));
     }
 }

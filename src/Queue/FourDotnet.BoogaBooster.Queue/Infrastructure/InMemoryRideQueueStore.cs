@@ -12,12 +12,15 @@ namespace FourDotnet.BoogaBooster.Queue.Infrastructure;
 internal sealed class InMemoryRideQueueStore : IRideQueueStore
 {
     private readonly ConcurrentDictionary<Guid, RideQueue> _queues = new();
+    private readonly ConcurrentDictionary<Guid, SingleRiderQueue> _singles = new();
     private readonly int _maxQueueLength;
+    private readonly int _maxSingleRiderQueueLength;
     private readonly int _maxBoardableGroupSize;
 
     public InMemoryRideQueueStore(IOptions<QueueModuleOptions> options)
     {
         _maxQueueLength = options.Value.MaxQueueLength;
+        _maxSingleRiderQueueLength = options.Value.MaxSingleRiderQueueLength;
         _maxBoardableGroupSize = options.Value.MaxBoardableGroupSize;
     }
 
@@ -26,4 +29,10 @@ internal sealed class InMemoryRideQueueStore : IRideQueueStore
 
     public RideQueue? Find(Guid rideId) =>
         _queues.TryGetValue(rideId, out var queue) ? queue : null;
+
+    public SingleRiderQueue GetOrCreateSingles(Guid rideId) =>
+        _singles.GetOrAdd(rideId, id => new SingleRiderQueue(id, _maxSingleRiderQueueLength));
+
+    public SingleRiderQueue? FindSingles(Guid rideId) =>
+        _singles.TryGetValue(rideId, out var queue) ? queue : null;
 }

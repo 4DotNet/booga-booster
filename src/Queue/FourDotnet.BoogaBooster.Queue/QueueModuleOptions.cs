@@ -57,6 +57,19 @@ public sealed class QueueModuleOptions
     /// <summary>Maximum number of people allowed to wait in a single ride's queue.</summary>
     public int MaxQueueLength { get; set; } = 500;
 
+    /// <summary>Maximum number of individuals allowed to wait in a single ride's single-riders line. Defaults to 200.</summary>
+    public int MaxSingleRiderQueueLength { get; set; } = 200;
+
+    /// <summary>Minimum number of individuals to add to the single-riders line across a fill cycle. Defaults to 1.</summary>
+    public int MinSingleArrivalsPerCycle { get; set; } = 1;
+
+    /// <summary>
+    /// Maximum number of individuals to add to the single-riders line across a fill
+    /// cycle, before weather scaling. An additional stream: it never draws on the
+    /// group arrival budget. Defaults to 3.
+    /// </summary>
+    public int MaxSingleArrivalsPerCycle { get; set; } = 3;
+
     /// <summary>
     /// The largest group that can ever be boarded in one pass, and therefore the
     /// size above which an arriving group is split into smaller boardable groups.

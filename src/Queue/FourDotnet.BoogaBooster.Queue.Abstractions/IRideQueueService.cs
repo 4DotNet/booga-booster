@@ -27,8 +27,39 @@ public interface IRideQueueService
     /// </exception>
     Task<IReadOnlyList<QueuedGroupDto>> EnqueueGroupAsync(Guid rideId, int groupSize, CancellationToken cancellationToken);
 
-    /// <summary>Returns a snapshot of the given ride's waiting line.</summary>
+    /// <summary>
+    /// Returns a snapshot of the given ride's waiting lines: the groups and the
+    /// single-riders line, taken together so they describe the same instant.
+    /// </summary>
     GetQueueStatusResponse GetStatus(Guid rideId);
+
+    /// <summary>
+    /// Generates one individual guest, appends them to the back of the given ride's
+    /// single-riders line and publishes a single-rider-queued integration event.
+    /// </summary>
+    /// <returns>The person as enqueued.</returns>
+    /// <exception cref="FourDotnet.BoogaBooster.Core.DomainValidationException">
+    /// The single-riders line is at its maximum length.
+    /// </exception>
+    Task<PersonDto> EnqueueSingleRiderAsync(Guid rideId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Removes up to <paramref name="count"/> individuals from the front of the given
+    /// ride's single-riders line, in arrival order, in one atomic step.
+    /// </summary>
+    /// <returns>
+    /// The individuals taken — fewer than <paramref name="count"/> when the line is
+    /// shorter, and an empty list (never an exception) when nobody is waiting, the
+    /// ride has no line yet, or <paramref name="count"/> is zero or less.
+    /// </returns>
+    Task<IReadOnlyList<PersonDto>> TakeSingleRidersAsync(Guid rideId, int count, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Returns individuals previously taken with <see cref="TakeSingleRidersAsync"/>
+    /// to the <b>front</b> of the ride's single-riders line, keeping their original
+    /// relative order, so a boarding that failed costs nobody their place.
+    /// </summary>
+    Task RequeueSingleRidersAsync(Guid rideId, IReadOnlyList<PersonDto> people, CancellationToken cancellationToken);
 
     /// <summary>
     /// Removes the group identified by <paramref name="groupId"/> from the given

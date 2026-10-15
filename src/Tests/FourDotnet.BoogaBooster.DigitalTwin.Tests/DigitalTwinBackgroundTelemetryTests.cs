@@ -217,7 +217,20 @@ public sealed class DigitalTwinBackgroundTelemetryTests : IDisposable
             CancellationToken cancellationToken) => throw new NotSupportedException();
 
         public GetQueueStatusResponse GetStatus(Guid rideId)
-            => new(rideId, _groups.Count, _groups.Sum(group => group.Size), [.. _groups]);
+            => new(rideId, _groups.Count, _groups.Sum(group => group.Size), [.. _groups], 0, []);
+
+        public Task<PersonDto> EnqueueSingleRiderAsync(Guid rideId, CancellationToken cancellationToken)
+            => throw new NotSupportedException();
+
+        public Task<IReadOnlyList<PersonDto>> TakeSingleRidersAsync(
+            Guid rideId,
+            int count,
+            CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<PersonDto>>([]);
+
+        public Task RequeueSingleRidersAsync(
+            Guid rideId,
+            IReadOnlyList<PersonDto> people,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
 
         public Task<QueuedGroupDto?> TakeGroupAsync(
             Guid rideId,
@@ -245,6 +258,19 @@ public sealed class DigitalTwinBackgroundTelemetryTests : IDisposable
 
         public GetQueueStatusResponse GetStatus(Guid rideId)
             => throw new InvalidOperationException("queue unreachable");
+
+        public Task<PersonDto> EnqueueSingleRiderAsync(Guid rideId, CancellationToken cancellationToken)
+            => throw new NotSupportedException();
+
+        public Task<IReadOnlyList<PersonDto>> TakeSingleRidersAsync(
+            Guid rideId,
+            int count,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task RequeueSingleRidersAsync(
+            Guid rideId,
+            IReadOnlyList<PersonDto> people,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
 
         public Task<QueuedGroupDto?> TakeGroupAsync(
             Guid rideId,

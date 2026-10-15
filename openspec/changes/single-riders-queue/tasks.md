@@ -6,8 +6,8 @@
 
 - [x] 2.1 Create `DataTransferObjects/` in `FourDotnet.BoogaBooster.Queue.Abstractions` and move `PersonDto` and `QueuedGroupDto` into it (namespace `...Queue.Abstractions.DataTransferObjects`), one type per file.
 - [x] 2.2 Add `DataTransferObjects/GetQueueStatus/GetQueueStatusResponse.cs` with `RideId`, `GroupCount`, `PeopleWaiting`, `Groups`, `SingleRidersWaiting`, `SingleRiders` and a computed `TotalPeopleWaiting`; delete `QueueStatusDto.cs`.
-- [ ] 2.3 Extend `IRideQueueService` with `EnqueueSingleRiderAsync(Guid rideId, CancellationToken)`, `TakeSingleRidersAsync(Guid rideId, int count, CancellationToken)` and `RequeueSingleRidersAsync(Guid rideId, IReadOnlyList<PersonDto> people, CancellationToken)`, and change `GetStatus` to return `GetQueueStatusResponse`; document the take's "up to count, possibly empty, never throws" and the requeue's front-of-line semantics in XML docs.
-- [ ] 2.4 Fix up the resulting compile errors in existing consumers (`QueueEndpoints`, `RideQueueService`, `RideLoadingCoordinator`, existing tests) so the solution builds before any behaviour is added.
+- [x] 2.3 Extend `IRideQueueService` with `EnqueueSingleRiderAsync(Guid rideId, CancellationToken)`, `TakeSingleRidersAsync(Guid rideId, int count, CancellationToken)` and `RequeueSingleRidersAsync(Guid rideId, IReadOnlyList<PersonDto> people, CancellationToken)`, and change `GetStatus` to return `GetQueueStatusResponse`; document the take's "up to count, possibly empty, never throws" and the requeue's front-of-line semantics in XML docs.
+- [x] 2.4 Fix up the resulting compile errors in existing consumers (`QueueEndpoints`, `RideQueueService`, `RideLoadingCoordinator`, existing tests) so the solution builds before any behaviour is added.
 
 ## 3. Queue domain — the single-riders line
 
@@ -18,11 +18,11 @@
 
 ## 4. Queue infrastructure and service
 
-- [ ] 4.1 Add `MaxSingleRiderQueueLength` (default 200), `MinSingleArrivalsPerCycle` (default 1) and `MaxSingleArrivalsPerCycle` (default 3) to `QueueModuleOptions` with XML docs.
-- [ ] 4.2 Extend `IRideQueueStore` and `InMemoryRideQueueStore` with `GetOrCreateSingles(Guid)` / `FindSingles(Guid)` backed by a second `ConcurrentDictionary`, sized from `MaxSingleRiderQueueLength`.
-- [ ] 4.3 Implement `EnqueueSingleRiderAsync` on `RideQueueService`: generate one person via `IPersonGenerator.Next()`, enqueue it, log the arrival, publish `SingleRiderQueuedIntegrationEvent` and return the `PersonDto`.
-- [ ] 4.4 Implement `TakeSingleRidersAsync` and `RequeueSingleRidersAsync` on `RideQueueService`, mapping between `Person` and `PersonDto` and returning an empty list when the ride has no singles line yet.
-- [ ] 4.5 Extend `GetStatus` to report `SingleRidersWaiting` and `SingleRiders` from the singles line, leaving `GroupCount` and `PeopleWaiting` counting groups only.
+- [x] 4.1 Add `MaxSingleRiderQueueLength` (default 200), `MinSingleArrivalsPerCycle` (default 1) and `MaxSingleArrivalsPerCycle` (default 3) to `QueueModuleOptions` with XML docs.
+- [x] 4.2 Extend `IRideQueueStore` and `InMemoryRideQueueStore` with `GetOrCreateSingles(Guid)` / `FindSingles(Guid)` backed by a second `ConcurrentDictionary`, sized from `MaxSingleRiderQueueLength`.
+- [x] 4.3 Implement `EnqueueSingleRiderAsync` on `RideQueueService`: generate one person via `IPersonGenerator.Next()`, enqueue it, log the arrival, publish `SingleRiderQueuedIntegrationEvent` and return the `PersonDto`.
+- [x] 4.4 Implement `TakeSingleRidersAsync` and `RequeueSingleRidersAsync` on `RideQueueService`, mapping between `Person` and `PersonDto` and returning an empty list when the ride has no singles line yet.
+- [x] 4.5 Extend `GetStatus` to report `SingleRidersWaiting` and `SingleRiders` from the singles line, leaving `GroupCount` and `PeopleWaiting` counting groups only.
 
 ## 5. Queue background filler
 
@@ -33,7 +33,7 @@
 ## 6. Queue tests
 
 - [x] 6.1 Add `SingleRiderQueueTests`: arrival order, `TakeUpTo` for fewer/more/zero/empty, capacity refusal, `RequeueFront` ordering, and validation on construction.
-- [ ] 6.2 Extend `RideQueueServiceTests`: enqueueing a single rider publishes `single-rider-queued`, taking returns and removes from the front, requeueing restores the front, and `GetStatus` reports both lines with group counts unaffected by singles.
+- [x] 6.2 Extend `RideQueueServiceTests`: enqueueing a single rider publishes `single-rider-queued`, taking returns and removes from the front, requeueing restores the front, and `GetStatus` reports both lines with group counts unaffected by singles.
 - [ ] 6.3 Extend the filler tests: individuals are added each cycle within bounds, worst weather adds none, the singles capacity stops the stream early, and group arrivals are unchanged with the singles stream enabled (seeded `RandomSeed` for determinism).
 - [ ] 6.4 Run `dotnet test` for the Queue tests and confirm the module stays at or above 80% line coverage.
 
