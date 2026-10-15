@@ -163,6 +163,9 @@ public sealed class Seat : DomainModel
     /// </summary>
     public void AdvanceExperience(double intensity, double dt) => _occupant?.Ride(intensity, dt);
 
+    /// <summary>Makes the seated passenger, if any, <paramref name="points"/> more nauseous.</summary>
+    public void AddNausea(double points) => _occupant?.AddNausea(points);
+
     /// <summary>Projects the seat's sensors onto the telemetry DTO.</summary>
     public SeatTelemetry ToTelemetry() => new(Position, OccupiedKg, _restraint, IsOccupied, IsSecured);
 }

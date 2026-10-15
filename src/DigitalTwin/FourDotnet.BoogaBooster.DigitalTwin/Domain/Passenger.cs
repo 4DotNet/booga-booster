@@ -47,4 +47,7 @@ public sealed class Passenger : DomainModel
     /// <paramref name="intensity"/> (docs/06 §6.4–6.5).
     /// </summary>
     public void Ride(double intensity, double dt) => SetExperience(_experience.AfterRiding(intensity, dt));
+
+    /// <summary>Makes the passenger <paramref name="points"/> more nauseous, held at the top of the scale.</summary>
+    public void AddNausea(double points) => SetExperience(_experience.AddNausea(points));
 }

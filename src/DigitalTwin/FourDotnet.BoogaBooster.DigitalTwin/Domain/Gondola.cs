@@ -14,6 +14,9 @@ public sealed class Gondola : DomainModel
 {
     private const double HalfPi = Math.PI / 2d;
 
+    /// <summary><see cref="RideParameters.OverGNauseaDwell"/> in the seconds the tick integrates in.</summary>
+    private static readonly double OverGNauseaDwellSeconds = RideParameters.OverGNauseaDwell.TotalSeconds;
+
     private readonly Seat _left = new(SeatPosition.Left);
     private readonly Seat _right = new(SeatPosition.Right);
 
@@ -22,6 +25,8 @@ public sealed class Gondola : DomainModel
     private double _omega;       // ω_cart — emergent yaw rate (rad/s)
     private double _lateralG;
     private double _forwardG;
+    private double _overGSeconds;       // how long the current over-G episode has lasted (s)
+    private bool _overGPenaltyApplied;  // whether this episode has already cost its nausea
 
     public Gondola(int hubIndex, int index)
         : base(isNew: true)
@@ -219,6 +224,35 @@ public sealed class Gondola : DomainModel
         var intensity = Intensity;
         _left.AdvanceExperience(intensity, dt);
         _right.AdvanceExperience(intensity, dt);
+
+        AdvanceOverGEpisode(dt);
+    }
+
+    /// <summary>
+    /// Times the current over-G episode (docs/06 §6.6). While the felt G is at or above
+    /// <see cref="RideParameters.MaxGForce"/> the episode lasts; once it has lasted more
+    /// than <see cref="RideParameters.OverGNauseaDwell"/>, every rider takes
+    /// <see cref="RideParameters.OverGNauseaPenalty"/> nausea — once. Dropping below max G
+    /// ends the episode, so the next one can penalise again.
+    /// </summary>
+    private void AdvanceOverGEpisode(double dt)
+    {
+        if (FeltG < RideParameters.MaxGForce)
+        {
+            _overGSeconds = 0d;
+            _overGPenaltyApplied = false;
+            return;
+        }
+
+        _overGSeconds += dt;
+        if (_overGPenaltyApplied || _overGSeconds <= OverGNauseaDwellSeconds)
+        {
+            return;
+        }
+
+        _overGPenaltyApplied = true;
+        _left.AddNausea(RideParameters.OverGNauseaPenalty);
+        _right.AddNausea(RideParameters.OverGNauseaPenalty);
     }
 
     private void UpdateGForces(PlanarVector field, double worldFacing, double comAngle, double comDistance)
