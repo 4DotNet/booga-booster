@@ -1,3 +1,6 @@
+<!-- github-issue: 9 -->
+> GitHub issue: [#9 Passenger experience: happiness, preferred ride intensity and nausea, with a Rider Experience panel](https://github.com/4DotNet/booga-booster/issues/9)
+
 ## Why
 
 Guests are only a weight today. Once seated, a passenger is a `PassengerWeight`, and nothing in the twin reflects whether the people in the queue or on the ride are having a good time. Giving each guest a mood, a preferred ride intensity and a nausea level lets the simulation show what operating choices mean for people: long waits, a ride that is too tame, or a ride that is too wild. It also gives the operator a direct read-out of guest experience next to the physics telemetry.
