@@ -12,8 +12,14 @@ namespace FourDotnet.BoogaBooster.Queue.Tests;
 internal static class QueueTestData
 {
     /// <summary>A valid person with sensible defaults; override any field as needed.</summary>
-    public static Person Person(long number = 1, string name = "Test Person", int weightInKilograms = 80) =>
-        new(number, name, weightInKilograms);
+    public static Person Person(
+        long number = 1,
+        string name = "Test Person",
+        int weightInKilograms = 80,
+        double happiness = 75,
+        double preferredRideIntensity = 75,
+        double nausea = 0) =>
+        new(number, name, weightInKilograms, happiness, preferredRideIntensity, nausea);
 
     /// <summary>A group arrival of <paramref name="size"/> distinct, valid people.</summary>
     public static GroupArrival Group(int size) =>
