@@ -11,6 +11,9 @@ namespace FourDotnet.BoogaBooster.Queue.Tests;
 /// </summary>
 internal static class QueueTestData
 {
+    /// <summary>A fixed enqueue instant for tests that do not care about waiting time.</summary>
+    public static readonly DateTimeOffset QueuedAt = new(2026, 10, 15, 12, 0, 0, TimeSpan.Zero);
+
     /// <summary>A valid person with sensible defaults; override any field as needed.</summary>
     public static Person Person(
         long number = 1,

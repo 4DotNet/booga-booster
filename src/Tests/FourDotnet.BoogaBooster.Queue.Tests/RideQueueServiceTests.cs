@@ -3,6 +3,7 @@ using FourDotnet.BoogaBooster.IntegrationMessages.Events.Queue;
 using FourDotnet.BoogaBooster.Queue.Infrastructure;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 
@@ -10,7 +11,9 @@ namespace FourDotnet.BoogaBooster.Queue.Tests;
 
 public class RideQueueServiceTests
 {
-    private static (RideQueueService service, Mock<IIntegrationEventPublisher> publisher, IRideQueueStore store) CreateService(int maxQueueLength = 100)
+    private static (RideQueueService service, Mock<IIntegrationEventPublisher> publisher, IRideQueueStore store) CreateService(
+        int maxQueueLength = 100,
+        TimeProvider? timeProvider = null)
     {
         var options = Options.Create(new QueueModuleOptions { MaxQueueLength = maxQueueLength });
         var store = new InMemoryRideQueueStore(options);
@@ -23,7 +26,7 @@ public class RideQueueServiceTests
             store,
             QueueTestData.Generator(),
             publisher.Object,
-            TimeProvider.System,
+            timeProvider ?? TimeProvider.System,
             NullLogger<RideQueueService>.Instance);
 
         return (service, publisher, store);
@@ -138,6 +141,25 @@ public class RideQueueServiceTests
         var taken = await service.TakeGroupAsync(Guid.NewGuid(), Guid.NewGuid(), CancellationToken.None);
 
         Assert.Null(taken);
+    }
+
+    [Fact]
+    public async Task EnqueueGroupAsync_StampsTheGroupWithTheTimeProvidersNow()
+    {
+        var time = new FakeTimeProvider(QueueTestData.QueuedAt);
+        var (service, publisher, store) = CreateService(timeProvider: time);
+        var rideId = Guid.NewGuid();
+        time.Advance(TimeSpan.FromMinutes(3));
+
+        var group = (await service.EnqueueGroupAsync(rideId, groupSize: 2, CancellationToken.None)).Single();
+
+        var expected = QueueTestData.QueuedAt.AddMinutes(3);
+        Assert.Equal(expected, store.Find(rideId)!.SnapshotGroups().Single().QueuedAt);
+        publisher.Verify(
+            p => p.PublishAsync(
+                It.Is<GroupQueuedIntegrationEvent>(e => e.GroupId == group.GroupId && e.QueuedAt == expected),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     [Fact]

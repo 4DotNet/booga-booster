@@ -65,7 +65,8 @@ internal sealed class RideQueueService : IRideQueueService
         // Admit the whole party in one step so a split arrival is never half-admitted
         // when the line is nearly full.
         var arrivals = sizes.Select(_personGenerator.CreateGroup).ToArray();
-        var groups = queue.EnqueueAll(arrivals);
+        var queuedAt = _timeProvider.GetUtcNow();
+        var groups = queue.EnqueueAll(arrivals, queuedAt);
 
         var enqueued = new List<QueuedGroupDto>(groups.Count);
 
@@ -88,7 +89,7 @@ internal sealed class RideQueueService : IRideQueueService
                 RideId: rideId,
                 GroupId: group.GroupId,
                 PeopleCount: group.Size,
-                QueuedAt: _timeProvider.GetUtcNow());
+                QueuedAt: group.QueuedAt);
 
             await _publisher.PublishAsync(integrationEvent, cancellationToken);
 
