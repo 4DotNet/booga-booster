@@ -114,6 +114,61 @@ public static class RideParameters
     /// <summary>Latest a seated passenger pulls their restraint down.</summary>
     public static readonly TimeSpan MaxRestraintCloseDelay = TimeSpan.FromSeconds(10);
 
+    // --- Passenger experience (docs/06-passenger-experience.md) ---
+    /// <summary>The lowest value of an experience attribute (very sad, very tame, not nauseous).</summary>
+    public const double ExperienceScaleMin = 0d;
+
+    /// <summary>
+    /// The highest value of an experience attribute (extremely happy, maximum allowed G,
+    /// extremely nauseous) — and the ride intensity of a gondola at <see cref="MaxGForce"/>.
+    /// </summary>
+    public const double ExperienceScaleMax = 100d;
+
+    /// <summary>
+    /// Happiness of a passenger boarded straight into a seat, without a queue history:
+    /// the midpoint of the queue's 65–85 arrival band (docs/06 §6.1).
+    /// </summary>
+    public const double DefaultRiderHappiness = 75d;
+
+    /// <summary>
+    /// Preferred ride intensity of a passenger boarded straight into a seat: the
+    /// midpoint of the queue's 50–100 arrival band (docs/06 §6.1).
+    /// </summary>
+    public const double DefaultRiderPreferredIntensity = 75d;
+
+    /// <summary>
+    /// How close (in intensity points) the ride must be to a passenger's preference
+    /// for their happiness to rise (docs/06 §6.4).
+    /// </summary>
+    public const double HappinessMatchBand = 15d;
+
+    /// <summary>Happiness gained per second at an exact intensity match (points/s, docs/06 §6.4).</summary>
+    public const double HappinessGainRate = 2d;
+
+    /// <summary>
+    /// How far (in intensity points) the ride must exceed a passenger's preference before
+    /// their nausea starts to grow (docs/06 §6.5).
+    /// </summary>
+    public const double NauseaIntensityExcess = 30d;
+
+    /// <summary>Exponential nausea growth rate while the ride is too intense (1/s, docs/06 §6.5).</summary>
+    public const double NauseaGrowthRate = 0.15d;
+
+    /// <summary>
+    /// Offset that lets exponential nausea growth start from zero:
+    /// <c>dN/dt = k (N + seed)</c> (points, docs/06 §6.5).
+    /// </summary>
+    public const double NauseaSeed = 1d;
+
+    /// <summary>
+    /// How long a gondola must stay at or above <see cref="MaxGForce"/> before its
+    /// passengers take the over-G nausea penalty (docs/06 §6.6).
+    /// </summary>
+    public static readonly TimeSpan OverGNauseaDwell = TimeSpan.FromSeconds(1);
+
+    /// <summary>Nausea points each passenger gains once per over-G episode (docs/06 §6.6).</summary>
+    public const double OverGNauseaPenalty = 25d;
+
     // --- Ride layout ---
     public const int HubCount = 4;
     public const int GondolasPerHub = 4;
