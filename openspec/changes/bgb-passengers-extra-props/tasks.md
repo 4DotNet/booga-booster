@@ -39,7 +39,7 @@
 
 ## 7. Frontend: Rider Experience panel
 
-- [ ] 7.1 Consult the `primeng` MCP server for `ProgressBar` (API, a11y, theming). Build `panels/rider-experience-panel/rider-experience-panel.ts` (OnPush, signal inputs, four labelled `p-progressbar`s with `%` values, explicit "No riders" and "Queue empty" states). Verify with a Vitest spec covering values, live updates and empty states.
+- [x] 7.1 Consult the `primeng` MCP server for `ProgressBar` (API, a11y, theming). Build `panels/rider-experience-panel/rider-experience-panel.ts` (OnPush, signal inputs, four labelled `p-progressbar`s with `%` values, explicit "No riders" and "Queue empty" states). Verify with a Vitest spec covering values, live updates and empty states.
 - [ ] 7.2 Place `<bb-rider-experience-panel>` directly after `bb-gondola-panel` in `ride-dashboard.html`, wired to `RideStateService` and `QueueStateService`. Verify with a dashboard spec asserting the panel order in the right rail.
 - [ ] 7.3 Add `rider-experience-panel.a11y.spec.ts` (axe-core, with data and empty states, accessible names including "%"). Verify with `npx vitest run` on the spec and then `npm test` for the whole app.
 
