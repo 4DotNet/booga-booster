@@ -10,7 +10,7 @@
 ## 2. Queue contracts and status
 
 - [x] 2.1 Extend `PersonDto` with `Happiness`, `PreferredRideIntensity` and `Nausea`. Map the *decayed* happiness at read/take time (status and `TakeGroupAsync`). Verify with tests showing a group taken after 15 minutes carries happiness 40 when it started at 80.
-- [x] 2.2 Add `double? AverageHappiness` to `GetQueueStatusResponse`, computed in the query handler (`null` when the queue is empty). Tag the activity via `EnrichActivityWithResponse` per `csharp-observability`. Verify with handler tests for 60/70/80 → 70 and for an empty queue → `null`.
+- [x] 2.2 Add `double? AverageHappiness` to `GetQueueStatusResponse`, computed in `RideQueueService.GetStatus` alongside the decay so every reader of the contract sees it (`null` when the queue is empty). Tag the activity via `EnrichActivityWithResponse` in the query handler per `csharp-observability`. Verify with service tests for 60/70/80 → 70 and for an empty queue → `null`, and a handler telemetry test for the tag.
 - [x] 2.3 Run `dotnet test` for `Queue.Tests` and check the `test-coverage` floor for the Queue module (≥ 80 % line coverage).
 
 ## 3. DigitalTwin domain: rider experience

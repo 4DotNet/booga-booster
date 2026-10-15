@@ -115,7 +115,7 @@ All constants go in `RideParameters` under a new `// --- Passenger experience --
 
 The averages are computed in `Ride.ToTelemetry()` from the seats. Per-seat experience is not streamed: it would add 96 numbers per frame at 30 Hz that no UI needs.
 
-`GetQueueStatusResponse` gains `double? AverageHappiness`, which is `null` for an empty queue.
+`GetQueueStatusResponse` gains `double? AverageHappiness`, which is `null` for an empty queue. It is computed in `RideQueueService.GetStatus`, where the decayed happiness is already evaluated, rather than in the query handler: the boarding coordinator reads the same contract, and a response the service returned half-populated would be a trap.
 
 ### D8. The panel is a new PrimeNG-based component
 
