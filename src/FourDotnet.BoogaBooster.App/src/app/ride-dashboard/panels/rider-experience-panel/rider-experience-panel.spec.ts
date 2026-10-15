@@ -48,6 +48,12 @@ describe('RiderExperiencePanel', () => {
     expect(host().textContent).toContain('72%');
   });
 
+  it('does not expose the ARIA-invalid aria-level PrimeNG adds to the bar', () => {
+    render({ queue: 72, happiness: 81, intensity: 68, nausea: 12 });
+
+    bars().forEach((bar) => expect(bar.hasAttribute('aria-level')).toBe(false));
+  });
+
   it('rounds fractional averages', () => {
     render({ queue: 71.6, happiness: 80.2, intensity: 67.5, nausea: 12.4 });
 

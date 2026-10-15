@@ -9,6 +9,13 @@ const BAR_TOKENS = {
 };
 
 /**
+ * PrimeNG 22 stamps `aria-level="72%"` on the progressbar root, which ARIA does
+ * not allow on that role and which axe rejects (aria-allowed-attr). The bar
+ * already exposes aria-valuenow/min/max, so the stray attribute is dropped.
+ */
+const BAR_PASS_THROUGH = { host: { 'aria-level': null } };
+
+/**
  * One labelled 0–100 meter. A `null` value is an explicit "nobody" state shown
  * as text (`emptyText`) instead of a 0 % bar, so "absent" is never mistaken
  * for "very low". The bar's accessible name carries its label and value with
@@ -27,6 +34,7 @@ const BAR_TOKENS = {
         [value]="value.number"
         [showValue]="false"
         [dt]="barTokens"
+        [pt]="barPassThrough"
         [attr.aria-label]="label() + ' ' + value.number + '%'"
       />
       <span class="value" aria-hidden="true">{{ value.number }}%</span>
@@ -68,6 +76,7 @@ export class ExperienceMeter {
   readonly emptyText = input.required<string>();
 
   protected readonly barTokens = BAR_TOKENS;
+  protected readonly barPassThrough = BAR_PASS_THROUGH;
 
   /** Rounded and clamped value, boxed so a legitimate 0 stays truthy. */
   protected readonly rounded = computed(() => {
