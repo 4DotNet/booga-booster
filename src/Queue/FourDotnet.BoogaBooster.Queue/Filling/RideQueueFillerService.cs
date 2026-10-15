@@ -107,6 +107,7 @@ internal sealed class RideQueueFillerService : BackgroundService
 
         var groupsAdded = 0;
         var peopleAdded = 0;
+        var singleRidersAdded = 0;
 
         try
         {
@@ -123,38 +124,41 @@ internal sealed class RideQueueFillerService : BackgroundService
                 _weatherInfluence.Current,
                 _options);
 
-            if (totalPeople == 0)
+            if (totalPeople > 0)
             {
-                return;
-            }
+                var groupSizes = ArrivalPlanner.PlanGroupSizes(
+                    totalPeople,
+                    _options.MinGroupSize,
+                    _options.MaxGroupSize,
+                    _rng);
 
-            var groupSizes = ArrivalPlanner.PlanGroupSizes(
-                totalPeople,
-                _options.MinGroupSize,
-                _options.MaxGroupSize,
-                _rng);
+                var queue = _store.GetOrCreate(rideId);
 
-            var queue = _store.GetOrCreate(rideId);
-
-            foreach (var size in groupSizes)
-            {
-                if (!queue.CanAccept(size))
+                foreach (var size in groupSizes)
                 {
-                    _logger.LogDebug(
-                        "Ride {RideId} queue is full ({PeopleWaiting}/{Max}); skipping remaining arrivals.",
-                        rideId,
-                        queue.PeopleWaiting,
-                        queue.MaxPeople);
-                    break;
+                    if (!queue.CanAccept(size))
+                    {
+                        _logger.LogDebug(
+                            "Ride {RideId} queue is full ({PeopleWaiting}/{Max}); skipping remaining arrivals.",
+                            rideId,
+                            queue.PeopleWaiting,
+                            queue.MaxPeople);
+                        break;
+                    }
+
+                    var enqueued = await _queueService.EnqueueGroupAsync(rideId, size, cancellationToken);
+
+                    // A party too large to board in one pass joins as several groups, so
+                    // count what actually went into the line rather than what was planned.
+                    groupsAdded += enqueued.Count;
+                    peopleAdded += enqueued.Sum(group => group.Size);
                 }
-
-                var enqueued = await _queueService.EnqueueGroupAsync(rideId, size, cancellationToken);
-
-                // A party too large to board in one pass joins as several groups, so
-                // count what actually went into the line rather than what was planned.
-                groupsAdded += enqueued.Count;
-                peopleAdded += enqueued.Sum(group => group.Size);
             }
+
+            // The single-riders stream is planned after — and independently of — the
+            // groups: same seeded rng and weather read, but its own budget, so it never
+            // reduces group arrivals and the group draws above are untouched.
+            singleRidersAdded = await FillSingleRidersAsync(rideId, cancellationToken);
         }
         catch (Exception exception)
         {
@@ -168,7 +172,51 @@ internal sealed class RideQueueFillerService : BackgroundService
             {
                 activity.SetTag(QueueTelemetryAttributes.GroupsAdded, groupsAdded);
                 activity.SetTag(QueueTelemetryAttributes.PeopleAdded, peopleAdded);
+                activity.SetTag(QueueTelemetryAttributes.SingleRidersAdded, singleRidersAdded);
             }
         }
+    }
+
+    /// <summary>
+    /// Adds this cycle's lone guests to the ride's single-riders line: a count planned
+    /// from the single-arrival bounds and scaled by the same weather multiplier as
+    /// group arrivals, enqueued one at a time and cut short when the line is full.
+    /// </summary>
+    /// <returns>How many individuals actually joined the line.</returns>
+    private async Task<int> FillSingleRidersAsync(Guid rideId, CancellationToken cancellationToken)
+    {
+        var planned = ArrivalPlanner.ScaleForWeather(
+            ArrivalPlanner.PlanArrivalCount(
+                _options.MinSingleArrivalsPerCycle,
+                _options.MaxSingleArrivalsPerCycle,
+                _rng),
+            _weatherInfluence.Current,
+            _options);
+
+        if (planned == 0)
+        {
+            return 0;
+        }
+
+        var line = _store.GetOrCreateSingles(rideId);
+        var added = 0;
+
+        for (var i = 0; i < planned; i++)
+        {
+            if (!line.CanAccept(1))
+            {
+                _logger.LogDebug(
+                    "Ride {RideId} single-riders line is full ({PeopleWaiting}/{Max}); skipping remaining arrivals.",
+                    rideId,
+                    line.PeopleWaiting,
+                    line.MaxPeople);
+                break;
+            }
+
+            await _queueService.EnqueueSingleRiderAsync(rideId, cancellationToken);
+            added++;
+        }
+
+        return added;
     }
 }

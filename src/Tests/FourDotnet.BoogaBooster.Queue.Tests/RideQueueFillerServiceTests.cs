@@ -375,4 +375,99 @@ public sealed class RideQueueFillerServiceTests
             await filler.StopAsync(CancellationToken.None);
         }
     }
+
+    private static QueueModuleOptions WithSingles(QueueModuleOptions options, int min, int max, int maxLine = 200)
+    {
+        options.MinSingleArrivalsPerCycle = min;
+        options.MaxSingleArrivalsPerCycle = max;
+        options.MaxSingleRiderQueueLength = maxLine;
+        return options;
+    }
+
+    [Fact]
+    public async Task FillCycle_AddsIndividualsWithinTheConfiguredBounds_EveryCycle()
+    {
+        var rideId = Guid.NewGuid();
+        var (filler, store, publisher) = Create(
+            WithSingles(OptionsFor(rideId, min: 4, max: 8, maxQueue: 500), min: 2, max: 3));
+
+        await filler.RunFillCycleAsync(CancellationToken.None);
+        var afterFirst = store.FindSingles(rideId)!.PeopleWaiting;
+        await filler.RunFillCycleAsync(CancellationToken.None);
+        var afterSecond = store.FindSingles(rideId)!.PeopleWaiting;
+
+        Assert.InRange(afterFirst, 2, 3);
+        Assert.InRange(afterSecond - afterFirst, 2, 3);
+        publisher.Verify(
+            p => p.PublishAsync(It.IsAny<SingleRiderQueuedIntegrationEvent>(), It.IsAny<CancellationToken>()),
+            Times.AtLeast(4));
+    }
+
+    [Fact]
+    public async Task FillCycle_WorstWeather_AddsNoIndividuals()
+    {
+        var rideId = Guid.NewGuid();
+        var (filler, store, _) = Create(
+            WithSingles(OptionsFor(rideId, min: 4, max: 8, maxQueue: 500), min: 3, max: 3), WeatherAt(0.0));
+
+        await filler.RunFillCycleAsync(CancellationToken.None);
+
+        Assert.Null(store.FindSingles(rideId));
+    }
+
+    [Fact]
+    public async Task FillCycle_BestWeather_AddsThePlannedNumberOfIndividuals()
+    {
+        var rideId = Guid.NewGuid();
+        var (filler, store, _) = Create(
+            WithSingles(OptionsFor(rideId, min: 0, max: 0, maxQueue: 500), min: 3, max: 3), WeatherAt(1.0));
+
+        await filler.RunFillCycleAsync(CancellationToken.None);
+
+        Assert.Equal(3, store.FindSingles(rideId)!.PeopleWaiting);
+    }
+
+    [Fact]
+    public async Task FillCycle_IndividualsAreStillAddedWhenGroupArrivalsFloorToZero()
+    {
+        var rideId = Guid.NewGuid();
+        var (filler, store, _) = Create(
+            WithSingles(OptionsFor(rideId, min: 0, max: 0, maxQueue: 500), min: 2, max: 2));
+
+        await filler.RunFillCycleAsync(CancellationToken.None);
+
+        Assert.Null(store.Find(rideId));
+        Assert.Equal(2, store.FindSingles(rideId)!.PeopleWaiting);
+    }
+
+    [Fact]
+    public async Task FillCycle_StopsTheSinglesStreamAtItsCapacity_WithoutBlockingGroups()
+    {
+        var rideId = Guid.NewGuid();
+        var (filler, store, _) = Create(
+            WithSingles(OptionsFor(rideId, min: 6, max: 6, maxQueue: 500), min: 3, max: 3, maxLine: 2));
+
+        await filler.RunFillCycleAsync(CancellationToken.None);
+
+        Assert.Equal(2, store.FindSingles(rideId)!.PeopleWaiting);
+        Assert.Equal(6, store.Find(rideId)!.PeopleWaiting);
+    }
+
+    [Fact]
+    public async Task FillCycle_GroupArrivalsAreUnchangedByTheSinglesStream()
+    {
+        var withoutRide = Guid.NewGuid();
+        var (withoutFiller, withoutStore, _) = Create(
+            WithSingles(OptionsFor(withoutRide, min: 4, max: 8, maxQueue: 500), min: 0, max: 0));
+        var withRide = Guid.NewGuid();
+        var (withFiller, withStore, _) = Create(
+            WithSingles(OptionsFor(withRide, min: 4, max: 8, maxQueue: 500), min: 1, max: 3));
+
+        await withoutFiller.RunFillCycleAsync(CancellationToken.None);
+        await withFiller.RunFillCycleAsync(CancellationToken.None);
+
+        Assert.Equal(
+            withoutStore.Find(withoutRide)!.SnapshotGroups().Select(g => g.Size),
+            withStore.Find(withRide)!.SnapshotGroups().Select(g => g.Size));
+    }
 }

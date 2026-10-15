@@ -26,15 +26,15 @@
 
 ## 5. Queue background filler
 
-- [ ] 5.1 In `RideQueueFillerService.FillRideAsync`, plan the singles headcount with `ArrivalPlanner.PlanArrivalCount(MinSingleArrivalsPerCycle, MaxSingleArrivalsPerCycle, _rng)` followed by `ArrivalPlanner.ScaleForWeather(...)`, using the same `_rng` and the same weather read as the group stream.
-- [ ] 5.2 Enqueue that many individuals one at a time via `EnqueueSingleRiderAsync`, breaking out early (with a debug log, like the group path) when the singles line reports it cannot accept another person.
-- [ ] 5.3 Verify the group arrival planning is untouched — the singles stream is planned and enqueued after the groups and shares no budget with them.
+- [x] 5.1 In `RideQueueFillerService.FillRideAsync`, plan the singles headcount with `ArrivalPlanner.PlanArrivalCount(MinSingleArrivalsPerCycle, MaxSingleArrivalsPerCycle, _rng)` followed by `ArrivalPlanner.ScaleForWeather(...)`, using the same `_rng` and the same weather read as the group stream.
+- [x] 5.2 Enqueue that many individuals one at a time via `EnqueueSingleRiderAsync`, breaking out early (with a debug log, like the group path) when the singles line reports it cannot accept another person.
+- [x] 5.3 Verify the group arrival planning is untouched — the singles stream is planned and enqueued after the groups and shares no budget with them.
 
 ## 6. Queue tests
 
 - [x] 6.1 Add `SingleRiderQueueTests`: arrival order, `TakeUpTo` for fewer/more/zero/empty, capacity refusal, `RequeueFront` ordering, and validation on construction.
 - [x] 6.2 Extend `RideQueueServiceTests`: enqueueing a single rider publishes `single-rider-queued`, taking returns and removes from the front, requeueing restores the front, and `GetStatus` reports both lines with group counts unaffected by singles.
-- [ ] 6.3 Extend the filler tests: individuals are added each cycle within bounds, worst weather adds none, the singles capacity stops the stream early, and group arrivals are unchanged with the singles stream enabled (seeded `RandomSeed` for determinism).
+- [x] 6.3 Extend the filler tests: individuals are added each cycle within bounds, worst weather adds none, the singles capacity stops the stream early, and group arrivals are unchanged with the singles stream enabled (seeded `RandomSeed` for determinism).
 - [ ] 6.4 Run `dotnet test` for the Queue tests and confirm the module stays at or above 80% line coverage.
 
 ## 7. DigitalTwin domain — free seats and stranger pairing

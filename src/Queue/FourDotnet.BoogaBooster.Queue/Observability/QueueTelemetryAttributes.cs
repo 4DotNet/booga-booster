@@ -27,6 +27,9 @@ internal static class QueueTelemetryAttributes
     /// <summary>People a fill pass added to the line.</summary>
     internal const string PeopleAdded = "queue.people.added";
 
+    /// <summary>Individual single riders a fill pass added to the single-riders line.</summary>
+    internal const string SingleRidersAdded = "queue.single_riders.added";
+
     /// <summary>The nice-weather reading an update carried.</summary>
     internal const string NiceWeatherObserved = "queue.weather.nice_weather.observed";
 
