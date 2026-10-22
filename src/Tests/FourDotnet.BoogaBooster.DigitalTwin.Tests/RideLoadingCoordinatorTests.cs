@@ -41,7 +41,7 @@ public sealed class RideLoadingCoordinatorTests
     private static QueuedGroupDto MakeGroup(int size)
     {
         var people = Enumerable.Range(0, size)
-            .Select(_ => new PersonDto(_nextPersonNumber++, Faker.Name.FullName(), Faker.Random.Int(30, 150)))
+            .Select(_ => new PersonDto(_nextPersonNumber++, Faker.Name.FullName(), Faker.Random.Int(30, 150), 75, 75, 0))
             .ToArray();
         return new QueuedGroupDto(Guid.NewGuid(), people);
     }
@@ -289,7 +289,7 @@ public sealed class RideLoadingCoordinatorTests
             throw new NotSupportedException();
 
         public GetQueueStatusResponse GetStatus(Guid rideId) =>
-            new(rideId, _groups.Count, _groups.Sum(g => g.Size), [.. _groups]);
+            new(rideId, _groups.Count, _groups.Sum(g => g.Size), [.. _groups], AverageHappiness: null);
 
         public Task<QueuedGroupDto?> TakeGroupAsync(Guid rideId, Guid groupId, CancellationToken cancellationToken)
         {

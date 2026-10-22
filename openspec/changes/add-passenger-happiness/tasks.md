@@ -14,9 +14,9 @@
 
 ## 3. Queue: contract and status
 
-- [ ] 3.1 Add `Happiness`, `PreferredRideIntensity` and `Nausea` to `PersonDto` and `AverageHappiness` (`double?`) to `GetQueueStatusResponse` (`dto-organization`). Verify the solution builds.
-- [ ] 3.2 Map the current (decayed) mood in `RideQueueService.ToDto` using `TimeProvider`, and compute the status average (`null` when empty). Verify with `FakeTimeProvider` tests: a group taken after 15 minutes reports halved happiness, the average over 60/70/80 is 70, and an empty queue reports no average.
-- [ ] 3.3 Verify `dotnet test` passes for `Queue.Tests` and that Queue module coverage stays ≥ 80 % (`test-coverage`).
+- [x] 3.1 Add `Happiness`, `PreferredRideIntensity` and `Nausea` to `PersonDto` and `AverageHappiness` (`double?`) to `GetQueueStatusResponse` (`dto-organization`). Verify the solution builds.
+- [x] 3.2 Map the current (decayed) mood in `RideQueueService.ToDto` using `TimeProvider`, and compute the status average (`null` when empty). Verify with `FakeTimeProvider` tests: a group taken after 15 minutes reports halved happiness, the average over 60/70/80 is 70, and an empty queue reports no average.
+- [x] 3.3 Verify `dotnet test` passes for `Queue.Tests` and that Queue module coverage stays ≥ 80 % (`test-coverage`).
 
 ## 4. DigitalTwin: passenger mood
 
