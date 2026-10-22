@@ -44,8 +44,8 @@
 ## 8. Frontend: Rider Experience panel
 
 - [x] 8.1 Consult the `primeng` MCP server for `ProgressBar` (API, theming, accessibility) and confirm the PrimeNG theme provider is configured in `app.config.ts`. Verify by running `npm run build` cleanly.
-- [ ] 8.2 Build `ride-dashboard/panels/rider-experience-panel` (`angular-architect`: OnPush, `input()` signals, PrimeNG `p-progressbar`). It shows four labelled bars in spec order with rounded visible values, "No guests" for `null`, and an accessible name plus value text on each bar. Verify with a Vitest spec covering values, the no-data states and live updates.
-- [ ] 8.3 Add `rider-experience-panel.a11y.spec.ts` (axe-core) for both the with-values and no-guests renders. Verify it reports zero violations.
+- [x] 8.2 Build `ride-dashboard/panels/rider-experience-panel` (`angular-architect`: OnPush, `input()` signals, PrimeNG `p-progressbar`). It shows four labelled bars in spec order with rounded visible values, "No guests" for `null`, and an accessible name plus value text on each bar. Verify with a Vitest spec covering values, the no-data states and live updates.
+- [x] 8.3 Add `rider-experience-panel.a11y.spec.ts` (axe-core) for both the with-values and no-guests renders. Verify it reports zero violations.
 - [ ] 8.4 Place the panel under the Gondolas panel in `ride-dashboard.html`, bound to the queue and ride state signals. Verify with a `ride-dashboard.spec.ts` assertion on order and binding, and confirm `ride-dashboard.a11y.spec.ts` still passes.
 
 ## 9. Integration check
