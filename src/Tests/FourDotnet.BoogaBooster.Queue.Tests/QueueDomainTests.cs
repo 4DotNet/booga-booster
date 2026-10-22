@@ -210,6 +210,6 @@ public class QueueDomainTests
     {
         var queue = new RideQueue(Guid.NewGuid(), maxPeople: 10, maxBoardableGroupSize: 32);
 
-        Assert.Throws<ArgumentNullException>(() => queue.Enqueue(null!));
+        Assert.Throws<ArgumentNullException>(() => queue.Enqueue(null!, QueueTestData.QueuedAt));
     }
 }

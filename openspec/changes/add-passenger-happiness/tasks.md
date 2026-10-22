@@ -9,7 +9,7 @@
 
 - [x] 2.1 Extend `Queue/Domain/Person` with arrival happiness, preferred ride intensity and nausea, validated to [0, 100] (`csharp-domain-model`). Verify with `Queue.Tests` cases for valid and out-of-range scores.
 - [x] 2.2 Add the read-time happiness function `Person.HappinessAfterWaiting(TimeSpan)` with the 5-minute threshold and 10-minute half-life as named constants. Verify with tests at 4:59 (unchanged), 15:00 (halved) and a strictly decreasing 10/20/30-minute series.
-- [ ] 2.3 Record `QueuedAt` on `QueuedGroup`, passed through `RideQueue.Enqueue`/`EnqueueAll`. Verify the existing queue tests still pass and that a new test asserts the recorded time.
+- [x] 2.3 Record `QueuedAt` on `QueuedGroup`, passed through `RideQueue.Enqueue`/`EnqueueAll`. Verify the existing queue tests still pass and that a new test asserts the recorded time.
 - [x] 2.4 Draw initial mood in `PersonGenerator` (happiness 65–85, intensity 50–100, nausea 0) after name and weight. Verify a 1,000-guest range test and a same-seed reproducibility test, and update any seeded expectations that shift.
 
 ## 3. Queue: contract and status

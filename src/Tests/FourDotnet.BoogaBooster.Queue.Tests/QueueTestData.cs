@@ -25,6 +25,9 @@ internal static class QueueTestData
     public static GroupArrival Group(int size) =>
         new(Guid.NewGuid(), Enumerable.Range(1, size).Select(n => Person(number: n)).ToArray());
 
+    /// <summary>A fixed instant used as the time a test group joined the queue.</summary>
+    public static readonly DateTimeOffset QueuedAt = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+
     /// <summary>A deterministically seeded person generator.</summary>
     public static PersonGenerator Generator(int? seed = 123) =>
         new(Options.Create(new QueueModuleOptions { RandomSeed = seed }));

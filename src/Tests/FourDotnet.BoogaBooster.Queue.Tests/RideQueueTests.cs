@@ -14,8 +14,8 @@ public class RideQueueTests
     {
         var queue = NewQueue();
 
-        var first = queue.Enqueue(QueueTestData.Group(2));
-        var second = queue.Enqueue(QueueTestData.Group(3));
+        var first = queue.Enqueue(QueueTestData.Group(2), QueueTestData.QueuedAt);
+        var second = queue.Enqueue(QueueTestData.Group(3), QueueTestData.QueuedAt);
 
         var groups = queue.SnapshotGroups();
         Assert.Equal(2, groups.Count);
@@ -25,12 +25,35 @@ public class RideQueueTests
     }
 
     [Fact]
+    public void Enqueue_RecordsWhenTheGroupJoined()
+    {
+        var queue = NewQueue();
+        var joinedAt = new DateTimeOffset(2026, 10, 22, 9, 30, 0, TimeSpan.Zero);
+
+        var group = queue.Enqueue(QueueTestData.Group(2), joinedAt);
+
+        Assert.Equal(joinedAt, group.QueuedAt);
+        Assert.Equal(joinedAt, queue.PeekNextGroup()!.QueuedAt);
+    }
+
+    [Fact]
+    public void EnqueueAll_StampsEveryGroupWithTheSameJoinTime()
+    {
+        var queue = NewQueue();
+        var joinedAt = new DateTimeOffset(2026, 10, 22, 9, 30, 0, TimeSpan.Zero);
+
+        var groups = queue.EnqueueAll([QueueTestData.Group(2), QueueTestData.Group(3)], joinedAt);
+
+        Assert.All(groups, g => Assert.Equal(joinedAt, g.QueuedAt));
+    }
+
+    [Fact]
     public void Enqueue_PreservesGroupContiguityAndSize()
     {
         var queue = NewQueue();
         var arrival = QueueTestData.Group(4);
 
-        var group = queue.Enqueue(arrival);
+        var group = queue.Enqueue(arrival, QueueTestData.QueuedAt);
 
         Assert.Equal(4, group.Size);
         Assert.Equal(4, group.Members.Count);
@@ -43,8 +66,8 @@ public class RideQueueTests
     {
         var queue = NewQueue();
 
-        queue.Enqueue(QueueTestData.Group(1));
-        queue.Enqueue(QueueTestData.Group(5));
+        queue.Enqueue(QueueTestData.Group(1), QueueTestData.QueuedAt);
+        queue.Enqueue(QueueTestData.Group(5), QueueTestData.QueuedAt);
 
         Assert.Equal(2, queue.GroupCount);
         Assert.Equal(6, queue.PeopleWaiting);
@@ -54,11 +77,11 @@ public class RideQueueTests
     public void Enqueue_BeyondMaxPeople_Throws()
     {
         var queue = NewQueue(maxPeople: 4);
-        queue.Enqueue(QueueTestData.Group(3));
+        queue.Enqueue(QueueTestData.Group(3), QueueTestData.QueuedAt);
 
         Assert.False(queue.CanAccept(2));
         Assert.True(queue.CanAccept(1));
-        Assert.Throws<DomainValidationException>(() => queue.Enqueue(QueueTestData.Group(2)));
+        Assert.Throws<DomainValidationException>(() => queue.Enqueue(QueueTestData.Group(2), QueueTestData.QueuedAt));
         Assert.Equal(3, queue.PeopleWaiting);
     }
 
@@ -76,8 +99,8 @@ public class RideQueueTests
     public void Remove_ById_ReturnsGroupAndShrinksTheLine()
     {
         var queue = NewQueue();
-        var first = queue.Enqueue(QueueTestData.Group(2));
-        var second = queue.Enqueue(QueueTestData.Group(3));
+        var first = queue.Enqueue(QueueTestData.Group(2), QueueTestData.QueuedAt);
+        var second = queue.Enqueue(QueueTestData.Group(3), QueueTestData.QueuedAt);
 
         var removed = queue.Remove(first.GroupId);
 
@@ -92,9 +115,9 @@ public class RideQueueTests
     public void Remove_NonFrontGroup_PreservesOrderOfTheRest()
     {
         var queue = NewQueue();
-        var first = queue.Enqueue(QueueTestData.Group(1));
-        var second = queue.Enqueue(QueueTestData.Group(2));
-        var third = queue.Enqueue(QueueTestData.Group(3));
+        var first = queue.Enqueue(QueueTestData.Group(1), QueueTestData.QueuedAt);
+        var second = queue.Enqueue(QueueTestData.Group(2), QueueTestData.QueuedAt);
+        var third = queue.Enqueue(QueueTestData.Group(3), QueueTestData.QueuedAt);
 
         var removed = queue.Remove(second.GroupId);
 
@@ -109,7 +132,7 @@ public class RideQueueTests
     public void Remove_AbsentOrAlreadyTakenId_ReturnsNull()
     {
         var queue = NewQueue();
-        var group = queue.Enqueue(QueueTestData.Group(2));
+        var group = queue.Enqueue(QueueTestData.Group(2), QueueTestData.QueuedAt);
 
         Assert.Null(queue.Remove(Guid.NewGuid()));
 
@@ -131,7 +154,7 @@ public class RideQueueTests
             {
                 for (var i = 0; i < 500; i++)
                 {
-                    enqueued.Enqueue(queue.Enqueue(QueueTestData.Group(1)).GroupId);
+                    enqueued.Enqueue(queue.Enqueue(QueueTestData.Group(1), QueueTestData.QueuedAt).GroupId);
                 }
             },
             cancellationToken);
@@ -167,7 +190,7 @@ public class RideQueueTests
         var queue = NewQueue();
         Assert.Equal(DomainModelState.New, queue.State);
 
-        queue.Enqueue(QueueTestData.Group(1));
+        queue.Enqueue(QueueTestData.Group(1), QueueTestData.QueuedAt);
 
         // Constructed-in-code queues stay New (an insert); the state plumbing itself
         // is covered by DomainModelStateTests.

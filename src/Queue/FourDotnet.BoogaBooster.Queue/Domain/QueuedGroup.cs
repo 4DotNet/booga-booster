@@ -10,15 +10,22 @@ public sealed class QueuedGroup
 {
     private readonly List<Person> _members;
 
-    internal QueuedGroup(GroupArrival arrival)
+    internal QueuedGroup(GroupArrival arrival, DateTimeOffset queuedAt)
     {
         ArgumentNullException.ThrowIfNull(arrival);
 
         GroupId = arrival.GroupId;
+        QueuedAt = queuedAt;
         _members = [.. arrival.Members];
     }
 
     public Guid GroupId { get; private set; }
+
+    /// <summary>
+    /// When the group joined the line. Every member's wait, and so their current
+    /// happiness (<see cref="Person.HappinessAfterWaiting"/>), is measured from here.
+    /// </summary>
+    public DateTimeOffset QueuedAt { get; private set; }
 
     public IReadOnlyList<Person> Members => _members;
 
