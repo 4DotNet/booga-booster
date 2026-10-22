@@ -39,7 +39,7 @@
 ## 7. Frontend: models and state
 
 - [x] 7.1 Add `averageHappiness: number | null` to the queue DTO/model mapping in `queue.models.ts`, treating a missing field as `null`. Verify `queue.models.spec.ts` cases for present, `null` and absent values.
-- [ ] 7.2 Add the rider-experience summary to `ride.models.ts` and expose it as a signal on `RideStateService`, with a missing summary mapped to `null` averages. Verify with `ride.models.spec.ts` and `ride-state.service.spec.ts` cases.
+- [x] 7.2 Add the rider-experience summary to `ride.models.ts` and expose it as a signal on `RideStateService`, with a missing summary mapped to `null` averages. Verify with `ride.models.spec.ts` and `ride-state.service.spec.ts` cases.
 
 ## 8. Frontend: Rider Experience panel
 

@@ -21,6 +21,29 @@ describe('RideStateService', () => {
     service = TestBed.inject(RideStateService);
   });
 
+  it('exposes the rider mood summary and live updates', () => {
+    expect(service.riderExperience().riderCount).toBe(0);
+    expect(service.riderExperience().averageHappiness).toBeNull();
+
+    source.setTelemetry(
+      createTelemetry({
+        riderExperience: {
+          riderCount: 3,
+          averageHappiness: 64,
+          averagePreferredRideIntensity: 81,
+          averageNausea: 12,
+        },
+      }),
+    );
+
+    expect(service.riderExperience()).toEqual({
+      riderCount: 3,
+      averageHappiness: 64,
+      averagePreferredRideIntensity: 81,
+      averageNausea: 12,
+    });
+  });
+
   it('clamps mill power above 100 before dispatching', () => {
     service.setMillPower(150);
 
