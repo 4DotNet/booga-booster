@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FourDotnet.BoogaBooster.DigitalTwin.Abstractions;
 using FourDotnet.BoogaBooster.DigitalTwin.Application;
 using FourDotnet.BoogaBooster.DigitalTwin.Domain;
@@ -127,6 +128,48 @@ public sealed class RideTelemetryStreamTests
         Assert.All(frame.Gondolas, g => Assert.Equal(RideParameters.SeatsPerGondola, g.Seats.Count));
         Assert.NotNull(frame.Mill);
     }
+
+    /// <summary>
+    /// Both the SSE stream and <c>GET /ride/telemetry</c> serialise with the host's
+    /// default web JSON options (camelCase), so a frame serialised that way is what goes
+    /// on the wire.
+    /// </summary>
+    [Fact]
+    public async Task Each_frame_carries_the_rider_experience_summary_on_the_wire()
+    {
+        var store = new RideStore(new RandomRideEventSampler(seed: 1));
+        store.BoardGroup(
+        [
+            new PassengerProfile(new PassengerWeight(75), happiness: 60, preferredRideIntensity: 50, nausea: 0),
+            new PassengerProfile(new PassengerWeight(80), happiness: 80, preferredRideIntensity: 100, nausea: 20),
+        ]); // moves the ride into Loading, so frames flow
+        var stream = new RideTelemetryStream(store, new FakeTimeProvider());
+
+        await using var frames = stream.Stream(CancellationToken.None).GetAsyncEnumerator();
+        Assert.True(await frames.MoveNextAsync());
+
+        using var json = JsonDocument.Parse(JsonSerializer.Serialize(frames.Current, WebJson));
+        var summary = json.RootElement.GetProperty("riderExperience");
+        Assert.Equal(2, summary.GetProperty("riderCount").GetInt32());
+        Assert.Equal(70, summary.GetProperty("averageHappiness").GetDouble());
+        Assert.Equal(75, summary.GetProperty("averagePreferredRideIntensity").GetDouble());
+        Assert.Equal(10, summary.GetProperty("averageNausea").GetDouble());
+    }
+
+    [Fact]
+    public void An_empty_rides_summary_serialises_its_averages_as_null()
+    {
+        var telemetry = new RideStore(new RandomRideEventSampler(seed: 1)).GetTelemetry();
+
+        using var json = JsonDocument.Parse(JsonSerializer.Serialize(telemetry, WebJson));
+        var summary = json.RootElement.GetProperty("riderExperience");
+        Assert.Equal(0, summary.GetProperty("riderCount").GetInt32());
+        Assert.Equal(JsonValueKind.Null, summary.GetProperty("averageHappiness").ValueKind);
+        Assert.Equal(JsonValueKind.Null, summary.GetProperty("averagePreferredRideIntensity").ValueKind);
+        Assert.Equal(JsonValueKind.Null, summary.GetProperty("averageNausea").ValueKind);
+    }
+
+    private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
 
     private static RideStore RunningStore()
     {
