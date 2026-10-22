@@ -145,7 +145,7 @@ public sealed class RideTelemetryStreamTests
         ]); // moves the ride into Loading, so frames flow
         var stream = new RideTelemetryStream(store, new FakeTimeProvider());
 
-        await using var frames = stream.Stream(CancellationToken.None).GetAsyncEnumerator();
+        await using var frames = stream.Stream(CancellationToken.None).GetAsyncEnumerator(TestContext.Current.CancellationToken);
         Assert.True(await frames.MoveNextAsync());
 
         using var json = JsonDocument.Parse(JsonSerializer.Serialize(frames.Current, WebJson));
