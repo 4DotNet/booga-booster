@@ -114,6 +114,52 @@ public static class RideParameters
     /// <summary>Latest a seated passenger pulls their restraint down.</summary>
     public static readonly TimeSpan MaxRestraintCloseDelay = TimeSpan.FromSeconds(10);
 
+    // --- Rider experience (docs/06-rider-experience.md; scores on a 0–100 scale) ---
+    /// <summary>The lowest value of any mood score or ride intensity.</summary>
+    public const double MinMoodScore = 0d;
+
+    /// <summary>The highest value of any mood score or ride intensity (intensity is a percentage of <see cref="MaxGForce"/>).</summary>
+    public const double MaxMoodScore = 100d;
+
+    /// <summary>Happiness of a passenger boarded without a known mood — the midpoint of the 65–85 arrival range (docs/06 §6.1).</summary>
+    public const double DefaultPassengerHappiness = 75d;
+
+    /// <summary>Preferred ride intensity of a passenger boarded without a known mood — the midpoint of the 50–100 arrival range (docs/06 §6.1).</summary>
+    public const double DefaultPreferredRideIntensity = 75d;
+
+    /// <summary>Nausea of a passenger boarded without a known mood: nobody boards nauseous (docs/06 §6.1).</summary>
+    public const double DefaultPassengerNausea = 0d;
+
+    /// <summary>Happiness gained per second at an exact intensity match, <c>R_h</c> (docs/06 §6.4).</summary>
+    public const double HappinessGainPerSecond = 1d;
+
+    /// <summary>
+    /// Half-width of the comfort band, <c>B</c>, in percentage points: the gain fades
+    /// linearly to zero this far either side of the preferred intensity (docs/06 §6.4).
+    /// </summary>
+    public const double ComfortHalfBand = 15d;
+
+    /// <summary>
+    /// How far, in percentage points, the intensity must exceed a rider's preference
+    /// before their nausea grows, <c>Δ_N</c> (docs/06 §6.5).
+    /// </summary>
+    public const double NauseaIntensityThreshold = 30d;
+
+    /// <summary>Time for <c>N + N₀</c> to double while over-intense, <c>T_N</c>, in seconds (docs/06 §6.5).</summary>
+    public const double NauseaDoublingSeconds = 10d;
+
+    /// <summary>
+    /// The seed <c>N₀</c> that lets exponential nausea leave zero: growth is
+    /// proportional to <c>N + N₀</c> (docs/06 §6.5).
+    /// </summary>
+    public const double NauseaSeed = 1d;
+
+    /// <summary>How long riders must feel at least <see cref="MaxGForce"/> without a break before an over-G shock, <c>T_shock</c> (docs/06 §6.6).</summary>
+    public static readonly TimeSpan OverGShockHold = TimeSpan.FromSeconds(1);
+
+    /// <summary>Nausea each occupant gains from one over-G shock, <c>N_shock</c> (docs/06 §6.6).</summary>
+    public const double OverGShockNausea = 25d;
+
     // --- Ride layout ---
     public const int HubCount = 4;
     public const int GondolasPerHub = 4;
