@@ -110,7 +110,7 @@ public sealed class RideStore : IRideStore, IRideTelemetryProvider
     {
         lock (_gate)
         {
-            var passenger = new Passenger(weight ?? _sampler.NextPassengerWeight());
+            var passenger = new Passenger(PassengerProfile.WithDefaultMood(weight ?? _sampler.NextPassengerWeight()));
             var delay = _sampler.NextRestraintCloseDelay();
             _ride.BoardPassenger(hubIndex, gondolaIndex, seat, passenger, delay);
             return _ride.ToTelemetry();

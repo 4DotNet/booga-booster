@@ -254,10 +254,10 @@ public sealed class Ride : DomainModel
         foreach (var index in picks)
         {
             var gondola = empty[index];
-            gondola.Board(SeatPosition.Left, new Passenger(members[member++]), restraintCloseDelay());
+            gondola.Board(SeatPosition.Left, new Passenger(PassengerProfile.WithDefaultMood(members[member++])), restraintCloseDelay());
             if (member < members.Count)
             {
-                gondola.Board(SeatPosition.Right, new Passenger(members[member++]), restraintCloseDelay());
+                gondola.Board(SeatPosition.Right, new Passenger(PassengerProfile.WithDefaultMood(members[member++])), restraintCloseDelay());
             }
         }
 
