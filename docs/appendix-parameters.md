@@ -57,6 +57,32 @@ toward Coulomb/viscous friction (which govern the low-speed tail) over aerodynam
 
 Units: `C_coulomb` in N·m, `C_viscous` in N·m·s/rad, `k_aero` in N·m·s²/rad².
 
+## Rider experience
+
+The mood model of [doc 6](06-rider-experience.md). These are reasoned defaults, not measured
+data; each is a named constant so retuning is a one-line, test-backed change.
+
+| Parameter | Symbol | Default | Unit | Lives in |
+|-----------|--------|--------:|------|----------|
+| Arrival happiness range | `H₀` | 65–85 | pt | `PersonGenerator` |
+| Arrival preferred-intensity range | `P` | 50–100 | pt | `PersonGenerator` |
+| Arrival nausea | — | 0 | pt | `PersonGenerator` |
+| Queue patience threshold | `T_patience` | 5 | min | `Person` |
+| Queue happiness half-life | `T½` | 10 | min | `Person` |
+| Default passenger happiness | — | 75 | pt | `RideParameters` |
+| Default preferred ride intensity | — | 75 | pt | `RideParameters` |
+| Default passenger nausea | — | 0 | pt | `RideParameters` |
+| Happiness gain rate | `R_h` | 1.0 | pt/s | `RideParameters` |
+| Comfort half-band | `B` | 15 | pp | `RideParameters` |
+| Nausea over-intensity threshold | `Δ_N` | 30 | pp | `RideParameters` |
+| Nausea doubling time | `T_N` | 10 | s | `RideParameters` |
+| Nausea seed | `N₀` | 1 | pt | `RideParameters` |
+| Over-G hold before a shock | `T_shock` | 1 | s | `RideParameters` |
+| Over-G nausea shock | `N_shock` | 25 | pt | `RideParameters` |
+| Max allowed G (intensity 100 %) | `G_max` | 4.5 | g | `RideParameters` (shared with the safety limits) |
+
+Mood scores are on a 0–100 scale (pt); intensity differences are in percentage points (pp).
+
 ## Sanity check
 
 With these parameters, a **full ride** (~2.4 t of carts + people orbiting at 6 m):

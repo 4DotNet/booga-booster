@@ -2,8 +2,8 @@
 
 ## 1. Specification doc
 
-- [ ] 1.1 Write `docs/06-rider-experience.md` deriving the mood model: the queue-wait decay (D1), felt-G intensity (D4), the happiness comfort band (D5), exact-step nausea integration with the worked 20/40/60 s values (D6), the over-G episode rule (D7), and the in-motion-only update rule (D8). Link it from `docs/README.md`. Verify the worked numbers by hand calculation in the doc.
-- [ ] 1.2 Add the new constants (patience threshold, decay half-life, default profile, comfort band, gain rate, nausea threshold/doubling/seed, over-G hold and shock) to `docs/appendix-parameters.md`. Verify every constant named in the doc appears in the table with a unit.
+- [x] 1.1 Write `docs/06-rider-experience.md` deriving the mood model: the queue-wait decay (D1), felt-G intensity (D4), the happiness comfort band (D5), exact-step nausea integration with the worked 20/40/60 s values (D6), the over-G episode rule (D7), and the in-motion-only update rule (D8). Link it from `docs/README.md`. Verify the worked numbers by hand calculation in the doc.
+- [x] 1.2 Add the new constants (patience threshold, decay half-life, default profile, comfort band, gain rate, nausea threshold/doubling/seed, over-G hold and shock) to `docs/appendix-parameters.md`. Verify every constant named in the doc appears in the table with a unit.
 
 ## 2. Queue: guest mood domain
 
