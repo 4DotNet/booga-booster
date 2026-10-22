@@ -12,12 +12,21 @@ namespace FourDotnet.BoogaBooster.Queue.Tests;
 internal static class QueueTestData
 {
     /// <summary>A valid person with sensible defaults; override any field as needed.</summary>
-    public static Person Person(long number = 1, string name = "Test Person", int weightInKilograms = 80) =>
-        new(number, name, weightInKilograms);
+    public static Person Person(
+        long number = 1,
+        string name = "Test Person",
+        int weightInKilograms = 80,
+        double arrivalHappiness = 75,
+        double preferredRideIntensity = 75,
+        double nausea = 0) =>
+        new(number, name, weightInKilograms, arrivalHappiness, preferredRideIntensity, nausea);
 
     /// <summary>A group arrival of <paramref name="size"/> distinct, valid people.</summary>
     public static GroupArrival Group(int size) =>
         new(Guid.NewGuid(), Enumerable.Range(1, size).Select(n => Person(number: n)).ToArray());
+
+    /// <summary>A fixed instant used as the time a test group joined the queue.</summary>
+    public static readonly DateTimeOffset QueuedAt = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
 
     /// <summary>A deterministically seeded person generator.</summary>
     public static PersonGenerator Generator(int? seed = 123) =>

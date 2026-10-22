@@ -6,7 +6,7 @@ import { RouterTestingHarness } from '@angular/router/testing';
 
 import { routes } from '../app.routes';
 import { QUEUE_SOURCE } from '../queue/data/queue-source';
-import { FakeQueueSource } from '../queue/testing/fake-queue-source';
+import { FakeQueueSource, createQueueStatus } from '../queue/testing/fake-queue-source';
 import { WEATHER_SOURCE } from '../weather/data/weather-source';
 import { FakeWeatherSource } from '../weather/testing/fake-weather-source';
 import { RIDE_TELEMETRY_SOURCE } from './data/ride-telemetry-source';
@@ -22,10 +22,12 @@ const TELEMETRY_URL = '/api/ride/telemetry';
 
 describe('RideDashboard', () => {
   let source: FakeRideTelemetrySource;
+  let queue: FakeQueueSource;
   let http: HttpTestingController;
 
   beforeEach(() => {
     source = new FakeRideTelemetrySource();
+    queue = new FakeQueueSource();
     TestBed.configureTestingModule({
       providers: [
         provideRouter(routes),
@@ -33,7 +35,7 @@ describe('RideDashboard', () => {
         provideHttpClientTesting(),
         { provide: RIDE_TELEMETRY_SOURCE, useValue: source },
         { provide: WEATHER_SOURCE, useValue: new FakeWeatherSource() },
-        { provide: QUEUE_SOURCE, useValue: new FakeQueueSource() },
+        { provide: QUEUE_SOURCE, useValue: queue },
       ],
     });
     http = TestBed.inject(HttpTestingController);
@@ -58,6 +60,55 @@ describe('RideDashboard', () => {
       .flush({ state: 'Idle', availableTransitions: ['Loading'] } satisfies RideTelemetryDto);
 
     expect(component).toBeInstanceOf(RideDashboard);
+  });
+
+  it('places Rider Experience last in the right rail, under Gondolas, bound to live averages', () => {
+    queue.setStatus('ready');
+    queue.setQueue(createQueueStatus({ averageHappiness: 72 }));
+    source.setTelemetry(
+      createTelemetry({
+        riderExperience: {
+          riderCount: 2,
+          averageHappiness: 64,
+          averagePreferredRideIntensity: 81,
+          averageNausea: 12,
+        },
+      }),
+    );
+    const fixture = TestBed.createComponent(RideDashboard);
+    http.expectOne(TELEMETRY_URL).flush({
+      state: 'Idle',
+      availableTransitions: [],
+    } satisfies RideTelemetryDto);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+
+    const panels = Array.from(host.querySelectorAll('.rail-right > .panel > *')).map((el) =>
+      el.tagName.toLowerCase(),
+    );
+    expect(panels.slice(-2)).toEqual(['bb-gondola-panel', 'bb-rider-experience-panel']);
+
+    const values = Array.from(
+      host.querySelectorAll('bb-rider-experience-panel [role="progressbar"]:not([aria-hidden])'),
+    ).map((bar) => bar.getAttribute('aria-valuenow'));
+    expect(values).toEqual(['72', '64', '81', '12']);
+
+    source.setTelemetry(
+      createTelemetry({
+        riderExperience: {
+          riderCount: 2,
+          averageHappiness: 30,
+          averagePreferredRideIntensity: 81,
+          averageNausea: 12,
+        },
+      }),
+    );
+    fixture.detectChanges();
+    expect(
+      host
+        .querySelectorAll('bb-rider-experience-panel [role="progressbar"]:not([aria-hidden])')[1]
+        .getAttribute('aria-valuenow'),
+    ).toBe('30');
   });
 
   it('summary reflects lifecycle state, occupancy and security', () => {

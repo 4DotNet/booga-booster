@@ -70,6 +70,56 @@ function buildDto(overrides: Partial<RideTelemetryStreamDto> = {}): RideTelemetr
 }
 
 describe('mapRideTelemetry', () => {
+  describe('riderExperience', () => {
+    it('maps a present summary', () => {
+      const riderExperience = {
+        riderCount: 4,
+        averageHappiness: 64,
+        averagePreferredRideIntensity: 81,
+        averageNausea: 12,
+      };
+
+      expect(mapRideTelemetry(buildDto({ riderExperience })).riderExperience).toEqual(
+        riderExperience,
+      );
+    });
+
+    it('keeps null averages for an empty ride', () => {
+      const riderExperience = {
+        riderCount: 0,
+        averageHappiness: null,
+        averagePreferredRideIntensity: null,
+        averageNausea: null,
+      };
+
+      expect(mapRideTelemetry(buildDto({ riderExperience })).riderExperience).toEqual(
+        riderExperience,
+      );
+    });
+
+    it('defaults an absent summary (older backend) to no riders and null averages', () => {
+      expect(mapRideTelemetry(buildDto()).riderExperience).toEqual({
+        riderCount: 0,
+        averageHappiness: null,
+        averagePreferredRideIntensity: null,
+        averageNausea: null,
+      });
+    });
+
+    it('nulls an individual absent average', () => {
+      const model = mapRideTelemetry(
+        buildDto({ riderExperience: { riderCount: 2, averageHappiness: 50 } }),
+      );
+
+      expect(model.riderExperience).toEqual({
+        riderCount: 2,
+        averageHappiness: 50,
+        averagePreferredRideIntensity: null,
+        averageNausea: null,
+      });
+    });
+  });
+
   it('maps lifecycle state and available transitions from numeric enums', () => {
     const model = mapRideTelemetry(buildDto({ state: 3, availableTransitions: [4, 6] }));
 

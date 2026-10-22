@@ -8,7 +8,9 @@ namespace FourDotnet.BoogaBooster.DigitalTwin.Domain;
 /// It has no motor: with the brake released it swings under the centrifugal field
 /// as a driven pendulum, its motion set entirely by who is seated where. It owns
 /// two <see cref="Seat"/>s, a yaw brake, and its emergent rotation state, and it
-/// emits the rider-felt lateral/forward G-forces.
+/// emits the rider-felt lateral/forward G-forces. Those forces set the ride
+/// intensity its riders feel, which drives their happiness and nausea
+/// (<c>docs/06-rider-experience.md</c>).
 /// </summary>
 public sealed class Gondola : DomainModel
 {
@@ -22,6 +24,8 @@ public sealed class Gondola : DomainModel
     private double _omega;       // ω_cart — emergent yaw rate (rad/s)
     private double _lateralG;
     private double _forwardG;
+    private double _overGSeconds;     // how long riders have felt ≥ G_max without a break
+    private bool _overGShockApplied;  // the current over-G episode has already shocked its riders
 
     public Gondola(int hubIndex, int index)
         : base(isNew: true)
@@ -65,6 +69,15 @@ public sealed class Gondola : DomainModel
 
     /// <summary>Fore/aft specific force felt by riders (g). Updated each physics tick.</summary>
     public double ForwardG => _forwardG;
+
+    /// <summary>
+    /// The total load riders feel (g): the horizontal specific force combined with
+    /// 1 g of gravity, so a gondola at rest reads exactly 1 g (docs/05 §5.1, docs/06 §6.3).
+    /// </summary>
+    public double FeltG => Math.Sqrt((_forwardG * _forwardG) + (_lateralG * _lateralG) + 1d);
+
+    /// <summary>The ride intensity riders feel (0–100): <see cref="FeltG"/> as a percentage of <see cref="RideParameters.MaxGForce"/>.</summary>
+    public double RideIntensity => IntensityForFeltG(FeltG);
 
     /// <summary>Total measured passenger weight in the gondola.</summary>
     public double PassengerLoadKg => _left.OccupiedKg + _right.OccupiedKg;
@@ -149,6 +162,7 @@ public sealed class Gondola : DomainModel
         var worldFacing = millAngle + hubAngle + RideKinematics.MountAngle(Index) + _angle;
 
         UpdateGForces(field, worldFacing, comAngle, comDistance);
+        ExperienceForces(FeltG, dt);
 
         if (_brake == GondolaBrakeState.Engaged)
         {
@@ -184,6 +198,46 @@ public sealed class Gondola : DomainModel
         PassengerLoadKg,
         IsSafeToDispatch,
         [_left.ToTelemetry(), _right.ToTelemetry()]);
+
+    /// <summary>
+    /// The ride intensity (0–100) of a felt load of <paramref name="feltG"/> g: the
+    /// load as a percentage of <see cref="RideParameters.MaxGForce"/>, capped at 100
+    /// (docs/06 §6.3). Half of <c>G_max</c> is 50 %.
+    /// </summary>
+    internal static double IntensityForFeltG(double feltG) =>
+        Math.Min(RideParameters.MaxMoodScore, RideParameters.MaxMoodScore * feltG / RideParameters.MaxGForce);
+
+    /// <summary>
+    /// Lets the gondola's riders feel <paramref name="feltG"/> for <paramref name="dt"/>
+    /// seconds. Tracks the current over-G episode — time at or above
+    /// <see cref="RideParameters.MaxGForce"/>, reset as soon as the load drops below
+    /// it — and shocks every occupant once when an episode first lasts longer than
+    /// <see cref="RideParameters.OverGShockHold"/> (docs/06 §6.6). Then each occupant
+    /// experiences the resulting ride intensity (§6.4, §6.5). Runs on every physics
+    /// step, straight after the G-forces are updated.
+    /// </summary>
+    internal void ExperienceForces(double feltG, double dt)
+    {
+        if (feltG >= RideParameters.MaxGForce)
+        {
+            _overGSeconds += dt;
+            if (!_overGShockApplied && _overGSeconds > RideParameters.OverGShockHold.TotalSeconds)
+            {
+                _left.Occupant?.SufferOverGShock();
+                _right.Occupant?.SufferOverGShock();
+                _overGShockApplied = true;
+            }
+        }
+        else
+        {
+            _overGSeconds = 0d;
+            _overGShockApplied = false;
+        }
+
+        var intensity = IntensityForFeltG(feltG);
+        _left.Occupant?.ExperienceRide(intensity, dt);
+        _right.Occupant?.ExperienceRide(intensity, dt);
+    }
 
     /// <summary>
     /// The world direction the gondola's back (its centre of mass) currently points.

@@ -221,7 +221,7 @@ public sealed class Ride : DomainModel
     /// have <c>ceil(N / 2)</c> empty gondolas to seat every member.
     /// </exception>
     public void BoardGroup(
-        IReadOnlyList<PassengerWeight> members,
+        IReadOnlyList<PassengerProfile> members,
         Func<TimeSpan> restraintCloseDelay,
         Func<int, int, IReadOnlyList<int>>? selectGondolas = null)
     {
@@ -378,7 +378,9 @@ public sealed class Ride : DomainModel
         }
 
         // 3. Physics while in motion; a stopping/emergency ride settles into offloading
-        //    (releasing the safety constraints) once it reaches a complete rest.
+        //    (releasing the safety constraints) once it reaches a complete rest. Rider
+        //    mood is updated inside each gondola's physics step, so it changes only
+        //    here, while the ride is in motion (docs/06 §6.7).
         if (_state is RideState.Started or RideState.Stopping or RideState.EmergencyStop)
         {
             _mill.AdvancePhysics(dt.TotalSeconds);
@@ -430,7 +432,43 @@ public sealed class Ride : DomainModel
             _mill.BrakesEngaged,
             _mill.ToTelemetry(),
             hubs,
-            gondolas);
+            gondolas,
+            SummariseRiderExperience());
+    }
+
+    /// <summary>
+    /// Averages the mood of every seated passenger, in any state. The averages are
+    /// absent, not 0, when nobody is aboard (docs/06 §6.8).
+    /// </summary>
+    private RiderExperienceTelemetry SummariseRiderExperience()
+    {
+        var riders = 0;
+        var happiness = 0d;
+        var preferredIntensity = 0d;
+        var nausea = 0d;
+
+        foreach (var hub in _mill.Hubs)
+        {
+            foreach (var gondola in hub.Gondolas)
+            {
+                foreach (var position in (ReadOnlySpan<SeatPosition>)[SeatPosition.Left, SeatPosition.Right])
+                {
+                    if (gondola.GetSeat(position).Occupant is not { } rider)
+                    {
+                        continue;
+                    }
+
+                    riders++;
+                    happiness += rider.Happiness;
+                    preferredIntensity += rider.PreferredRideIntensity;
+                    nausea += rider.Nausea;
+                }
+            }
+        }
+
+        return riders == 0
+            ? new RiderExperienceTelemetry(0, null, null, null)
+            : new RiderExperienceTelemetry(riders, happiness / riders, preferredIntensity / riders, nausea / riders);
     }
 
     /// <summary>Runs the entry side-effects for the state being entered.</summary>

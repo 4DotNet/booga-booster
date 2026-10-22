@@ -17,8 +17,8 @@ public sealed class RideBoardGroupTests
 
     private static readonly Func<TimeSpan> NoDelay = () => TimeSpan.Zero;
 
-    private static IReadOnlyList<PassengerWeight> Group(int size, double kilograms = 75d) =>
-        Enumerable.Range(0, size).Select(_ => new PassengerWeight(kilograms)).ToArray();
+    private static IReadOnlyList<PassengerProfile> Group(int size, double kilograms = 75d) =>
+        Enumerable.Range(0, size).Select(_ => PassengerProfile.WithDefaultMood(new PassengerWeight(kilograms))).ToArray();
 
     private static int OccupiedSeats(Gondola gondola) =>
         (gondola.GetSeat(SeatPosition.Left).IsOccupied ? 1 : 0)
@@ -57,11 +57,29 @@ public sealed class RideBoardGroupTests
     public void BoardGroup_CountsEveryMemberWeightTowardPassengerLoad()
     {
         var ride = Ride.Create();
-        var members = new[] { new PassengerWeight(60d), new PassengerWeight(70d), new PassengerWeight(80d) };
+        var members = new[] { 60d, 70d, 80d }
+            .Select(kilograms => PassengerProfile.WithDefaultMood(new PassengerWeight(kilograms)))
+            .ToArray();
 
         ride.BoardGroup(members, NoDelay);
 
         Assert.Equal(210d, ride.Mill.PassengerLoadKg);
+    }
+
+    [Fact]
+    public void BoardGroup_SeatsEachMemberWithTheirMood()
+    {
+        var ride = Ride.Create();
+        var member = new PassengerProfile(new PassengerWeight(62d), happiness: 40, preferredRideIntensity: 90, nausea: 0);
+
+        ride.BoardGroup([member], NoDelay);
+
+        var passenger = ride.Mill.GetHub(0).GetGondola(0).GetSeat(SeatPosition.Left).Occupant;
+        Assert.NotNull(passenger);
+        Assert.Equal(62d, passenger.Weight.Kilograms);
+        Assert.Equal(40, passenger.Happiness);
+        Assert.Equal(90, passenger.PreferredRideIntensity);
+        Assert.Equal(0, passenger.Nausea);
     }
 
     [Fact]

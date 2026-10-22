@@ -29,6 +29,51 @@ public sealed class ValueObjectTests
     }
 
     [Theory]
+    [InlineData(0, 0, 0)]
+    [InlineData(40, 90, 0)]
+    [InlineData(100, 100, 100)]
+    public void PassengerProfile_accepts_mood_scores_in_range(double happiness, double intensity, double nausea)
+    {
+        var profile = new PassengerProfile(new PassengerWeight(80), happiness, intensity, nausea);
+
+        Assert.Equal(80, profile.Weight.Kilograms);
+        Assert.Equal(happiness, profile.Happiness);
+        Assert.Equal(intensity, profile.PreferredRideIntensity);
+        Assert.Equal(nausea, profile.Nausea);
+    }
+
+    [Theory]
+    [InlineData(101, 75, 0)]
+    [InlineData(-0.1, 75, 0)]
+    [InlineData(75, 100.5, 0)]
+    [InlineData(75, -1, 0)]
+    [InlineData(75, 75, 100.1)]
+    [InlineData(75, 75, -1)]
+    [InlineData(75, double.NaN, 0)]
+    public void PassengerProfile_rejects_out_of_range_mood_scores(double happiness, double intensity, double nausea)
+    {
+        Assert.Throws<DomainValidationException>(
+            () => new PassengerProfile(new PassengerWeight(80), happiness, intensity, nausea));
+    }
+
+    [Fact]
+    public void PassengerProfile_requires_a_weight()
+    {
+        Assert.Throws<ArgumentNullException>(() => new PassengerProfile(null!, 75, 75, 0));
+    }
+
+    [Fact]
+    public void PassengerProfile_with_default_mood_is_75_75_0()
+    {
+        var profile = PassengerProfile.WithDefaultMood(new PassengerWeight(60));
+
+        Assert.Equal(60, profile.Weight.Kilograms);
+        Assert.Equal(75, profile.Happiness);
+        Assert.Equal(75, profile.PreferredRideIntensity);
+        Assert.Equal(0, profile.Nausea);
+    }
+
+    [Theory]
     [InlineData(0)]
     [InlineData(50)]
     [InlineData(100)]

@@ -96,8 +96,13 @@ public sealed class RideLoadingCoordinator
                     continue; // The group was already gone; re-read the line and retry.
                 }
 
+                // Guests board with the mood they had the moment they left the line.
                 var members = taken.People
-                    .Select(person => new PassengerWeight(person.WeightInKilograms))
+                    .Select(person => new PassengerProfile(
+                        new PassengerWeight(person.WeightInKilograms),
+                        person.Happiness,
+                        person.PreferredRideIntensity,
+                        person.Nausea))
                     .ToArray();
                 _store.BoardGroup(members);
 

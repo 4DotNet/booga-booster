@@ -12,7 +12,8 @@ namespace FourDotnet.BoogaBooster.Queue.Filling;
 /// distribution centred in the typical 70–100 kg band so most guests are average
 /// while lighter and heavier exceptions still occur across the full
 /// <c>[<see cref="Person.MinWeightInKilograms"/>, <see cref="Person.MaxWeightInKilograms"/>]</c>
-/// range. Registered as a singleton so the unique-number counter is shared; its
+/// range. Each guest also gets an initial mood: happiness 65–85, preferred ride
+/// intensity 50–100, and no nausea. Registered as a singleton so the unique-number counter is shared; its
 /// randomness honours <see cref="QueueModuleOptions.RandomSeed"/> for deterministic tests.
 /// </summary>
 internal sealed class PersonGenerator : IPersonGenerator
@@ -22,6 +23,13 @@ internal sealed class PersonGenerator : IPersonGenerator
     // of the mass yet the clamped tails still reach 30 kg and 150 kg on occasion.
     private const double MeanWeightInKilograms = 85.0;
     private const double WeightStandardDeviation = 12.0;
+
+    // Initial mood ranges, inclusive (docs/06 §6.1): guests arrive fairly happy, all
+    // want at least a medium ride, and nobody arrives nauseous.
+    private const int MinArrivalHappiness = 65;
+    private const int MaxArrivalHappiness = 85;
+    private const int MinPreferredRideIntensity = 50;
+    private const int MaxPreferredRideIntensity = 100;
 
     private readonly Faker _faker;
     private long _lastNumber;
@@ -43,7 +51,12 @@ internal sealed class PersonGenerator : IPersonGenerator
         var name = _faker.Name.FullName();
         var weight = NextWeight();
 
-        return new Person(number, name, weight);
+        // Drawn after name and weight so the seeded sequence of those is unchanged for
+        // the first guest (docs/06 §6.1).
+        var happiness = _faker.Random.Int(MinArrivalHappiness, MaxArrivalHappiness);
+        var preferredRideIntensity = _faker.Random.Int(MinPreferredRideIntensity, MaxPreferredRideIntensity);
+
+        return new Person(number, name, weight, happiness, preferredRideIntensity, nausea: Person.MinMoodScore);
     }
 
     public GroupArrival CreateGroup(int size)

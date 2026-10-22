@@ -6,6 +6,7 @@ using FourDotnet.BoogaBooster.Queue.Abstractions;
 using FourDotnet.BoogaBooster.Queue.Abstractions.DataTransferObjects;
 using FourDotnet.BoogaBooster.Queue.Abstractions.DataTransferObjects.GetQueueStatus;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using Xunit;
 
 namespace FourDotnet.BoogaBooster.DigitalTwin.Tests;
@@ -41,7 +42,7 @@ public sealed class RideLoadingCoordinatorTests
     private static QueuedGroupDto MakeGroup(int size)
     {
         var people = Enumerable.Range(0, size)
-            .Select(_ => new PersonDto(_nextPersonNumber++, Faker.Name.FullName(), Faker.Random.Int(30, 150)))
+            .Select(_ => new PersonDto(_nextPersonNumber++, Faker.Name.FullName(), Faker.Random.Int(30, 150), 75, 75, 0))
             .ToArray();
         return new QueuedGroupDto(Guid.NewGuid(), people);
     }
@@ -50,7 +51,7 @@ public sealed class RideLoadingCoordinatorTests
     private static void LeaveEmptyGondolas(RideStore store, int desiredEmpty)
     {
         var seats = (TotalGondolas - desiredEmpty) * RideParameters.SeatsPerGondola;
-        var members = Enumerable.Range(0, seats).Select(_ => new PassengerWeight(75d)).ToArray();
+        var members = Enumerable.Range(0, seats).Select(_ => PassengerProfile.WithDefaultMood(new PassengerWeight(75d))).ToArray();
         store.BoardGroup(members);
         Assert.Equal(desiredEmpty, store.EmptyGondolaCount);
     }
@@ -267,6 +268,35 @@ public sealed class RideLoadingCoordinatorTests
         Assert.Equal(RideState.Loading, store.CurrentState);
     }
 
+    // Mood carried aboard (add-passenger-happiness).
+
+    [Fact]
+    public async Task RunLoadingPass_BoardsEachMemberWithTheMoodTheyHadInTheQueue()
+    {
+        var boarded = new List<PassengerProfile>();
+        var store = new Mock<IRideStore>();
+        store.SetupGet(s => s.CurrentState).Returns(RideState.Loading);
+        store.SetupGet(s => s.EmptyGondolaCount).Returns(TotalGondolas);
+        store
+            .Setup(s => s.BoardGroup(It.IsAny<IReadOnlyList<PassengerProfile>>()))
+            .Callback<IReadOnlyList<PassengerProfile>>(members => boarded.AddRange(members))
+            .Returns((RideTelemetry)null!);
+
+        var queue = new FakeRideQueueService();
+        queue.Enqueue(new QueuedGroupDto(
+            Guid.NewGuid(),
+            [new PersonDto(1, "Ada", 62, Happiness: 40, PreferredRideIntensity: 90, Nausea: 0)]));
+        var coordinator = new RideLoadingCoordinator(store.Object, NullLogger<RideLoadingCoordinator>.Instance, queue);
+
+        await coordinator.RunLoadingPassAsync(Guid.NewGuid(), Ct);
+
+        var profile = Assert.Single(boarded);
+        Assert.Equal(62, profile.Weight.Kilograms);
+        Assert.Equal(40, profile.Happiness);
+        Assert.Equal(90, profile.PreferredRideIntensity);
+        Assert.Equal(0, profile.Nausea);
+    }
+
     /// <summary>
     /// In-memory <see cref="IRideQueueService"/> for the coordinator tests: an ordered
     /// list of groups that supports the status snapshot and take-by-id the coordinator
@@ -289,7 +319,7 @@ public sealed class RideLoadingCoordinatorTests
             throw new NotSupportedException();
 
         public GetQueueStatusResponse GetStatus(Guid rideId) =>
-            new(rideId, _groups.Count, _groups.Sum(g => g.Size), [.. _groups]);
+            new(rideId, _groups.Count, _groups.Sum(g => g.Size), [.. _groups], AverageHappiness: null);
 
         public Task<QueuedGroupDto?> TakeGroupAsync(Guid rideId, Guid groupId, CancellationToken cancellationToken)
         {

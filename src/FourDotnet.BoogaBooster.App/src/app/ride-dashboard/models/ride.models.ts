@@ -96,6 +96,25 @@ export interface Gondola {
   readonly angleDegrees: number;
 }
 
+/**
+ * Mood summary of everyone aboard the ride. Each average is on a 0-100 scale
+ * and `null` when nobody is aboard (`riderCount` is 0).
+ */
+export interface RiderExperience {
+  readonly riderCount: number;
+  readonly averageHappiness: number | null;
+  readonly averagePreferredRideIntensity: number | null;
+  readonly averageNausea: number | null;
+}
+
+/** The summary for a ride nobody is aboard, or a frame that carries none. */
+export const NO_RIDER_EXPERIENCE: RiderExperience = {
+  riderCount: 0,
+  averageHappiness: null,
+  averagePreferredRideIntensity: null,
+  averageNausea: null,
+};
+
 /** A full snapshot of ride telemetry. */
 export interface RideTelemetry {
   readonly state: RideState;
@@ -119,6 +138,8 @@ export interface RideTelemetry {
    * it is absent (see `RideStateService.occupiedSeats`).
    */
   readonly boardedPassengerCount?: number;
+  /** Mood summary of the riders aboard; defaults to {@link NO_RIDER_EXPERIENCE}. */
+  readonly riderExperience?: RiderExperience;
 }
 
 /**
@@ -234,6 +255,8 @@ export interface RideTelemetryStreamDto {
   readonly gondolas: readonly RideTelemetryGondolaStreamDto[];
   readonly boardedPassengerCount: number;
   readonly brakesEngaged?: boolean;
+  /** Optional so a mixed deploy (older backend) still maps; see {@link toRiderExperience}. */
+  readonly riderExperience?: Partial<RiderExperience> | null;
 }
 
 /** The backend's `GondolaBrakeState` names in index order (`0=Engaged, 1=Released`). */
@@ -315,6 +338,18 @@ function round(value: number, decimals = 0): number {
   return Math.round(value * factor) / factor;
 }
 
+/** Normalizes a possibly absent or partial wire summary; missing averages become `null`. */
+export function toRiderExperience(
+  dto: Partial<RiderExperience> | null | undefined,
+): RiderExperience {
+  return {
+    riderCount: dto?.riderCount ?? 0,
+    averageHappiness: dto?.averageHappiness ?? null,
+    averagePreferredRideIntensity: dto?.averagePreferredRideIntensity ?? null,
+    averageNausea: dto?.averageNausea ?? null,
+  };
+}
+
 /**
  * Maps one raw `RideTelemetry` wire snapshot (from the SSE stream or the
  * plain `GET`) onto the frontend's normalized {@link RideTelemetry}.
@@ -368,6 +403,7 @@ export function mapRideTelemetry(dto: RideTelemetryStreamDto): RideTelemetry {
     gondolaBrakeEngaged: dto.gondolas.every((gondola) => brakeEngaged(gondola.brake)),
     // Defaults to released for an older frame that doesn't carry the field.
     brakesEngaged: dto.brakesEngaged ?? false,
+    riderExperience: toRiderExperience(dto.riderExperience),
   };
 }
 
