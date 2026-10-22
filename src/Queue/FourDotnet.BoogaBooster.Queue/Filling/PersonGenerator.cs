@@ -12,7 +12,8 @@ namespace FourDotnet.BoogaBooster.Queue.Filling;
 /// distribution centred in the typical 70–100 kg band so most guests are average
 /// while lighter and heavier exceptions still occur across the full
 /// <c>[<see cref="Person.MinWeightInKilograms"/>, <see cref="Person.MaxWeightInKilograms"/>]</c>
-/// range. Registered as a singleton so the unique-number counter is shared; its
+/// range. Each guest also gets an initial mood: happiness 65–85, preferred ride
+/// intensity 50–100, and no nausea. Registered as a singleton so the unique-number counter is shared; its
 /// randomness honours <see cref="QueueModuleOptions.RandomSeed"/> for deterministic tests.
 /// </summary>
 internal sealed class PersonGenerator : IPersonGenerator

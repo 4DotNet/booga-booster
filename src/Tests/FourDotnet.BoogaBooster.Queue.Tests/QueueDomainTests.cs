@@ -156,6 +156,35 @@ public class QueueDomainTests
     }
 
     [Fact]
+    public void PersonGenerator_Next_DrawsInitialMoodWithinTheArrivalRanges()
+    {
+        var generator = QueueTestData.Generator();
+
+        var people = Enumerable.Range(0, 1_000).Select(_ => generator.Next()).ToArray();
+
+        Assert.All(people, p => Assert.InRange(p.ArrivalHappiness, 65, 85));
+        Assert.All(people, p => Assert.InRange(p.PreferredRideIntensity, 50, 100));
+        Assert.All(people, p => Assert.Equal(0, p.Nausea));
+
+        // The draws are uniform over the whole range, not stuck on one value.
+        Assert.True(people.Select(p => p.ArrivalHappiness).Distinct().Count() > 10);
+        Assert.True(people.Select(p => p.PreferredRideIntensity).Distinct().Count() > 25);
+    }
+
+    [Fact]
+    public void PersonGenerator_Next_WithTheSameSeed_ReproducesTheMood()
+    {
+        var first = QueueTestData.Generator(seed: 7);
+        var second = QueueTestData.Generator(seed: 7);
+
+        var a = Enumerable.Range(0, 10).Select(_ => first.Next()).ToArray();
+        var b = Enumerable.Range(0, 10).Select(_ => second.Next()).ToArray();
+
+        Assert.Equal(a.Select(p => p.ArrivalHappiness), b.Select(p => p.ArrivalHappiness));
+        Assert.Equal(a.Select(p => p.PreferredRideIntensity), b.Select(p => p.PreferredRideIntensity));
+    }
+
+    [Fact]
     public void RideQueue_WithEmptyRideId_Throws()
     {
         Assert.Throws<DomainValidationException>(() => new RideQueue(Guid.Empty, maxPeople: 10, maxBoardableGroupSize: 32));
