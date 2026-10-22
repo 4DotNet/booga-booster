@@ -50,5 +50,5 @@
 
 ## 9. Integration check
 
-- [ ] 9.1 Run `dotnet build` and `dotnet test BoogaBooster.slnx` from `src/`, and `npm test` in the Angular app. Verify everything is green.
+- [x] 9.1 Run `dotnet build` and `dotnet test BoogaBooster.slnx` from `src/`, and `npm test` in the Angular app. Verify everything is green.
 - [ ] 9.2 Run the system via the Aspire AppHost and drive a ride from the dashboard. Verify that queue happiness shows within the first minute, rider bars appear after boarding and move while the ride runs, and empty states read "No guests".
