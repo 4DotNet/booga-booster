@@ -122,6 +122,9 @@ of code**:
      `UserSecretsId` and need no setup.
 5. **Announce:**
    `Working on <type>/<change-name> in .claude/worktrees/<change-name> (from development @ <short-sha>)`.
+6. **Linked GitHub issue?** If `proposal.md` contains `<!-- github-issue: <n> -->`,
+   sync the issue as the `github-issue-triage` skill (section 5) describes:
+   `spec:proposed` → `spec:in-progress`, plus a comment naming the branch.
 
 ### 2.2 Implement — commit very frequently
 
@@ -172,6 +175,7 @@ When every task is complete:
    <2–4 sentences: what the change does and why — from proposal.md>
 
    OpenSpec change: `openspec/changes/<change-name>/`
+   Refs #<n>   ← only if proposal.md links a GitHub issue
 
    ## Changes
    - <one bullet per area / group of commits>
@@ -189,7 +193,9 @@ When every task is complete:
    End the body with the PR attribution line if the session requires one. If the
    diff touches `.github/workflows/`, `.github/code-review/`, `CLAUDE.md` or
    `.claude/`, say so in the Summary — the CI review flags those `major` by design.
-6. **Report** the PR URL, branch, worktree path and
+6. **Linked GitHub issue?** Move it `spec:in-progress` → `spec:in-review` and
+   comment with the PR link (`github-issue-triage` section 5).
+7. **Report** the PR URL, branch, worktree path and
    `git log --oneline origin/development..HEAD`.
 
 **Do not** merge the PR, enable auto-merge or remove the worktree. After the merge
@@ -214,6 +220,10 @@ docs(openspec): archive <change-name>                             ← the move i
 Stage the move with `git add openspec/changes/<change-name> openspec/changes/archive/<date>-<change-name>`
 so git records it as a rename. Push `development` when done. If the change's PR is
 not merged yet, warn the user before archiving.
+
+If `proposal.md` links a GitHub issue (`<!-- github-issue: <n> -->`), finish by
+syncing it per `github-issue-triage` section 5: `spec:done`, point its OpenSpec link
+at the archive path, and close it as completed with a comment.
 
 ## Commit messages
 

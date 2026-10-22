@@ -187,11 +187,14 @@ behavioural contract** and read the relevant one before changing a feature.
 Copilot CLI runs the workflow through the prompts in `.github/prompts/`
 (`opsx-explore`, `opsx-propose`, `opsx-apply`, `opsx-archive`).
 
-**Apply never happens on `main`.** The `git-change-workflow` skill
-(`.claude/skills/git-change-workflow/SKILL.md`) first creates a worktree
-(`.claude/worktrees/<change>`) and a `<type>/<change>` branch from `origin/main`; the work
-lands as logical Conventional Commits; when every task is done the branch is pushed and a
-PR into `main` is opened with `gh`. The agent never merges the PR.
+**Git model** (`.claude/skills/git-workflow/SKILL.md`): day-to-day work happens on the
+`development` branch, created from `main` if it does not exist; `main` and `development`
+always share the main checkout and never get their own worktree. Propose and archive are
+committed on `development` as logical commits. **Apply never happens on `main` or
+`development`:** it gets a worktree (`.claude/worktrees/<change>`) and a `<type>/<change>`
+branch from `development`; the work lands as very frequent, logical Conventional Commits;
+when every task is done the branch is pushed and a PR into `development` is opened with
+`gh`. The agent never merges the PR.
 
 ## Known style-guide discrepancies
 
@@ -253,7 +256,7 @@ Shared with Claude Code from `.claude/`; Copilot CLI and VS Code read them nativ
 - **Skills** — the C# style-guide set (`csharp-solution-structure`,
   `csharp-feature-slices`, `csharp-minimal-api-endpoints`, `csharp-domain-model`,
   `csharp-observability`, `csharp-aspire`, `csharp-unit-testing`), `dto-organization`,
-  `test-coverage`, `git-workflow`, `ai-tooling-sync`, and the `openspec-*`
+  `test-coverage`, `git-workflow`, `github-issue-triage`, `ai-tooling-sync`, and the `openspec-*`
   change-workflow skills.
 
 Visual Studio only reads MCP servers from the solution directory, so `src/.mcp.json`

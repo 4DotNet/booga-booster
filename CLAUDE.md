@@ -187,14 +187,21 @@ Features are not written straight into code. They go through `openspec/`:
 
 1. `/opsx:explore` — think the idea through and clarify requirements.
 2. `/opsx:propose` — generate a change folder with `proposal.md`, `design.md`,
-   per-capability `specs/*/spec.md`, and `tasks.md`.
-3. `/opsx:apply` — work the task list, tests included. **Never on `main`:** the
-   `git-change-workflow` skill first creates a worktree (`.claude/worktrees/<change>`)
-   and a `<type>/<change>` branch from `origin/main`, the work lands as logical
-   Conventional Commits, and when every task is done the branch is pushed and a PR
-   into `main` is opened with `gh`. The PR is never merged by the agent.
+   per-capability `specs/*/spec.md`, and `tasks.md`. Written and committed (logical
+   `docs(openspec)` commits) on the `development` branch.
+3. `/opsx:apply` — work the task list, tests included. **Never on `main` or
+   `development`:** the `git-workflow` skill creates a worktree
+   (`.claude/worktrees/<change>`) and a `<type>/<change>` branch from `development`,
+   the work lands as very frequent, logical Conventional Commits, and when every task
+   is done the branch is pushed and a PR into `development` is opened with `gh`. The
+   PR is never merged by the agent.
 4. `/opsx:archive` — publish capability specs into `openspec/specs/` and move the
-   change into `openspec/changes/archive/`.
+   change into `openspec/changes/archive/`. Committed on `development`.
+
+**Git model** (the `git-workflow` skill): day-to-day work happens on `development`,
+created from `main` if it does not exist. `main` and `development` always share the
+main checkout at the repo root — never give either its own worktree. Only change
+branches get worktrees.
 
 `openspec/specs/` holds the 20 published capabilities — **treat them as the current
 behavioural contract** and read the relevant one before changing a feature.
@@ -311,8 +318,11 @@ reviewers: one model catching a MUST violation alone still fails the check.
   `csharp-feature-slices`, `csharp-minimal-api-endpoints`, `csharp-domain-model`,
   `csharp-observability`, `csharp-aspire`, `csharp-unit-testing`), `dto-organization`
   (DTO placement), `test-coverage` (≥ 80 % backend line coverage),
-  `git-change-workflow` (worktree + branch → logical commits → push → PR for every
-  OpenSpec change), `ai-tooling-sync` (Claude ⇄ Copilot parity for all of the
+  `git-workflow` (`development` branch model; worktree + branch from
+  `development` → frequent logical commits → push → PR for every
+  OpenSpec change), `github-issue-triage` (labels and fleshes out unlabelled
+  issues, proposes an OpenSpec change for each on `development`, and keeps issue and
+  change in sync), `ai-tooling-sync` (Claude ⇄ Copilot parity for all of the
   above), and the `openspec-*` change-workflow skills.
 
 **Rules when adding tooling:**
