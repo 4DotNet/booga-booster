@@ -27,8 +27,8 @@
 
 ## 5. DigitalTwin: intensity and over-G
 
-- [ ] 5.1 Compute felt G and intensity per gondola (D4) after the G-force update. Verify tests at 2.25 g → 50 and 5.0 g → 100.
-- [ ] 5.2 Track over-G episodes in `Gondola` (accumulate at or above `G_max`, reset below, shock once past 1 s) and apply the mood update to occupants on every physics step. Verify tests for a 3 s hold (one shock), a 0.5 s peak (none) and two 1.5 s episodes (two shocks).
+- [x] 5.1 Compute felt G and intensity per gondola (D4) after the G-force update. Verify tests at 2.25 g → 50 and 5.0 g → 100.
+- [x] 5.2 Track over-G episodes in `Gondola` (accumulate at or above `G_max`, reset below, shock once past 1 s) and apply the mood update to occupants on every physics step. Verify tests for a 3 s hold (one shock), a 0.5 s peak (none) and two 1.5 s episodes (two shocks).
 - [ ] 5.3 Drive mood updates from `Ride.Advance` only in `Started`/`Stopping`/`EmergencyStop`. Verify that 60 s of `Loading` leaves mood unchanged and that two identical rides replaying the same commands produce identical mood (determinism).
 
 ## 6. DigitalTwin: telemetry summary
