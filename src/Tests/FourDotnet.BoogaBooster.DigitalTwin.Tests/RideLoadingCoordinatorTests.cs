@@ -6,6 +6,7 @@ using FourDotnet.BoogaBooster.Queue.Abstractions;
 using FourDotnet.BoogaBooster.Queue.Abstractions.DataTransferObjects;
 using FourDotnet.BoogaBooster.Queue.Abstractions.DataTransferObjects.GetQueueStatus;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using Xunit;
 
 namespace FourDotnet.BoogaBooster.DigitalTwin.Tests;
@@ -50,7 +51,7 @@ public sealed class RideLoadingCoordinatorTests
     private static void LeaveEmptyGondolas(RideStore store, int desiredEmpty)
     {
         var seats = (TotalGondolas - desiredEmpty) * RideParameters.SeatsPerGondola;
-        var members = Enumerable.Range(0, seats).Select(_ => new PassengerWeight(75d)).ToArray();
+        var members = Enumerable.Range(0, seats).Select(_ => PassengerProfile.WithDefaultMood(new PassengerWeight(75d))).ToArray();
         store.BoardGroup(members);
         Assert.Equal(desiredEmpty, store.EmptyGondolaCount);
     }
@@ -265,6 +266,35 @@ public sealed class RideLoadingCoordinatorTests
 
         Assert.Equal(TotalGondolas, store.EmptyGondolaCount);
         Assert.Equal(RideState.Loading, store.CurrentState);
+    }
+
+    // Mood carried aboard (add-passenger-happiness).
+
+    [Fact]
+    public async Task RunLoadingPass_BoardsEachMemberWithTheMoodTheyHadInTheQueue()
+    {
+        var boarded = new List<PassengerProfile>();
+        var store = new Mock<IRideStore>();
+        store.SetupGet(s => s.CurrentState).Returns(RideState.Loading);
+        store.SetupGet(s => s.EmptyGondolaCount).Returns(TotalGondolas);
+        store
+            .Setup(s => s.BoardGroup(It.IsAny<IReadOnlyList<PassengerProfile>>()))
+            .Callback<IReadOnlyList<PassengerProfile>>(members => boarded.AddRange(members))
+            .Returns((RideTelemetry)null!);
+
+        var queue = new FakeRideQueueService();
+        queue.Enqueue(new QueuedGroupDto(
+            Guid.NewGuid(),
+            [new PersonDto(1, "Ada", 62, Happiness: 40, PreferredRideIntensity: 90, Nausea: 0)]));
+        var coordinator = new RideLoadingCoordinator(store.Object, NullLogger<RideLoadingCoordinator>.Instance, queue);
+
+        await coordinator.RunLoadingPassAsync(Guid.NewGuid(), Ct);
+
+        var profile = Assert.Single(boarded);
+        Assert.Equal(62, profile.Weight.Kilograms);
+        Assert.Equal(40, profile.Happiness);
+        Assert.Equal(90, profile.PreferredRideIntensity);
+        Assert.Equal(0, profile.Nausea);
     }
 
     /// <summary>

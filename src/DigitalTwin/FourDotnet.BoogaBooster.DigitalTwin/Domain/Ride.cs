@@ -221,7 +221,7 @@ public sealed class Ride : DomainModel
     /// have <c>ceil(N / 2)</c> empty gondolas to seat every member.
     /// </exception>
     public void BoardGroup(
-        IReadOnlyList<PassengerWeight> members,
+        IReadOnlyList<PassengerProfile> members,
         Func<TimeSpan> restraintCloseDelay,
         Func<int, int, IReadOnlyList<int>>? selectGondolas = null)
     {
@@ -254,10 +254,10 @@ public sealed class Ride : DomainModel
         foreach (var index in picks)
         {
             var gondola = empty[index];
-            gondola.Board(SeatPosition.Left, new Passenger(PassengerProfile.WithDefaultMood(members[member++])), restraintCloseDelay());
+            gondola.Board(SeatPosition.Left, new Passenger(members[member++]), restraintCloseDelay());
             if (member < members.Count)
             {
-                gondola.Board(SeatPosition.Right, new Passenger(PassengerProfile.WithDefaultMood(members[member++])), restraintCloseDelay());
+                gondola.Board(SeatPosition.Right, new Passenger(members[member++]), restraintCloseDelay());
             }
         }
 

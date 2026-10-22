@@ -40,9 +40,9 @@ public sealed class TelemetryAndCommandTests
 
         var telemetry = store.BoardGroup(new[]
         {
-            new PassengerWeight(70d),
-            new PassengerWeight(80d),
-            new PassengerWeight(90d),
+            PassengerProfile.WithDefaultMood(new PassengerWeight(70d)),
+            PassengerProfile.WithDefaultMood(new PassengerWeight(80d)),
+            PassengerProfile.WithDefaultMood(new PassengerWeight(90d)),
         });
 
         Assert.Equal(3, telemetry.BoardedPassengerCount);

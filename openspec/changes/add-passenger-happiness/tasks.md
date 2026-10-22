@@ -23,7 +23,7 @@
 - [x] 4.1 Add the mood constants and the default profile (75/75/0) to `RideParameters`, each with a doc comment pointing to `docs/06-rider-experience.md`. Verify no new literal appears in the domain code.
 - [x] 4.2 Introduce the `PassengerProfile` value object (weight plus three validated 0–100 scores). Verify with tests for valid and out-of-range construction.
 - [x] 4.3 Extend `Passenger` with fixed `PreferredRideIntensity` and private-set `Happiness`/`Nausea`, plus `ExperienceRide(intensity, dt)` (comfort-band gain, exact-step exponential nausea past +30 pp, clamped) and `SufferOverGShock()`. Keep `Passenger.OfWeight` on the default profile. Verify with tests for the 10 s / +10 gain, the cap at 100, no gain when mismatched, nausea ≈ 3/15/63 at 20/40/60 s, and holding below the threshold.
-- [ ] 4.4 Replace `PassengerWeight` with `PassengerProfile` in `Ride.BoardGroup` and the store, and map `PersonDto` mood in `RideLoadingCoordinator`. Verify a coordinator test boards a member with happiness 40 / intensity 90 and the seat's passenger reports the same values.
+- [x] 4.4 Replace `PassengerWeight` with `PassengerProfile` in `Ride.BoardGroup` and the store, and map `PersonDto` mood in `RideLoadingCoordinator`. Verify a coordinator test boards a member with happiness 40 / intensity 90 and the seat's passenger reports the same values.
 
 ## 5. DigitalTwin: intensity and over-G
 

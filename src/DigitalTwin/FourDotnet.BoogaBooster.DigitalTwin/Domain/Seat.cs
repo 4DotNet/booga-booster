@@ -27,6 +27,9 @@ public sealed class Seat : DomainModel
     /// <summary><c>true</c> when a passenger is boarded.</summary>
     public bool IsOccupied => _occupant is not null;
 
+    /// <summary>The passenger in this seat, or <c>null</c> when it is empty.</summary>
+    public Passenger? Occupant => _occupant;
+
     /// <summary>Weight measured by the load cell (0 when empty).</summary>
     public double OccupiedKg => _occupant?.Weight.Kilograms ?? 0d;
 
