@@ -378,7 +378,9 @@ public sealed class Ride : DomainModel
         }
 
         // 3. Physics while in motion; a stopping/emergency ride settles into offloading
-        //    (releasing the safety constraints) once it reaches a complete rest.
+        //    (releasing the safety constraints) once it reaches a complete rest. Rider
+        //    mood is updated inside each gondola's physics step, so it changes only
+        //    here, while the ride is in motion (docs/06 §6.7).
         if (_state is RideState.Started or RideState.Stopping or RideState.EmergencyStop)
         {
             _mill.AdvancePhysics(dt.TotalSeconds);
