@@ -23,6 +23,13 @@ internal sealed class PersonGenerator : IPersonGenerator
     private const double MeanWeightInKilograms = 85.0;
     private const double WeightStandardDeviation = 12.0;
 
+    // Initial mood ranges, inclusive (docs/06 §6.1): guests arrive fairly happy, all
+    // want at least a medium ride, and nobody arrives nauseous.
+    private const int MinArrivalHappiness = 65;
+    private const int MaxArrivalHappiness = 85;
+    private const int MinPreferredRideIntensity = 50;
+    private const int MaxPreferredRideIntensity = 100;
+
     private readonly Faker _faker;
     private long _lastNumber;
 
@@ -43,7 +50,12 @@ internal sealed class PersonGenerator : IPersonGenerator
         var name = _faker.Name.FullName();
         var weight = NextWeight();
 
-        return new Person(number, name, weight);
+        // Drawn after name and weight so the seeded sequence of those is unchanged for
+        // the first guest (docs/06 §6.1).
+        var happiness = _faker.Random.Int(MinArrivalHappiness, MaxArrivalHappiness);
+        var preferredRideIntensity = _faker.Random.Int(MinPreferredRideIntensity, MaxPreferredRideIntensity);
+
+        return new Person(number, name, weight, happiness, preferredRideIntensity, nausea: Person.MinMoodScore);
     }
 
     public GroupArrival CreateGroup(int size)
