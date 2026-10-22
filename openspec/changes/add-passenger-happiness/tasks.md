@@ -33,7 +33,7 @@
 
 ## 6. DigitalTwin: telemetry summary
 
-- [ ] 6.1 Add `RiderExperienceTelemetry(RiderCount, AverageHappiness?, AveragePreferredRideIntensity?, AverageNausea?)` to `DigitalTwin.Abstractions` and to `RideTelemetry`, and populate it in `Ride.ToTelemetry()`. Verify the 60/80, 50/100, 0/20 → 70/75/10 test and the empty-ride → 0 riders, no averages test.
+- [x] 6.1 Add `RiderExperienceTelemetry(RiderCount, AverageHappiness?, AveragePreferredRideIntensity?, AverageNausea?)` to `DigitalTwin.Abstractions` and to `RideTelemetry`, and populate it in `Ride.ToTelemetry()`. Verify the 60/80, 50/100, 0/20 → 70/75/10 test and the empty-ride → 0 riders, no averages test.
 - [ ] 6.2 Verify the SSE stream and the `GET` telemetry endpoint serialise the new field (endpoint/stream test), and that `DigitalTwin.Tests` pass with module coverage ≥ 80 %.
 
 ## 7. Frontend: models and state

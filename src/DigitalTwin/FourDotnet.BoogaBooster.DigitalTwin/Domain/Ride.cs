@@ -432,7 +432,43 @@ public sealed class Ride : DomainModel
             _mill.BrakesEngaged,
             _mill.ToTelemetry(),
             hubs,
-            gondolas);
+            gondolas,
+            SummariseRiderExperience());
+    }
+
+    /// <summary>
+    /// Averages the mood of every seated passenger, in any state. The averages are
+    /// absent, not 0, when nobody is aboard (docs/06 §6.8).
+    /// </summary>
+    private RiderExperienceTelemetry SummariseRiderExperience()
+    {
+        var riders = 0;
+        var happiness = 0d;
+        var preferredIntensity = 0d;
+        var nausea = 0d;
+
+        foreach (var hub in _mill.Hubs)
+        {
+            foreach (var gondola in hub.Gondolas)
+            {
+                foreach (var position in (ReadOnlySpan<SeatPosition>)[SeatPosition.Left, SeatPosition.Right])
+                {
+                    if (gondola.GetSeat(position).Occupant is not { } rider)
+                    {
+                        continue;
+                    }
+
+                    riders++;
+                    happiness += rider.Happiness;
+                    preferredIntensity += rider.PreferredRideIntensity;
+                    nausea += rider.Nausea;
+                }
+            }
+        }
+
+        return riders == 0
+            ? new RiderExperienceTelemetry(0, null, null, null)
+            : new RiderExperienceTelemetry(riders, happiness / riders, preferredIntensity / riders, nausea / riders);
     }
 
     /// <summary>Runs the entry side-effects for the state being entered.</summary>

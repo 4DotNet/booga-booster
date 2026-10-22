@@ -100,4 +100,34 @@ public sealed class RideMoodTests
         Assert.Equal(a.Select(r => r.Nausea), b.Select(r => r.Nausea));
         Assert.Contains(a, rider => rider.Happiness != 60); // the comparison is not vacuous
     }
+
+    [Fact]
+    public void Telemetry_summarises_the_riders_mood()
+    {
+        var ride = Ride.Create();
+        ride.BoardGroup(
+            [
+                new PassengerProfile(new PassengerWeight(75), happiness: 60, preferredRideIntensity: 50, nausea: 0),
+                new PassengerProfile(new PassengerWeight(80), happiness: 80, preferredRideIntensity: 100, nausea: 20),
+            ],
+            () => TimeSpan.Zero);
+
+        var summary = ride.ToTelemetry().RiderExperience;
+
+        Assert.Equal(2, summary.RiderCount);
+        Assert.Equal(70, summary.AverageHappiness);
+        Assert.Equal(75, summary.AveragePreferredRideIntensity);
+        Assert.Equal(10, summary.AverageNausea);
+    }
+
+    [Fact]
+    public void Telemetry_of_an_empty_ride_has_no_averages()
+    {
+        var summary = Ride.Create().ToTelemetry().RiderExperience;
+
+        Assert.Equal(0, summary.RiderCount);
+        Assert.Null(summary.AverageHappiness);
+        Assert.Null(summary.AveragePreferredRideIntensity);
+        Assert.Null(summary.AverageNausea);
+    }
 }
