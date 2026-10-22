@@ -8,7 +8,23 @@ describe('queue.models', () => {
       peopleWaiting: 34,
     });
 
-    expect(queue).toEqual({ groupCount: 12, peopleWaiting: 34 });
+    expect(queue).toEqual({ groupCount: 12, peopleWaiting: 34, averageHappiness: null });
+  });
+
+  describe('averageHappiness', () => {
+    const base = { rideId: 'r', groupCount: 1, peopleWaiting: 2 };
+
+    it('passes a present average through', () => {
+      expect(toQueueStatus({ ...base, averageHappiness: 72.5 }).averageHappiness).toBe(72.5);
+    });
+
+    it('keeps an explicit null for an empty queue', () => {
+      expect(toQueueStatus({ ...base, averageHappiness: null }).averageHappiness).toBeNull();
+    });
+
+    it('treats an absent field (older backend) as null', () => {
+      expect(toQueueStatus(base).averageHappiness).toBeNull();
+    });
   });
 
   describe('pluralize', () => {
@@ -30,10 +46,10 @@ describe('queue.models', () => {
     });
 
     it('summarizes groups and people, pluralized', () => {
-      expect(summaryText({ groupCount: 12, peopleWaiting: 34 })).toBe(
+      expect(summaryText({ groupCount: 12, peopleWaiting: 34, averageHappiness: null })).toBe(
         '12 groups queued, 34 people waiting.',
       );
-      expect(summaryText({ groupCount: 1, peopleWaiting: 1 })).toBe(
+      expect(summaryText({ groupCount: 1, peopleWaiting: 1, averageHappiness: null })).toBe(
         '1 group queued, 1 person waiting.',
       );
     });

@@ -29,6 +29,7 @@ describe('QueueStateService', () => {
     expect(service.isReady()).toBe(true);
     expect(service.groupCount()).toBe(12);
     expect(service.peopleWaiting()).toBe(34);
+    expect(service.averageHappiness()).toBe(72);
     expect(service.summary()).toContain('12 groups queued');
     expect(service.summary()).toContain('34 people waiting');
   });
