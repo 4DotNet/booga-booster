@@ -36,8 +36,8 @@
 
 ## 6. Repo instructions and tooling sync
 
-- [ ] 6.1 Mention the dev container in `CLAUDE.md` (Common commands / Status) and mirror it in condensed form in `.github/copilot-instructions.md`
-- [ ] 6.2 Run `node .claude/skills/ai-tooling-sync/scripts/sync-ai-tooling.mjs` and verify it reports no errors
+- [x] 6.1 Mention the dev container in `CLAUDE.md` (Common commands / Status) and mirror it in condensed form in `.github/copilot-instructions.md`
+- [x] 6.2 Run `node .claude/skills/ai-tooling-sync/scripts/sync-ai-tooling.mjs` and verify it reports no errors
 
 ## 7. Integration check
 
