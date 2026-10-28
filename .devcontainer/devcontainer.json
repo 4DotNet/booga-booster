@@ -2,7 +2,7 @@
 // Works unchanged in local VS Code Dev Containers and in GitHub Codespaces.
 {
   "name": "BoogaBooster",
-  "image": "mcr.microsoft.com/devcontainers/dotnet:10.0",
+  "image": "mcr.microsoft.com/devcontainers/dotnet:0.0-does-not-exist",
 
   "features": {
     "ghcr.io/devcontainers/features/node:1": {
