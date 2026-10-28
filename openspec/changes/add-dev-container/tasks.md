@@ -32,7 +32,7 @@
 ## 5. CI check for the container
 
 - [x] 5.1 Add `.github/workflows/devcontainer.yml` using `devcontainers/ci` that builds the container and runs `dotnet build src/BoogaBooster.slnx` and `npm run build` in the Angular app inside it, triggered on `pull_request` and `push` with `paths: [".devcontainer/**", "global.json", ".github/workflows/devcontainer.yml"]` and least-privilege `permissions: contents: read` (design D8); verify locally with `actionlint` (or by pushing the branch) that the workflow is valid
-- [ ] 5.2 Verify the check on the pushed branch: the workflow runs green for this PR, and a deliberately broken `devcontainer.json` in a throwaway commit makes it fail (then revert)
+- [x] 5.2 Verify the check on the pushed branch: the workflow runs green for this PR, and a deliberately broken `devcontainer.json` in a throwaway commit makes it fail (then revert)
 
 ## 6. Repo instructions and tooling sync
 
