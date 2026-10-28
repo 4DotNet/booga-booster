@@ -56,7 +56,7 @@ truth the tests are written against; read it before touching the physics.
 
 | Requirement | Why |
 | --- | --- |
-| **.NET 10 SDK** | the backend targets `net10.0` |
+| **.NET 10 SDK**, `10.0.401` or newer (pinned in `global.json`) | the backend targets `net10.0`; older SDKs are rejected |
 | **Node 22+ / npm 11** | the Angular app pins `npm@11.5.2` |
 | **Docker** (or Podman) | Aspire starts RabbitMQ in a container |
 | **Dapr CLI**, initialised (`dapr init`) | the API runs with a Dapr sidecar for pub/sub |
