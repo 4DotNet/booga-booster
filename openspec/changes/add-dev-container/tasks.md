@@ -18,7 +18,7 @@
 - [x] 3.3 Install or update the `4dotnet-csharp-style-guide` global tool, make sure `~/.dotnet/tools` is on `PATH` for login and non-login shells, and warn (without failing provisioning) if nuget.org is unreachable; verify `which 4dotnet-csharp-style-guide` resolves in a new terminal
 - [x] 3.4 Run `dapr init --slim` with the pinned runtime version (1.17.x), skipped when already initialised (design D3), and verify `dapr --version` reports both CLI and runtime versions
 - [x] 3.5 Set the AppHost's `Parameters:rabbitmq-username` / `rabbitmq-password` user-secrets to `guest` only when they are unset (design D5), and verify with `dotnet user-secrets list` both on a fresh container and after changing the password and re-running the script (the custom value must survive)
-- [ ] 3.6 Trust the ASP.NET dev certificate (`dotnet dev-certs https --trust`), then `dotnet restore src/BoogaBooster.slnx` and `npm ci` in `src/FourDotnet.BoogaBooster.App`; verify `dotnet build` + `dotnet test BoogaBooster.slnx` and `npm test` all pass inside a freshly created container
+- [x] 3.6 Trust the ASP.NET dev certificate (`dotnet dev-certs https --trust`), then `dotnet restore src/BoogaBooster.slnx` and `npm ci` in `src/FourDotnet.BoogaBooster.App`; verify `dotnet build` + `dotnet test BoogaBooster.slnx` and `npm test` all pass inside a freshly created container
 - [ ] 3.7 Run `bash .devcontainer/post-create.sh` a second time in the same container and verify it exits 0 and the environment still builds and tests (idempotency scenario)
 - [ ] 3.8 Verify no AI tokens or API keys appear in `devcontainer.json`, `post-create.sh`, the container's environment (`env`) or the image layers
 

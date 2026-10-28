@@ -68,3 +68,23 @@ for name in username password; do
   fi
 done
 
+# --- ASP.NET development certificate ------------------------------------------------------
+step "ASP.NET development certificate"
+# Exit code 4 means "trusted by some clients but not others": on Linux, OpenSSL trust needs
+# SSL_CERT_DIR, which devcontainer.json's containerEnv sets. Any other failure is fatal.
+dev_certs_exit=0
+dotnet dev-certs https --trust || dev_certs_exit=$?
+if [ "$dev_certs_exit" -eq 4 ]; then
+  warn "the dev certificate is only partially trusted - check that SSL_CERT_DIR includes ~/.aspnet/dev-certs/trust"
+elif [ "$dev_certs_exit" -ne 0 ]; then
+  exit "$dev_certs_exit"
+fi
+
+# --- Restore ------------------------------------------------------------------------------
+step "Restore the .NET solution"
+dotnet restore "$repo_root/src/BoogaBooster.slnx"
+
+step "Install the Angular app's npm packages"
+(cd "$app_dir" && npm ci)
+
+step "Dev container ready"
