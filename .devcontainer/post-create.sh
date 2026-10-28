@@ -23,3 +23,17 @@ if ! command -v copilot > /dev/null; then
   npm install --global @github/copilot
 fi
 
+# --- 4dotnet-csharp-style-guide MCP server ------------------------------------------------
+# .mcp.json launches it by bare name, so ~/.dotnet/tools must be on PATH in every shell, not
+# only in VS Code terminals (devcontainer.json's remoteEnv covers those).
+step "4dotnet-csharp-style-guide (MCP server)"
+tools_path_line='export PATH="$PATH:$HOME/.dotnet/tools"'
+for rc in "$HOME/.bashrc" "$HOME/.profile"; do
+  grep -qxF "$tools_path_line" "$rc" 2> /dev/null || echo "$tools_path_line" >> "$rc"
+done
+export PATH="$PATH:$HOME/.dotnet/tools"
+# A failed install must not stop the rest of provisioning: the solution builds without it.
+if ! dotnet tool update --global 4dotnet-csharp-style-guide; then
+  warn "could not install 4dotnet-csharp-style-guide - the MCP server stays unavailable until this script is re-run"
+fi
+
