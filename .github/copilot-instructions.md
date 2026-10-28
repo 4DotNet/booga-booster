@@ -225,6 +225,10 @@ dotnet user-secrets --project Aspire/FourDotnet.BoogaBooster.Aspire.AppHost \
   set Parameters:rabbitmq-password guest
 ```
 
+Or open the repo in the **dev container** (`.devcontainer/`, also a Codespace): it
+provides and provisions all of the above through `.devcontainer/post-create.sh`.
+`global.json` pins the SDK and opts `dotnet test` into Microsoft.Testing.Platform.
+
 Angular (from `src/FourDotnet.BoogaBooster.App`, package manager **npm 11**):
 
 ```bash

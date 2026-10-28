@@ -234,6 +234,14 @@ dotnet user-secrets --project Aspire/FourDotnet.BoogaBooster.Aspire.AppHost \
 Running the AppHost also requires **Docker** (for the RabbitMQ container) and an
 initialised **Dapr CLI** (`dapr init`).
 
+**Dev container.** `.devcontainer/` provides all of the above, pre-provisioned: the
+.NET SDK from `global.json`, Node with the pinned npm, its own Docker engine, a slim Dapr
+runtime, the RabbitMQ user-secrets (set to `guest` only when unset), the trusted dev
+cert, the style-guide MCP tool, and the Claude Code / Copilot CLIs. It also works as a
+GitHub Codespace. Provisioning lives in `.devcontainer/post-create.sh`, which is idempotent
+and safe to re-run by hand. Native setup stays supported. `global.json` also opts
+`dotnet test` into Microsoft.Testing.Platform, which xunit.v3 requires on the .NET 10 SDK.
+
 Angular commands run from `src/FourDotnet.BoogaBooster.App` (package manager: **npm 11**):
 
 ```bash
