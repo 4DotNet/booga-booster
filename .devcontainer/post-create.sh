@@ -70,6 +70,17 @@ done
 
 # --- ASP.NET development certificate ------------------------------------------------------
 step "ASP.NET development certificate"
+# Prefer the host's certificate, exported by devcontainer.json's initializeCommand: the host
+# browser already trusts it, so the forwarded Aspire dashboard opens without a warning.
+# Without it (Codespaces, no dotnet on the host) the container generates its own.
+host_cert="$repo_root/.devcontainer/devcert.pfx"
+if [ -f "$host_cert" ]; then
+  # --import is only accepted together with --clean, which replaces any existing certificate.
+  dotnet dev-certs https --clean --import "$host_cert" --password boogabooster-devcontainer
+  echo "Imported the host's development certificate"
+else
+  echo "No host certificate exported - generating one; the host browser will warn once"
+fi
 # Exit code 4 means "trusted by some clients but not others": on Linux, OpenSSL trust needs
 # SSL_CERT_DIR, which devcontainer.json's containerEnv sets. Any other failure is fatal.
 dev_certs_exit=0
