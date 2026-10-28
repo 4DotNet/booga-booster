@@ -1,0 +1,49 @@
+# Builds the dev container and checks that the solution builds inside it, so a change to
+# the container definition (or the SDK pin it must satisfy) cannot silently break it.
+#
+# Spec: openspec/changes/add-dev-container/ (design D8). Running the AppHost, RabbitMQ and
+# Dapr inside CI's docker-in-docker is deliberately out of scope: slow and flaky for little
+# extra assurance. That stays a manual check.
+
+name: Dev container
+
+on:
+  pull_request:
+    paths:
+      - ".devcontainer/**"
+      - "global.json"
+      - ".github/workflows/devcontainer.yml"
+  push:
+    branches: [main, development]
+    paths:
+      - ".devcontainer/**"
+      - "global.json"
+      - ".github/workflows/devcontainer.yml"
+
+concurrency:
+  group: devcontainer-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build dev container
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      # Creates the container exactly as an editor would - postCreateCommand included, so
+      # post-create.sh (Dapr, user-secrets, dev cert, restore, npm ci) runs too - then
+      # builds the solution and the Angular app inside it. No image is pushed.
+      - name: Build the container and the solution inside it
+        uses: devcontainers/ci@v0.3
+        with:
+          push: never
+          runCmd: |
+            set -euo pipefail
+            dotnet build src/BoogaBooster.slnx
+            cd src/FourDotnet.BoogaBooster.App && npm run build
