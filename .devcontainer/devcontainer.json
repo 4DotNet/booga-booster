@@ -22,6 +22,12 @@
     "ghcr.io/anthropics/devcontainer-features/claude-code:1": {}
   },
 
+  "containerEnv": {
+    // Lets OpenSSL clients (curl, daprd, Node) trust the ASP.NET dev certificate that
+    // post-create.sh trusts with `dotnet dev-certs https --trust`.
+    "SSL_CERT_DIR": "/home/vscode/.aspnet/dev-certs/trust:/usr/lib/ssl/certs"
+  },
+
   "remoteEnv": {
     // Global .NET tools - the 4dotnet-csharp-style-guide MCP server is launched by bare name.
     "PATH": "${containerEnv:PATH}:/home/vscode/.dotnet/tools"
