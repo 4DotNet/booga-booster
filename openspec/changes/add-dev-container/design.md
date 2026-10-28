@@ -74,6 +74,8 @@ A `global.json` at the repo root pins `sdk.version` to `10.0.401` with `rollForw
 
 *Alternative: `rollForward: latestPatch`.* Stricter, but it would break every contributor the moment they install the next feature band. Rejected as too much friction for a teaching repo.
 
+`global.json` also opts into **Microsoft.Testing.Platform** (`"test": { "runner": "Microsoft.Testing.Platform" }`). Implementation found that `dotnet test BoogaBooster.slnx` already failed on `development`: xunit.v3 on Microsoft.Testing.Platform 2.4 no longer runs under the VSTest target on the .NET 10 SDK. The opt-in belongs in `global.json`, and the spec requires the tests to pass in the container, so it is part of this change. It also fixes native runs.
+
 ### D8 — CI builds the container on change
 
 A new `.github/workflows/devcontainer.yml` uses `devcontainers/ci` to build the container and, inside it, run `dotnet build src/BoogaBooster.slnx` and `npm run build` in the Angular app. It triggers on pull requests and pushes that touch `.devcontainer/**` or `global.json`. It runs no tests and does not start the AppHost; that stays a manual verification task. Starting RabbitMQ and Dapr inside CI's docker-in-docker would make the workflow slow and flaky, for little extra assurance.
