@@ -37,3 +37,17 @@ if ! dotnet tool update --global 4dotnet-csharp-style-guide; then
   warn "could not install 4dotnet-csharp-style-guide - the MCP server stays unavailable until this script is re-run"
 fi
 
+# --- Dapr ---------------------------------------------------------------------------------
+# Slim mode installs daprd without the default Redis/Zipkin/placement containers: BoogaBooster
+# only uses pub/sub, declared by the AppHost (design D3). The runtime version is pinned.
+dapr_runtime_version="1.17.4"
+step "Dapr runtime $dapr_runtime_version (slim)"
+installed_runtime="$("$HOME/.dapr/bin/daprd" --version 2> /dev/null || true)"
+if [ "$installed_runtime" != "$dapr_runtime_version" ]; then
+  if [ -n "$installed_runtime" ]; then
+    dapr uninstall
+  fi
+  dapr init --slim --runtime-version "$dapr_runtime_version"
+fi
+dapr --version
+
