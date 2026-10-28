@@ -13,7 +13,7 @@
 
 ## 3. Provisioning
 
-- [ ] 3.1 Create `.devcontainer/post-create.sh` (`set -euo pipefail`, executable, LF line endings enforced through `.gitattributes`) and wire it as `postCreateCommand`; verify it runs on container creation and its log is visible in the creation output
+- [x] 3.1 Create `.devcontainer/post-create.sh` (`set -euo pipefail`, executable, LF line endings enforced through `.gitattributes`) and wire it as `postCreateCommand`; verify it runs on container creation and its log is visible in the creation output
 - [ ] 3.2 Install the npm version read from the Angular app's `packageManager` field plus `@github/copilot` globally, and verify `npm --version` equals `11.5.2` and `copilot --version` succeeds inside the container
 - [ ] 3.3 Install or update the `4dotnet-csharp-style-guide` global tool, make sure `~/.dotnet/tools` is on `PATH` for login and non-login shells, and warn (without failing provisioning) if nuget.org is unreachable; verify `which 4dotnet-csharp-style-guide` resolves in a new terminal
 - [ ] 3.4 Run `dapr init --slim` with the pinned runtime version (1.17.x), skipped when already initialised (design D3), and verify `dapr --version` reports both CLI and runtime versions
