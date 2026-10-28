@@ -8,7 +8,7 @@
 ## 2. Dev container definition
 
 - [x] 2.1 Create `.devcontainer/devcontainer.json` on `mcr.microsoft.com/devcontainers/dotnet:10.0` with the `node`, `docker-in-docker` (with a named volume for `/var/lib/docker`), `github-cli`, Dapr CLI and Claude Code features (design D1, D2), and verify with `devcontainer build --workspace-folder .` (or "Rebuild Container" in VS Code) that the image builds
-- [ ] 2.2 Add `customizations.vscode.extensions` (C# Dev Kit, Aspire, Angular Language Service, Prettier) and verify they are installed when the container opens
+- [x] 2.2 Add `customizations.vscode.extensions` (C# Dev Kit, Aspire, Angular Language Service, Prettier) and verify they are installed when the container opens
 - [ ] 2.3 Add `portsAttributes` labels for the dashboard launch-profile ports and RabbitMQ management (`15672`), with infrastructure ports set to `onAutoForward: "silent"` (design D6), and verify `devcontainer.json` passes the dev container JSON schema in VS Code without warnings
 
 ## 3. Provisioning

@@ -29,5 +29,16 @@
 
   "postCreateCommand": "bash .devcontainer/post-create.sh",
 
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-dotnettools.csdevkit",
+        "microsoft-aspire.aspire-vscode",
+        "angular.ng-template",
+        "esbenp.prettier-vscode"
+      ]
+    }
+  },
+
   "remoteUser": "vscode"
 }
