@@ -42,4 +42,4 @@
 ## 7. Integration check
 
 - [ ] 7.1 Create a GitHub Codespace from the change branch and verify, without any manual setup, that `dotnet test BoogaBooster.slnx` passes, the AppHost starts, and the operator dashboard opens in the Codespaces browser with live telemetry
-- [ ] 7.2 On a native (non-container) Windows setup, verify `dotnet build` / `dotnet test` and the AppHost run behave as before with `global.json` in place
+- [x] 7.2 On a native (non-container) Windows setup, verify `dotnet build` / `dotnet test` and the AppHost run behave as before with `global.json` in place
