@@ -51,3 +51,20 @@ if [ "$installed_runtime" != "$dapr_runtime_version" ]; then
 fi
 dapr --version
 
+# --- RabbitMQ development user-secrets ----------------------------------------------------
+# The same user-secrets the README tells native users to set (design D5). Only set when
+# missing, so values a developer chose survive a rebuild. Addressed by id, so no project
+# evaluation (and therefore no restore) is needed first.
+step "RabbitMQ development user-secrets"
+secrets_id="$(sed -n 's|.*<UserSecretsId>\(.*\)</UserSecretsId>.*|\1|p' "$apphost_csproj")"
+secrets="$(dotnet user-secrets list --id "$secrets_id")"
+for name in username password; do
+  key="Parameters:rabbitmq-$name"
+  if grep -q "^$key = " <<< "$secrets"; then
+    echo "$key is already set - leaving it"
+  else
+    dotnet user-secrets set "$key" guest --id "$secrets_id" > /dev/null
+    echo "$key set to the development default"
+  fi
+done
+
