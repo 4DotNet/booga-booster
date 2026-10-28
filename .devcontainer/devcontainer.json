@@ -29,6 +29,17 @@
 
   "postCreateCommand": "bash .devcontainer/post-create.sh",
 
+  // Aspire allocates and forwards the API and frontend ports itself; only the fixed ports
+  // are labelled here (design D6). Ports from the AppHost launch profile and AppHost.cs.
+  "portsAttributes": {
+    "17071": { "label": "Aspire dashboard (https)", "protocol": "https" },
+    "15145": { "label": "Aspire dashboard (http)", "onAutoForward": "silent" },
+    "15672": { "label": "RabbitMQ management", "onAutoForward": "silent" },
+    "5672": { "label": "RabbitMQ (AMQP)", "onAutoForward": "ignore" },
+    "21154": { "label": "Aspire OTLP", "onAutoForward": "ignore" },
+    "22138": { "label": "Aspire resource service", "onAutoForward": "ignore" }
+  },
+
   "customizations": {
     "vscode": {
       "extensions": [
