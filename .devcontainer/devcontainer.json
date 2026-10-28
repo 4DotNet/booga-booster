@@ -33,6 +33,14 @@
     "PATH": "${containerEnv:PATH}:/home/vscode/.dotnet/tools"
   },
 
+  // Runs on the HOST before the container is created: exports the host's ASP.NET dev
+  // certificate (already trusted by the host's browser) so post-create.sh can import it,
+  // and the Aspire dashboard is served with a certificate the host trusts. The PFX is
+  // git-ignored (*.pfx) and the password only protects it on this machine. `||` works in
+  // both cmd.exe and sh: without dotnet on the host (Codespaces, CI) the export is skipped
+  // and the container falls back to a certificate of its own.
+  "initializeCommand": "dotnet dev-certs https --export-path .devcontainer/devcert.pfx --password boogabooster-devcontainer || echo No host dotnet - the container will generate its own dev certificate.",
+
   "postCreateCommand": "bash .devcontainer/post-create.sh",
 
   // Aspire allocates and forwards the API and frontend ports itself; only the fixed ports

@@ -77,9 +77,13 @@ Things to know:
 
 - The container runs **its own Docker engine** (docker-in-docker, so the container is
   privileged). RabbitMQ is pulled into it on the first run.
-- Open the dashboard and the operator UI through the **forwarded** URLs. The ASP.NET
-  development certificate is trusted inside the container but not by your host browser,
-  so expect a one-time certificate warning on the Aspire dashboard.
+- Open the dashboard and the operator UI through the **forwarded** URLs. Before the
+  container is created, your host's ASP.NET development certificate is exported (to the
+  git-ignored `.devcontainer/devcert.pfx`) and imported into the container. The dashboard
+  then serves a certificate your browser already trusts. Run `dotnet dev-certs https --trust`
+  on the host once if you never have. Without `dotnet` on the host, for example in
+  Codespaces, the container generates its own certificate and the browser warns once. If you
+  created the container before this was added, run **Dev Containers: Rebuild Container**.
 - **Claude Code** (`claude`) and **Copilot CLI** (`copilot`) are installed but not
   signed in. Sign in with your own account; no credentials ship with the container.
 
