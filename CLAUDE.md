@@ -130,7 +130,7 @@ arrival rate; Queue publishes `group-queued`.
 - Telemetry arrives over **SSE** (`GET /ride/telemetry/stream`); queue and weather are
   polled HTTP. In dev, `/api/*` is proxied to the API by `proxy.conf.js`, which reads
   the Aspire-injected service-discovery env var and falls back to
-  `https://localhost:7001`.
+  the API's launch-profile URL, `https://localhost:7069`.
 - **PrimeNG 22** + `@primeuix/themes` are installed and are the mandated component
   library, but **no component uses them yet** — the existing panels are hand-rolled.
   New UI work should adopt PrimeNG (consult the `primeng` MCP server first).
@@ -233,6 +233,14 @@ dotnet user-secrets --project Aspire/FourDotnet.BoogaBooster.Aspire.AppHost \
 
 Running the AppHost also requires **Docker** (for the RabbitMQ container) and an
 initialised **Dapr CLI** (`dapr init`).
+
+**Dev container.** `.devcontainer/` provides all of the above, pre-provisioned: the
+.NET SDK from `global.json`, Node with the pinned npm, its own Docker engine, a slim Dapr
+runtime, the RabbitMQ user-secrets (set to `guest` only when unset), the trusted dev
+cert, the style-guide MCP tool, and the Claude Code / Copilot CLIs. It also works as a
+GitHub Codespace. Provisioning lives in `.devcontainer/post-create.sh`, which is idempotent
+and safe to re-run by hand. Native setup stays supported. `global.json` also opts
+`dotnet test` into Microsoft.Testing.Platform, which xunit.v3 requires on the .NET 10 SDK.
 
 Angular commands run from `src/FourDotnet.BoogaBooster.App` (package manager: **npm 11**):
 

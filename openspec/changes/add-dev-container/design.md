@@ -74,6 +74,8 @@ A `global.json` at the repo root pins `sdk.version` to `10.0.401` with `rollForw
 
 *Alternative: `rollForward: latestPatch`.* Stricter, but it would break every contributor the moment they install the next feature band. Rejected as too much friction for a teaching repo.
 
+`global.json` also opts into **Microsoft.Testing.Platform** (`"test": { "runner": "Microsoft.Testing.Platform" }`). Implementation found that `dotnet test BoogaBooster.slnx` already failed on `development`: xunit.v3 on Microsoft.Testing.Platform 2.4 no longer runs under the VSTest target on the .NET 10 SDK. The opt-in belongs in `global.json`, and the spec requires the tests to pass in the container, so it is part of this change. It also fixes native runs.
+
 ### D8 — CI builds the container on change
 
 A new `.github/workflows/devcontainer.yml` uses `devcontainers/ci` to build the container and, inside it, run `dotnet build src/BoogaBooster.slnx` and `npm run build` in the Angular app. It triggers on pull requests and pushes that touch `.devcontainer/**` or `global.json`. It runs no tests and does not start the AppHost; that stays a manual verification task. Starting RabbitMQ and Dapr inside CI's docker-in-docker would make the workflow slow and flaky, for little extra assurance.
@@ -90,3 +92,12 @@ A new `.github/workflows/devcontainer.yml` uses `devcontainers/ci` to build the 
 ## Migration Plan
 
 This change is purely additive. Native setups are untouched, apart from `global.json` rejecting SDKs older than 10.0.401. To roll back, delete `.devcontainer/`, `global.json` and the workflow.
+
+## Implementation Notes
+
+Running the system inside the container exposed two pre-existing defects that affect native setups too. They are fixed in this change because the spec's scenarios depend on them:
+
+- **Dev proxy under Aspire 13.** `proxy.conf.js` read the `services__fourdotnet-boogabooster-api__https__0` variable, but Aspire 13's JavaScript integration injects `FOURDOTNET_BOOGABOOSTER_API_HTTPS`. The fallback `https://localhost:7001` matched no listener, so `/api/*` returned 500 and the dashboard received no telemetry. The proxy now reads the new names first and falls back to the API's launch-profile URL (`https://localhost:7069`).
+- **Order-dependent instrument test.** `DomainInstrumentTests.InstrumentNamed` relied on another test having already run `BoogaBoosterTelemetry`'s static initialiser (`SourceName` is a `const` and does not trigger it). The test order inside the container exposed this. The helper now forces the initialiser.
+
+`dapr init --slim` was confirmed sufficient: the AppHost reaches RabbitMQ through Aspire's proxy on the container's own `localhost:5672`, as D2 predicted.

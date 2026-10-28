@@ -1,0 +1,61 @@
+// Dev container for BoogaBooster - see openspec/changes/add-dev-container/design.md.
+// Works unchanged in local VS Code Dev Containers and in GitHub Codespaces.
+{
+  "name": "BoogaBooster",
+  "image": "mcr.microsoft.com/devcontainers/dotnet:10.0",
+
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "24"
+    },
+    // Its own Docker engine rather than the host's: daprd runs as a process inside this
+    // container and reaches RabbitMQ on localhost:5672, which only works when the port is
+    // published by an engine running in here (design D2). The feature mounts a volume on
+    // /var/lib/docker, so pulled images survive container rebuilds.
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    // Pinned: "latest" is resolved through the unauthenticated GitHub API and fails when
+    // that is rate-limited, leaving an empty version.
+    "ghcr.io/dapr/cli/dapr-cli:0": {
+      "version": "1.18.2"
+    },
+    "ghcr.io/anthropics/devcontainer-features/claude-code:1": {}
+  },
+
+  "containerEnv": {
+    // Lets OpenSSL clients (curl, daprd, Node) trust the ASP.NET dev certificate that
+    // post-create.sh trusts with `dotnet dev-certs https --trust`.
+    "SSL_CERT_DIR": "/home/vscode/.aspnet/dev-certs/trust:/usr/lib/ssl/certs"
+  },
+
+  "remoteEnv": {
+    // Global .NET tools - the 4dotnet-csharp-style-guide MCP server is launched by bare name.
+    "PATH": "${containerEnv:PATH}:/home/vscode/.dotnet/tools"
+  },
+
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+
+  // Aspire allocates and forwards the API and frontend ports itself; only the fixed ports
+  // are labelled here (design D6). Ports from the AppHost launch profile and AppHost.cs.
+  "portsAttributes": {
+    "17071": { "label": "Aspire dashboard (https)", "protocol": "https" },
+    "15145": { "label": "Aspire dashboard (http)", "onAutoForward": "silent" },
+    "15672": { "label": "RabbitMQ management", "onAutoForward": "silent" },
+    "5672": { "label": "RabbitMQ (AMQP)", "onAutoForward": "ignore" },
+    "21154": { "label": "Aspire OTLP", "onAutoForward": "ignore" },
+    "22138": { "label": "Aspire resource service", "onAutoForward": "ignore" }
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-dotnettools.csdevkit",
+        "microsoft-aspire.aspire-vscode",
+        "angular.ng-template",
+        "esbenp.prettier-vscode"
+      ]
+    }
+  },
+
+  "remoteUser": "vscode"
+}
