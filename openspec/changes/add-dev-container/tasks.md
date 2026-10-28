@@ -27,7 +27,7 @@
 - [ ] 4.1 Start the AppHost inside the container with the documented command and verify the Aspire dashboard (opened through the forwarded port in the host browser) shows the RabbitMQ, API, API sidecar and frontend resources running
 - [x] 4.2 Verify pub/sub end to end: a `weather-updated` event reaches the Queue module (visible in the dashboard traces/logs, and the queue arrival rate changes), as on a native setup
 - [ ] 4.3 Open the Angular operator dashboard through its forwarded URL in the host browser and verify live telemetry streams over SSE; record any one-time certificate warning for the README
-- [ ] 4.4 Add a "Dev container / Codespaces" quick start to `README.md`: open in container, the recommended "Clone Repository in Container Volume" path on Windows/macOS, the privileged docker-in-docker note, the dev-cert browser warning, signing in to Claude Code / Copilot CLI, and that the native setup stays supported. Verify each documented command runs as written inside the container
+- [x] 4.4 Add a "Dev container / Codespaces" quick start to `README.md`: open in container, the recommended "Clone Repository in Container Volume" path on Windows/macOS, the privileged docker-in-docker note, the dev-cert browser warning, signing in to Claude Code / Copilot CLI, and that the native setup stays supported. Verify each documented command runs as written inside the container
 
 ## 5. CI check for the container
 
