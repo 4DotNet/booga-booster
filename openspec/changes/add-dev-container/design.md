@@ -92,3 +92,12 @@ A new `.github/workflows/devcontainer.yml` uses `devcontainers/ci` to build the 
 ## Migration Plan
 
 This change is purely additive. Native setups are untouched, apart from `global.json` rejecting SDKs older than 10.0.401. To roll back, delete `.devcontainer/`, `global.json` and the workflow.
+
+## Implementation Notes
+
+Running the system inside the container exposed two pre-existing defects that affect native setups too. They are fixed in this change because the spec's scenarios depend on them:
+
+- **Dev proxy under Aspire 13.** `proxy.conf.js` read the `services__fourdotnet-boogabooster-api__https__0` variable, but Aspire 13's JavaScript integration injects `FOURDOTNET_BOOGABOOSTER_API_HTTPS`. The fallback `https://localhost:7001` matched no listener, so `/api/*` returned 500 and the dashboard received no telemetry. The proxy now reads the new names first and falls back to the API's launch-profile URL (`https://localhost:7069`).
+- **Order-dependent instrument test.** `DomainInstrumentTests.InstrumentNamed` relied on another test having already run `BoogaBoosterTelemetry`'s static initialiser (`SourceName` is a `const` and does not trigger it). The test order inside the container exposed this. The helper now forces the initialiser.
+
+`dapr init --slim` was confirmed sufficient: the AppHost reaches RabbitMQ through Aspire's proxy on the container's own `localhost:5672`, as D2 predicted.
