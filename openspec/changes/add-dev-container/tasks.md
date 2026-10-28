@@ -2,7 +2,7 @@
 
 ## 1. Pin the .NET SDK
 
-- [ ] 1.1 Add a root `global.json` pinning `sdk.version` to `10.0.401` with `rollForward: latestFeature` (design D7), and verify `dotnet --version` from both the repo root and `src/` reports a 10.0.4xx-or-newer SDK and that `dotnet build BoogaBooster.slnx` still succeeds natively
+- [x] 1.1 Add a root `global.json` pinning `sdk.version` to `10.0.401` with `rollForward: latestFeature` (design D7), and verify `dotnet --version` from both the repo root and `src/` reports a 10.0.4xx-or-newer SDK and that `dotnet build BoogaBooster.slnx` still succeeds natively
 - [ ] 1.2 Add the SDK pin to the README prerequisites table ("the SDK version in `global.json` or newer 10.0") and verify the README text matches the file
 
 ## 2. Dev container definition
