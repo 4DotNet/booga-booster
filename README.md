@@ -52,7 +52,40 @@ truth the tests are written against; read it before touching the physics.
 
 ## Quick start
 
-### Prerequisites
+### Dev container / Codespaces (recommended)
+
+The repo ships a dev container (`.devcontainer/`) that provides and provisions everything
+below. You need only Docker and VS Code with the Dev Containers extension, or a GitHub
+Codespace.
+
+- **Locally:** *Dev Containers: Clone Repository in Container Volume…*. On Windows and
+  macOS this is much faster than *Reopen in Container* on a local clone, because
+  bind-mounted file I/O slows `npm ci` and the builds considerably. *Reopen in
+  Container* works too.
+- **Codespaces:** *Code → Codespaces → Create codespace*.
+
+The first creation takes a few minutes. `.devcontainer/post-create.sh` installs the
+pinned npm, a slim Dapr runtime and the `4dotnet-csharp-style-guide` MCP tool. It sets
+the RabbitMQ user-secrets to `guest` (only if they are unset), trusts the dev
+certificate inside the container, and restores the .NET and npm packages. The script is
+idempotent: re-run it with `bash .devcontainer/post-create.sh` if a step failed, for
+example on a network hiccup.
+
+After that, the commands under [Run everything](#run-everything) and
+[Build and test](#build-and-test) work as written. You can skip the user-secrets step.
+Things to know:
+
+- The container runs **its own Docker engine** (docker-in-docker, so the container is
+  privileged). RabbitMQ is pulled into it on the first run.
+- Open the dashboard and the operator UI through the **forwarded** URLs. The ASP.NET
+  development certificate is trusted inside the container but not by your host browser,
+  so expect a one-time certificate warning on the Aspire dashboard.
+- **Claude Code** (`claude`) and **Copilot CLI** (`copilot`) are installed but not
+  signed in. Sign in with your own account; no credentials ship with the container.
+
+The native setup below remains fully supported.
+
+### Prerequisites (native setup)
 
 | Requirement | Why |
 | --- | --- |
