@@ -2,8 +2,8 @@
 
 ## 1. Web model export
 
-- [ ] 1.1 Add `designs/3d/export_web_model.py` implementing D1 (rest pose, bulb extraction into `extras.bulbs`, gondola rim bulbs on `GondolaBulbs_<i>_<j>`, theme colours on spot heads, 8192×2048 backdrop swap, GLB export of the ride, backdrop, floor and poles only). Verify by running it in Blender and checking the console report lists every bulb group with a non-zero count.
-- [ ] 1.2 Export `src/FourDotnet.BoogaBooster.App/public/3dmodels/booga-booster.glb` and remove the unused `boogabooster.fbx`. Verify the GLB loads in Blender's glTF importer with the expected node names and that `grep` finds no reference to the `.fbx`.
+- [x] 1.1 Add `designs/3d/export_web_model.py` implementing D1 (rest pose, bulb extraction into `extras.bulbs`, gondola rim bulbs on `GondolaBulbs_<i>_<j>`, theme colours on spot heads, 8192×2048 backdrop swap, GLB export of the ride, backdrop, floor and poles only). Verify by running it in Blender and checking the console report lists every bulb group with a non-zero count.
+- [x] 1.2 Export `src/FourDotnet.BoogaBooster.App/public/3dmodels/booga-booster.glb` and remove the unused `boogabooster.fbx`. Verify the GLB loads in Blender's glTF importer with the expected node names and that `grep` finds no reference to the `.fbx`.
 
 ## 2. Light-show engine (plain TypeScript)
 
