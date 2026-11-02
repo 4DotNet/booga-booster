@@ -20,4 +20,4 @@
 
 ## 4. Integration
 
-- [ ] 4.1 Run the app (`npm start`), open the dashboard and check that the model, backdrop, poles, bulb patterns (switching after 5 loops) and blinking/fading spots render, and that rotation still follows the operation controls. Record a screenshot in the PR.
+- [x] 4.1 Run the app (`npm start`), open the dashboard and check that the model, backdrop, poles, bulb patterns (switching after 5 loops) and blinking/fading spots render, and that rotation still follows the operation controls. Record a screenshot in the PR.

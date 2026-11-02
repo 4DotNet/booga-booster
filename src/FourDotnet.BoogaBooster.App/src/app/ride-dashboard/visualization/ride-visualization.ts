@@ -171,7 +171,7 @@ export class RideVisualization {
     composer.setPixelRatio(pixelRatio);
     composer.setSize(width, height);
     composer.addPass(new RenderPass(scene, camera));
-    const bloom = new UnrealBloomPass(new THREE.Vector2(width / 2, height / 2), 0.85, 0.45, 0.92);
+    const bloom = new UnrealBloomPass(new THREE.Vector2(width / 2, height / 2), 0.7, 0.4, 1.05);
     composer.addPass(bloom);
     composer.addPass(new OutputPass());
 
