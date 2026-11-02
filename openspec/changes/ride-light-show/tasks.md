@@ -7,7 +7,7 @@
 
 ## 2. Light-show engine (plain TypeScript)
 
-- [ ] 2.1 Add `visualization/light-show/bulb.ts` (bulb descriptor, colours, group kinds) and `light-patterns.ts` with the 12 patterns of D3. Verify with a Vitest spec: 12 unique names, positive loop durations, brightness in [0, 1] and deterministic for sampled bulbs and phases.
+- [x] 2.1 Add `visualization/light-show/bulb.ts` (bulb descriptor, colours, group kinds) and `light-patterns.ts` with the 12 patterns of D3. Verify with a Vitest spec: 12 unique names, positive loop durations, brightness in [0, 1] and deterministic for sampled bulbs and phases.
 - [ ] 2.2 Add `light-show-sequencer.ts` (D4): 5 loops per pattern, cycling forever, starting at pattern 0. Verify with a spec covering start, the switch after the fifth loop, and the wrap after the twelfth pattern.
 - [ ] 2.3 Add `spot-effects.ts` (D5): per-pole fade + blink brightness with phase offsets. Verify with a spec that values stay in [0, 1], vary over time, and differ between poles.
 - [ ] 2.4 Add the flash-rate safety spec (D7) over every pattern and spot effect. Verify it passes with at most 3 off→on transitions per second.
