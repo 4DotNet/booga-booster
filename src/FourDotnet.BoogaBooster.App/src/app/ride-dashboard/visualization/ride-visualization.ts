@@ -10,33 +10,25 @@ import {
 } from '@angular/core';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 
 import { MotorDirection } from '../models/ride.models';
+import { STEADY_BRIGHTNESS, evaluateShow } from './light-show/light-show';
+import { spotBrightness } from './light-show/spot-effects';
+import {
+  RIDE_MODEL_URL,
+  RideModel,
+  applyBulbs,
+  applySpot,
+  prepareRideModel,
+} from './scenery/ride-model';
 
-/** Ride geometry (metres) — mirrors the reference model's parameter set. */
-const P = {
-  towerRadius: 0.6,
-  towerHeight: 6.0,
-  baseSize: 3.4,
-  baseHeight: 0.35,
-  mainMotorR: 1.05,
-  mainMotorH: 1.3,
-  mainArmLen: 6.0,
-  mainArmW: 0.42,
-  mainArmH: 0.42,
-  hubR: 0.62,
-  hubH: 1.0,
-  hubArmLen: 2.0,
-  hubArmW: 0.26,
-  hubArmH: 0.26,
-  gondolaLen: 2.0,
-  gondolaW: 0.85,
-  gondolaH: 1.15,
-  gondolaDrop: 0.55,
-};
-
-/** Height of the arm plane above the ground. */
-const ARM_HEIGHT = P.towerHeight;
+/** Night-sky colour behind the stage. */
+const NIGHT = 0x05061a;
 
 /** Largest simulation step applied per frame, in seconds (guards tab-switch jumps). */
 const MAX_STEP_S = 0.05;
@@ -81,27 +73,18 @@ export function podFreeAngle(comboA: number, phase: number): number {
   return -comboA + Math.sin(comboA + phase);
 }
 
-interface GondolaNode {
-  readonly obj: THREE.Object3D;
-  readonly phase: number;
-  /**
-   * The pod's free-trajectory angle sampled on the previous frame. Drives the
-   * per-frame delta applied while the brake is released, and is refreshed every
-   * frame (braked or not) so releasing the brake resumes from the held position
-   * without a jump.
-   */
-  prevFree: number;
-}
-
 /**
- * Central visualization: a live 3D render of the ride — one central mill turning
- * four arms, each carrying a hub that spins four gondolas. The mill and hubs turn
- * at the sensed speed and direction from the operation controls (both can run
- * either way), and the gondola brake holds or frees the pods.
+ * Central visualization: a live 3D render of the ride as designed in
+ * `designs/3d/ride-design.blend` — the low-slung mill with four arms, each carrying a
+ * hub that spins four two-seat gondolas, in front of a half-round backdrop with eight
+ * light poles. The mill and hubs turn at the sensed speed and direction from the
+ * operation controls, and the gondola brake holds or frees the pods. Every bulb runs
+ * the light show and the pole spots blink and fade (steady under reduced motion).
  *
  * Everything shown is duplicated in the text panels, so the canvas is decorative
  * (`aria-hidden`). WebGL setup is guarded so the component degrades to an empty,
- * harmless element where WebGL is unavailable (e.g. jsdom under test).
+ * harmless element where WebGL is unavailable (e.g. jsdom under test), and a model
+ * that fails to load leaves an empty, lit stage.
  */
 @Component({
   selector: 'bb-ride-visualization',
@@ -118,12 +101,6 @@ interface GondolaNode {
       width: 100%;
       height: 100%;
     }
-    .viz canvas {
-      display: block;
-      width: 100%;
-      height: 100%;
-      border-radius: 0.5rem;
-    }
   `,
 })
 export class RideVisualization {
@@ -136,8 +113,6 @@ export class RideVisualization {
   private readonly hostRef = viewChild.required<ElementRef<HTMLDivElement>>('host');
   private readonly destroyRef = inject(DestroyRef);
 
-  private renderer?: THREE.WebGLRenderer;
-
   constructor() {
     afterNextRender(() => this.initScene());
   }
@@ -147,55 +122,94 @@ export class RideVisualization {
 
     let renderer: THREE.WebGLRenderer;
     try {
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer = new THREE.WebGLRenderer({ antialias: true });
     } catch {
       // No WebGL (e.g. jsdom during tests). Leave the element empty and harmless.
       return;
     }
-    this.renderer = renderer;
 
     const width = host.clientWidth || 640;
     const height = host.clientHeight || 480;
     const pixelRatio = typeof devicePixelRatio === 'number' ? Math.min(devicePixelRatio, 2) : 1;
     renderer.setPixelRatio(pixelRatio);
     renderer.setSize(width, height, false);
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.1;
     host.appendChild(renderer.domElement);
 
     // The canvas is created by three.js, not by the Angular template, so the
-    // component's emulated-encapsulation styles (`.viz canvas { … }`) never match
-    // it. Size it explicitly so it always fills the host and displays correctly on
-    // HiDPI screens regardless of the (device-pixel-scaled) drawing-buffer size.
-    renderer.domElement.style.display = 'block';
-    renderer.domElement.style.width = '100%';
-    renderer.domElement.style.height = '100%';
+    // component's emulated-encapsulation styles never match it. Size it explicitly so
+    // it always fills the host and displays correctly on HiDPI screens regardless of
+    // the (device-pixel-scaled) drawing-buffer size.
+    Object.assign(renderer.domElement.style, {
+      display: 'block',
+      width: '100%',
+      height: '100%',
+      borderRadius: '0.5rem',
+    });
 
     const scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(0x0f1420, 40, 95);
+    scene.background = new THREE.Color(NIGHT);
+    scene.fog = new THREE.Fog(NIGHT, 32, 80);
 
-    const camera = new THREE.PerspectiveCamera(48, width / height, 0.1, 1000);
-    camera.position.set(18, 13, 18);
+    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 200);
+    camera.position.set(0, 6.5, 21);
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-    controls.target.set(0, 5.5, 0);
+    controls.target.set(0, 2.8, 0);
+    controls.minDistance = 6;
+    controls.maxDistance = 40;
+    controls.maxPolarAngle = Math.PI / 2 - 0.04;
 
-    this.addLighting(scene);
-    this.addGround(scene);
-    this.addStaticStructure(scene);
-    const { mainPivot, hubPivots, gondolas } = this.addRig(scene);
+    scene.add(new THREE.HemisphereLight(0x8a96ff, 0x1a0a20, 0.9));
+    const key = new THREE.DirectionalLight(0xfff1e6, 1.1);
+    key.position.set(4, 14, 16);
+    scene.add(key);
+
+    const composer = new EffectComposer(renderer);
+    composer.setPixelRatio(pixelRatio);
+    composer.setSize(width, height);
+    composer.addPass(new RenderPass(scene, camera));
+    const bloom = new UnrealBloomPass(new THREE.Vector2(width / 2, height / 2), 0.85, 0.45, 0.92);
+    composer.addPass(bloom);
+    composer.addPass(new OutputPass());
 
     const reducedMotion =
       typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+    let destroyed = false;
+    let model: RideModel | null = null;
+    let brightness = new Float32Array(0);
+    let colours = new Uint8Array(0);
+    new GLTFLoader()
+      .loadAsync(RIDE_MODEL_URL)
+      .then((gltf) => {
+        if (destroyed) {
+          disposeObject(gltf.scene);
+          return;
+        }
+        scene.add(gltf.scene);
+        model = prepareRideModel(gltf.scene);
+        brightness = new Float32Array(model.bulbs.length);
+        colours = new Uint8Array(model.bulbs.length);
+      })
+      .catch(() => {
+        // The view is decorative and mirrored by the text panels: an unreachable or
+        // corrupt model leaves the empty, lit stage rather than surfacing an error.
+      });
+
     const clock = new THREE.Clock();
+    let showTime = 0;
     let mainA = 0;
     let hubA = 0;
     let comboA = 0;
+    const prevFree: number[] = [];
 
     renderer.setAnimationLoop(() => {
-      const dt = finiteOrZero(Math.min(clock.getDelta(), MAX_STEP_S));
+      const rawDt = finiteOrZero(clock.getDelta());
+      const dt = Math.min(rawDt, MAX_STEP_S);
+      showTime += rawDt;
       if (!reducedMotion) {
         const wm = angularVelocity(this.millSpeedRpm());
         const wh = angularVelocity(this.hubSpeedRpm());
@@ -207,26 +221,20 @@ export class RideVisualization {
         comboA = finiteOrZero(comboA + (wm + wh) * dt);
       }
 
-      const braked = this.gondolaBrakeEngaged();
-      mainPivot.rotation.y = mainA;
-      for (const hub of hubPivots) {
-        hub.rotation.y = hubA;
-      }
-      for (const gondola of gondolas) {
-        // The pods' free trajectory keeps advancing with the combined rotation.
-        // Apply only its change since the previous frame, and only while the
-        // brake is released — so an engaged brake holds each pod exactly where
-        // it is rather than snapping it back to the hub-arm alignment.
-        const freeAngle = podFreeAngle(comboA, gondola.phase);
-        const delta = freeAngle - gondola.prevFree;
-        gondola.prevFree = freeAngle;
-        if (!braked) {
-          gondola.obj.rotation.y = finiteOrZero(gondola.obj.rotation.y + delta);
-        }
+      if (model) {
+        this.driveRig(model, mainA, hubA, comboA, prevFree);
+        evaluateShow(model.bulbs, showTime, reducedMotion, brightness, colours);
+        applyBulbs(model, brightness, colours);
+        model.spots.forEach((spot, k) =>
+          applySpot(
+            spot,
+            reducedMotion ? STEADY_BRIGHTNESS : spotBrightness(k, model!.spots.length, showTime),
+          ),
+        );
       }
 
       controls.update();
-      renderer.render(scene, camera);
+      composer.render();
     });
 
     // Resizing is deferred to the next animation frame and skipped when the size
@@ -249,6 +257,8 @@ export class RideVisualization {
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h, false);
+      composer.setSize(w, h);
+      bloom.resolution.set(w / 2, h / 2);
     };
     const resize = new ResizeObserver(() => {
       if (resizeHandle === 0) {
@@ -258,158 +268,68 @@ export class RideVisualization {
     resize.observe(host);
 
     this.destroyRef.onDestroy(() => {
+      destroyed = true;
       if (resizeHandle !== 0) {
         cancelAnimationFrame(resizeHandle);
       }
       resize.disconnect();
       renderer.setAnimationLoop(null);
       controls.dispose();
-      this.disposeScene(scene);
+      bloom.dispose();
+      composer.dispose();
+      disposeObject(scene);
       renderer.dispose();
       renderer.domElement.remove();
-      this.renderer = undefined;
     });
   }
 
-  private addLighting(scene: THREE.Scene): void {
-    scene.add(new THREE.HemisphereLight(0xbfd4ff, 0x2a2620, 1.0));
-    const sun = new THREE.DirectionalLight(0xffffff, 2.2);
-    sun.position.set(14, 24, 10);
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
-    Object.assign(sun.shadow.camera, {
-      left: -20,
-      right: 20,
-      top: 20,
-      bottom: -20,
-      near: 1,
-      far: 70,
+  /** Turns the model's mill, hubs and gondolas exactly as the telemetry dictates. */
+  private driveRig(
+    model: RideModel,
+    mainA: number,
+    hubA: number,
+    comboA: number,
+    prevFree: number[],
+  ): void {
+    if (model.mainPivot) {
+      model.mainPivot.rotation.y = mainA;
+    }
+    for (const hub of model.hubPivots) {
+      hub.rotation.y = hubA;
+    }
+    const braked = this.gondolaBrakeEngaged();
+    model.gondolas.forEach((gondola, k) => {
+      // The pods' free trajectory keeps advancing with the combined rotation.
+      // Apply only its change since the previous frame, and only while the
+      // brake is released — so an engaged brake holds each pod exactly where
+      // it is rather than snapping it back to the hub-arm alignment.
+      const freeAngle = podFreeAngle(comboA, gondola.phase);
+      const delta = freeAngle - (prevFree[k] ?? 0);
+      prevFree[k] = freeAngle;
+      if (!braked) {
+        gondola.obj.rotation.y = finiteOrZero(gondola.obj.rotation.y + delta);
+      }
     });
-    scene.add(sun);
   }
+}
 
-  private addGround(scene: THREE.Scene): void {
-    const ground = new THREE.Mesh(
-      new THREE.CircleGeometry(50, 72),
-      new THREE.MeshStandardMaterial({ color: 0x232c3d, roughness: 1 }),
+/** Disposes every geometry, material and texture under `root`. */
+function disposeObject(root: THREE.Object3D): void {
+  const materials = new Set<THREE.Material>();
+  root.traverse((object) => {
+    const mesh = object as Partial<THREE.Mesh>;
+    mesh.geometry?.dispose();
+    const material = mesh.material;
+    (Array.isArray(material) ? material : material ? [material] : []).forEach((m) =>
+      materials.add(m),
     );
-    ground.rotation.x = -Math.PI / 2;
-    ground.receiveShadow = true;
-    scene.add(ground);
-  }
-
-  private addStaticStructure(scene: THREE.Scene): void {
-    const mats = this.materials();
-    const base = this.box(P.baseSize, P.baseHeight, P.baseSize, mats.base);
-    base.position.y = P.baseHeight / 2;
-    scene.add(base);
-
-    const tower = this.cyl(P.towerRadius, P.towerHeight, mats.tower);
-    tower.position.y = P.towerHeight / 2;
-    scene.add(tower);
-
-    const motor = this.cyl(P.mainMotorR, P.mainMotorH, mats.motor);
-    motor.position.y = ARM_HEIGHT;
-    scene.add(motor);
-  }
-
-  private addRig(scene: THREE.Scene): {
-    mainPivot: THREE.Group;
-    hubPivots: THREE.Group[];
-    gondolas: GondolaNode[];
-  } {
-    const mats = this.materials();
-    const mainPivot = new THREE.Group();
-    mainPivot.position.y = ARM_HEIGHT;
-    scene.add(mainPivot);
-
-    const cap = this.cyl(P.mainMotorR * 0.6, 0.35, mats.tower);
-    cap.position.y = P.mainMotorH / 2 + 0.1;
-    mainPivot.add(cap);
-
-    const hubPivots: THREE.Group[] = [];
-    const gondolas: GondolaNode[] = [];
-
-    for (let k = 0; k < 4; k++) {
-      const armHinge = new THREE.Group();
-      armHinge.rotation.y = (k * Math.PI) / 2;
-      mainPivot.add(armHinge);
-
-      const arm = this.box(P.mainArmLen, P.mainArmH, P.mainArmW, mats.arm);
-      arm.position.x = P.mainArmLen / 2;
-      armHinge.add(arm);
-
-      const hubPivot = new THREE.Group();
-      hubPivot.position.x = P.mainArmLen;
-      armHinge.add(hubPivot);
-      hubPivots.push(hubPivot);
-
-      hubPivot.add(this.cyl(P.hubR, P.hubH, mats.hub));
-      const hubCap = this.cyl(P.hubR * 0.6, 0.3, mats.tower);
-      hubCap.position.y = P.hubH / 2 + 0.08;
-      hubPivot.add(hubCap);
-
-      for (let j = 0; j < 4; j++) {
-        const hubArmHinge = new THREE.Group();
-        hubArmHinge.rotation.y = (j * Math.PI) / 2;
-        hubPivot.add(hubArmHinge);
-
-        const hubArm = this.box(P.hubArmLen, P.hubArmH, P.hubArmW, mats.hubArm);
-        hubArm.position.x = P.hubArmLen / 2;
-        hubArmHinge.add(hubArm);
-
-        const gondolaPivot = new THREE.Group();
-        gondolaPivot.position.x = P.hubArmLen;
-        hubArmHinge.add(gondolaPivot);
-
-        const pod = this.box(P.gondolaLen, P.gondolaH, P.gondolaW, mats.gondola);
-        pod.position.y = -P.gondolaDrop;
-        gondolaPivot.add(pod);
-
-        gondolas.push({ obj: gondolaPivot, phase: (k * 4 + j) * 0.7, prevFree: 0 });
+  });
+  for (const material of materials) {
+    for (const value of Object.values(material)) {
+      if (value instanceof THREE.Texture) {
+        value.dispose();
       }
     }
-
-    return { mainPivot, hubPivots, gondolas };
-  }
-
-  private materials() {
-    const make = (color: number) =>
-      new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0.12 });
-    return {
-      base: make(0x47474d),
-      tower: make(0x8d9096),
-      motor: make(0xcc2e2e),
-      arm: make(0xe6b826),
-      hub: make(0x347ad9),
-      hubArm: make(0xf2d959),
-      gondola: make(0x27b374),
-    };
-  }
-
-  private box(l: number, h: number, w: number, mat: THREE.Material): THREE.Mesh {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(l, h, w), mat);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    return mesh;
-  }
-
-  private cyl(r: number, h: number, mat: THREE.Material, segments = 32): THREE.Mesh {
-    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, segments), mat);
-    mesh.castShadow = true;
-    return mesh;
-  }
-
-  private disposeScene(scene: THREE.Scene): void {
-    scene.traverse((object) => {
-      const mesh = object as Partial<THREE.Mesh>;
-      mesh.geometry?.dispose();
-      const material = mesh.material;
-      if (Array.isArray(material)) {
-        material.forEach((m) => m.dispose());
-      } else {
-        material?.dispose();
-      }
-    });
+    material.dispose();
   }
 }

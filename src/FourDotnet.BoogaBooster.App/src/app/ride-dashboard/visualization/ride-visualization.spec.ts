@@ -1,6 +1,12 @@
 import { TestBed } from '@angular/core/testing';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
-import { RideVisualization, angularVelocity, podFreeAngle, rpmToRadPerSec } from './ride-visualization';
+import {
+  RideVisualization,
+  angularVelocity,
+  podFreeAngle,
+  rpmToRadPerSec,
+} from './ride-visualization';
 
 describe('RideVisualization', () => {
   function render() {
@@ -20,6 +26,16 @@ describe('RideVisualization', () => {
 
     expect(host.getAttribute('aria-hidden')).toBe('true');
     expect(host.querySelector('.viz')).not.toBeNull();
+  });
+
+  it('does not request the ride model when WebGL is unavailable', () => {
+    const load = vi.spyOn(GLTFLoader.prototype, 'loadAsync');
+    try {
+      render();
+      expect(load).not.toHaveBeenCalled();
+    } finally {
+      load.mockRestore();
+    }
   });
 
   it('maps rpm to radians per second', () => {
