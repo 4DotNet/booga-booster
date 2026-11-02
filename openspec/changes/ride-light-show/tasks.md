@@ -14,7 +14,7 @@
 
 ## 3. Scenery in the visualization
 
-- [ ] 3.1 Add `scenery/ride-model.ts`: load the GLB, find the pivots by name, build the `InstancedMesh` bulb groups and bulb descriptors from `extras.bulbs`, and collect the pole spots, lenses and beam cones. Verify with a spec that feeds a hand-built `Object3D` tree with `userData.bulbs` and asserts the instanced groups, descriptors and pivot lookup (missing names skipped).
+- [x] 3.1 Add `scenery/ride-model.ts`: load the GLB, find the pivots by name, build the `InstancedMesh` bulb groups and bulb descriptors from `extras.bulbs`, and collect the pole spots, lenses and beam cones. Verify with a spec that feeds a hand-built `Object3D` tree with `userData.bulbs` and asserts the instanced groups, descriptors and pivot lookup (missing names skipped).
 - [ ] 3.2 Rework `ride-visualization.ts` to show the loaded model (night lighting, new camera framing, bloom per D6), drive the found pivots with the existing telemetry maths, and run the light show and spot effects (steady glow under reduced motion). Verify the existing `ride-visualization.spec.ts` still passes and add a case that the component mounts without WebGL and requests no model.
 - [ ] 3.3 Run `npm run build` and `npm test` in the Angular app. Verify both pass.
 
