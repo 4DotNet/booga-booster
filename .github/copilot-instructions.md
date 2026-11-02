@@ -249,6 +249,7 @@ and `copilot mcp list` shows user-scoped servers only.
 | `4dotnet-csharp-style-guide` | **Authoritative** for all C# and solution-design decisions. Query first, every time. Needs the `4dotnet-csharp-style-guide` executable on `PATH`. |
 | `primeng` | PrimeNG 22 component API, props, events, theming, accessibility. |
 | `microsoft-learn` | Official Microsoft/Azure docs and code samples. |
+| `blender` | Drives a running Blender (`designs/3d/ride-design.blend`). Needs `uv` on `PATH` and the MCP for Blender addon running in Blender. |
 
 ## Agents and skills
 

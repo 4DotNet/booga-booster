@@ -280,6 +280,7 @@ before you commit.
 | `4dotnet-csharp-style-guide` | **Authoritative** for all C# and solution-design decisions. Query it first, every time. Requires the `4dotnet-csharp-style-guide` executable on `PATH`. |
 | `primeng` | PrimeNG 22 component API, props, events, theming, accessibility. Consult before using any PrimeNG component. |
 | `microsoft-learn` | Official Microsoft/Azure documentation and code samples. |
+| `blender` | Drives a running Blender (the `designs/3d/ride-design.blend` model). Needs `uv` on `PATH` and the MCP for Blender addon enabled in Blender with its server started (`uvx mcp-for-blender install-addon`). |
 
 ### Automated PR review (CI)
 
