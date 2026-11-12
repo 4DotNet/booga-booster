@@ -14,7 +14,9 @@ namespace FourDotnet.BoogaBooster.Queue;
 /// <summary>
 /// Default <see cref="IRideQueueService"/>. Enqueues arriving groups onto the
 /// in-memory per-ride queues and publishes a <see cref="GroupQueuedIntegrationEvent"/>
-/// for every group that joins a line.
+/// for every group that joins a line; individuals join the ride's separate
+/// single-riders line and are announced with a
+/// <see cref="SingleRiderQueuedIntegrationEvent"/>.
 /// </summary>
 internal sealed class RideQueueService : IRideQueueService
 {
@@ -149,12 +151,36 @@ internal sealed class RideQueueService : IRideQueueService
         return Task.FromResult<QueuedGroupDto?>(ToDto(removed));
     }
 
-    // The single-riders operations are contract-only for now: the line itself (the
-    // aggregate and its store) arrives with tasks 3.x-4.x of the single-riders-queue
-    // change, which replace these placeholders.
-    public Task<PersonDto> EnqueueSingleRiderAsync(Guid rideId, CancellationToken cancellationToken) =>
-        throw new NotImplementedException();
+    public async Task<PersonDto> EnqueueSingleRiderAsync(Guid rideId, CancellationToken cancellationToken)
+    {
+        var singles = _store.GetOrCreateSingles(rideId);
 
+        // The aggregate is the arbiter of its own capacity: a full line throws here,
+        // before anything is logged or published.
+        var person = _personGenerator.Next();
+        singles.Enqueue(person);
+
+        // The person's number only — never the name — so no personal data is logged.
+        _logger.LogInformation(
+            "Single rider {PersonNumber} ({Weight} kg) joined ride {RideId}'s single-riders line; " +
+            "{SingleRidersWaiting} now waiting.",
+            person.Number,
+            person.WeightInKilograms,
+            rideId,
+            singles.PeopleWaiting);
+
+        var integrationEvent = new SingleRiderQueuedIntegrationEvent(
+            RideId: rideId,
+            PersonNumber: person.Number,
+            QueuedAt: _timeProvider.GetUtcNow());
+
+        await _publisher.PublishAsync(integrationEvent, cancellationToken);
+
+        return ToDto(person);
+    }
+
+    // Taking and requeueing are contract-only for now; task 4.4 of the
+    // single-riders-queue change replaces these placeholders.
     public Task<IReadOnlyList<PersonDto>> TakeSingleRidersAsync(
         Guid rideId,
         int count,
@@ -170,9 +196,12 @@ internal sealed class RideQueueService : IRideQueueService
     private static QueuedGroupDto ToDto(QueuedGroup group)
     {
         var people = group.Members
-            .Select(p => new PersonDto(p.Number, p.Name, p.WeightInKilograms))
+            .Select(ToDto)
             .ToArray();
 
         return new QueuedGroupDto(group.GroupId, people);
     }
+
+    private static PersonDto ToDto(Person person) =>
+        new(person.Number, person.Name, person.WeightInKilograms);
 }

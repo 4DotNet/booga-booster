@@ -1,8 +1,10 @@
+using FourDotnet.BoogaBooster.Core;
 using FourDotnet.BoogaBooster.IntegrationMessages;
 using FourDotnet.BoogaBooster.IntegrationMessages.Events.Queue;
 using FourDotnet.BoogaBooster.Queue.Infrastructure;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Xunit;
 
@@ -10,20 +12,30 @@ namespace FourDotnet.BoogaBooster.Queue.Tests;
 
 public class RideQueueServiceTests
 {
-    private static (RideQueueService service, Mock<IIntegrationEventPublisher> publisher, IRideQueueStore store) CreateService(int maxQueueLength = 100)
+    private static (RideQueueService service, Mock<IIntegrationEventPublisher> publisher, IRideQueueStore store) CreateService(
+        int maxQueueLength = 100,
+        int maxSingleRiderQueueLength = 100,
+        TimeProvider? timeProvider = null)
     {
-        var options = Options.Create(new QueueModuleOptions { MaxQueueLength = maxQueueLength });
+        var options = Options.Create(new QueueModuleOptions
+        {
+            MaxQueueLength = maxQueueLength,
+            MaxSingleRiderQueueLength = maxSingleRiderQueueLength,
+        });
         var store = new InMemoryRideQueueStore(options);
         var publisher = new Mock<IIntegrationEventPublisher>();
         publisher
             .Setup(p => p.PublishAsync(It.IsAny<GroupQueuedIntegrationEvent>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        publisher
+            .Setup(p => p.PublishAsync(It.IsAny<SingleRiderQueuedIntegrationEvent>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
         var service = new RideQueueService(
             store,
             QueueTestData.Generator(),
             publisher.Object,
-            TimeProvider.System,
+            timeProvider ?? TimeProvider.System,
             NullLogger<RideQueueService>.Instance);
 
         return (service, publisher, store);
@@ -152,5 +164,94 @@ public class RideQueueServiceTests
         Assert.Equal(0, status.GroupCount);
         Assert.Equal(0, status.PeopleWaiting);
         Assert.Empty(status.Groups);
+    }
+
+    // Single riders — enqueue.
+
+    [Fact]
+    public async Task EnqueueSingleRiderAsync_PublishesSingleRiderQueuedEvent_NamingTheRideThePersonAndTheMoment()
+    {
+        var time = new FakeTimeProvider(new DateTimeOffset(2026, 5, 1, 12, 0, 0, TimeSpan.Zero));
+        var (service, publisher, _) = CreateService(timeProvider: time);
+        var rideId = Guid.NewGuid();
+
+        var person = await service.EnqueueSingleRiderAsync(rideId, CancellationToken.None);
+
+        Assert.Equal("single-rider-queued", TopicNameResolver.Resolve<SingleRiderQueuedIntegrationEvent>());
+        publisher.Verify(
+            p => p.PublishAsync(
+                It.Is<SingleRiderQueuedIntegrationEvent>(e =>
+                    e.RideId == rideId &&
+                    e.PersonNumber == person.Number &&
+                    e.QueuedAt == time.GetUtcNow()),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+        publisher.Verify(
+            p => p.PublishAsync(It.IsAny<GroupQueuedIntegrationEvent>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task EnqueueSingleRiderAsync_AddsARealPersonToTheBackOfTheSinglesLine()
+    {
+        var (service, _, store) = CreateService();
+        var rideId = Guid.NewGuid();
+
+        var first = await service.EnqueueSingleRiderAsync(rideId, CancellationToken.None);
+        var second = await service.EnqueueSingleRiderAsync(rideId, CancellationToken.None);
+
+        Assert.False(string.IsNullOrWhiteSpace(first.Name));
+        Assert.InRange(
+            first.WeightInKilograms,
+            Domain.Person.MinWeightInKilograms,
+            Domain.Person.MaxWeightInKilograms);
+        Assert.NotEqual(first.Number, second.Number);
+        Assert.Equal(
+            [first.Number, second.Number],
+            store.FindSingles(rideId)!.SnapshotPeople().Select(p => p.Number));
+    }
+
+    [Fact]
+    public async Task EnqueueSingleRiderAsync_DoesNotJoinTheGroupQueue()
+    {
+        var (service, _, store) = CreateService();
+        var rideId = Guid.NewGuid();
+
+        await service.EnqueueSingleRiderAsync(rideId, CancellationToken.None);
+
+        // A single rider is not a group of one: the regular queue is not even created.
+        Assert.Null(store.Find(rideId));
+    }
+
+    [Fact]
+    public async Task EnqueueSingleRiderAsync_WhenTheSinglesLineIsFull_Throws_PublishesNothing_AndDisplacesNobody()
+    {
+        var (service, publisher, store) = CreateService(maxSingleRiderQueueLength: 1);
+        var rideId = Guid.NewGuid();
+        var waiting = await service.EnqueueSingleRiderAsync(rideId, CancellationToken.None);
+        publisher.Invocations.Clear();
+
+        await Assert.ThrowsAsync<DomainValidationException>(
+            () => service.EnqueueSingleRiderAsync(rideId, CancellationToken.None));
+
+        publisher.Verify(
+            p => p.PublishAsync(It.IsAny<SingleRiderQueuedIntegrationEvent>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        var stillWaiting = Assert.Single(store.FindSingles(rideId)!.SnapshotPeople());
+        Assert.Equal(waiting.Number, stillWaiting.Number);
+    }
+
+    [Fact]
+    public async Task EnqueueGroupAsync_StillJoinsTheRegularQueue_WhileTheSinglesLineIsFull()
+    {
+        var (service, _, store) = CreateService(maxSingleRiderQueueLength: 1);
+        var rideId = Guid.NewGuid();
+        await service.EnqueueSingleRiderAsync(rideId, CancellationToken.None);
+        Assert.False(store.FindSingles(rideId)!.CanAccept(1));
+
+        var group = (await service.EnqueueGroupAsync(rideId, groupSize: 4, CancellationToken.None)).Single();
+
+        Assert.Equal(4, group.Size);
+        Assert.Equal(4, store.Find(rideId)!.PeopleWaiting);
     }
 }
