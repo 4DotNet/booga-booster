@@ -2,13 +2,18 @@
 export interface QueueStatusDto {
   readonly rideId: string;
   readonly groupCount: number;
+  /** People waiting in groups; single riders are counted separately. */
   readonly peopleWaiting: number;
+  readonly singleRidersWaiting: number;
 }
 
 /** Normalized queue status used across the UI. */
 export interface QueueStatus {
   readonly groupCount: number;
+  /** People waiting in groups; single riders are counted separately. */
   readonly peopleWaiting: number;
+  /** Individuals waiting in the single-riders line. */
+  readonly singleRidersWaiting: number;
 }
 
 /** Projects the raw server DTO onto the normalized {@link QueueStatus}. */
@@ -16,6 +21,7 @@ export function toQueueStatus(dto: QueueStatusDto): QueueStatus {
   return {
     groupCount: dto.groupCount,
     peopleWaiting: dto.peopleWaiting,
+    singleRidersWaiting: dto.singleRidersWaiting,
   };
 }
 
@@ -35,5 +41,6 @@ export function summaryText(queue: QueueStatus | null): string {
   }
   const groups = `${queue.groupCount} ${pluralize(queue.groupCount, 'group')} queued`;
   const people = `${queue.peopleWaiting} ${pluralize(queue.peopleWaiting, 'person', 'people')} waiting`;
-  return `${groups}, ${people}.`;
+  const singles = `${queue.singleRidersWaiting} ${pluralize(queue.singleRidersWaiting, 'single rider')}`;
+  return `${groups}, ${people}, ${singles}.`;
 }
