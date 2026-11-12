@@ -18,8 +18,8 @@
 
 ## 4. Queue infrastructure and service
 
-- [ ] 4.1 Add `MaxSingleRiderQueueLength` (default 200), `MinSingleArrivalsPerCycle` (default 1) and `MaxSingleArrivalsPerCycle` (default 3) to `QueueModuleOptions` with XML docs.
-- [ ] 4.2 Extend `IRideQueueStore` and `InMemoryRideQueueStore` with `GetOrCreateSingles(Guid)` / `FindSingles(Guid)` backed by a second `ConcurrentDictionary`, sized from `MaxSingleRiderQueueLength`.
+- [x] 4.1 Add `MaxSingleRiderQueueLength` (default 200), `MinSingleArrivalsPerCycle` (default 1) and `MaxSingleArrivalsPerCycle` (default 3) to `QueueModuleOptions` with XML docs.
+- [x] 4.2 Extend `IRideQueueStore` and `InMemoryRideQueueStore` with `GetOrCreateSingles(Guid)` / `FindSingles(Guid)` backed by a second `ConcurrentDictionary`, sized from `MaxSingleRiderQueueLength`.
 - [ ] 4.3 Implement `EnqueueSingleRiderAsync` on `RideQueueService`: generate one person via `IPersonGenerator.Next()`, enqueue it, log the arrival, publish `SingleRiderQueuedIntegrationEvent` and return the `PersonDto`.
 - [ ] 4.4 Implement `TakeSingleRidersAsync` and `RequeueSingleRidersAsync` on `RideQueueService`, mapping between `Person` and `PersonDto` and returning an empty list when the ride has no singles line yet.
 - [ ] 4.5 Extend `GetStatus` to report `SingleRidersWaiting` and `SingleRiders` from the singles line, leaving `GroupCount` and `PeopleWaiting` counting groups only.
