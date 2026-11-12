@@ -47,7 +47,7 @@
 
 ## 8. DigitalTwin application — the top-up phase
 
-- [ ] 8.1 Expose `int FreeSeatCount { get; }` and `RideTelemetry SeatSingleRiders(IReadOnlyList<PassengerWeight> riders)` on `IRideStore`, implementing them in `RideStore` under the existing store lock and drawing the restraint delay and seat selection from `_sampler`.
+- [x] 8.1 Expose `int FreeSeatCount { get; }` and `RideTelemetry SeatSingleRiders(IReadOnlyList<PassengerWeight> riders)` on `IRideStore`, implementing them in `RideStore` under the existing store lock and drawing the restraint delay and seat selection from `_sampler`.
 - [ ] 8.2 Extend `RideLoadingCoordinator.RunLoadingPassAsync` with the top-up phase after the existing group loop: return unless still `Loading`; read `FreeSeatCount` and return when zero; take up to that many single riders; return when none came back.
 - [ ] 8.3 Clamp the take to `Math.Min(taken.Count, _store.FreeSeatCount)` immediately before seating, and on any failure return the un-seated riders to the front of the line via `RequeueSingleRidersAsync`.
 - [ ] 8.4 Log the top-up outcome (riders seated, seats still free) in the style of the existing group-boarding log, keeping the pass a silent no-op when nothing happens.
