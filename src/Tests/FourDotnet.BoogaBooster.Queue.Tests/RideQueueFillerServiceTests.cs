@@ -109,7 +109,7 @@ public sealed class RideQueueFillerServiceTests
 
         await filler.RunFillCycleAsync(CancellationToken.None);
 
-        // A zero-headcount cycle returns before it even creates the ride's queue.
+        // A zero-headcount group stream never even creates the ride's group queue.
         Assert.Null(store.Find(rideId));
         publisher.Verify(
             p => p.PublishAsync(It.IsAny<GroupQueuedIntegrationEvent>(), It.IsAny<CancellationToken>()),
@@ -311,6 +311,197 @@ public sealed class RideQueueFillerServiceTests
 
         Assert.InRange(fair, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(30));
         Assert.InRange(bad, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(60));
+    }
+
+    // The single-riders arrival stream.
+
+    private static QueueModuleOptions SinglesOptionsFor(
+        Guid rideId,
+        int minSingles,
+        int maxSingles,
+        int maxSinglesQueue = 200,
+        int groupMin = 4,
+        int groupMax = 8,
+        int seed = 123)
+    {
+        var options = OptionsFor(rideId, groupMin, groupMax, maxQueue: 500, seed);
+        options.MinSingleArrivalsPerCycle = minSingles;
+        options.MaxSingleArrivalsPerCycle = maxSingles;
+        options.MaxSingleRiderQueueLength = maxSinglesQueue;
+        return options;
+    }
+
+    private static int SinglesWaiting(IRideQueueStore store, Guid rideId) =>
+        store.FindSingles(rideId)?.PeopleWaiting ?? 0;
+
+    [Fact]
+    public async Task FillCycle_AddsIndividualsWithinTheConfiguredBounds_EveryCycle()
+    {
+        var rideId = Guid.NewGuid();
+        var (filler, store, publisher) = Create(SinglesOptionsFor(rideId, minSingles: 1, maxSingles: 3));
+
+        var previous = 0;
+        for (var cycle = 0; cycle < 20; cycle++)
+        {
+            await filler.RunFillCycleAsync(CancellationToken.None);
+
+            var waiting = SinglesWaiting(store, rideId);
+            Assert.InRange(waiting - previous, 1, 3);
+            previous = waiting;
+        }
+
+        // Every individual is announced on their own topic.
+        publisher.Verify(
+            p => p.PublishAsync(It.IsAny<SingleRiderQueuedIntegrationEvent>(), It.IsAny<CancellationToken>()),
+            Times.Exactly(previous));
+    }
+
+    [Fact]
+    public async Task FillCycle_InTheBestWeather_AdmitsThePlannedNumberOfIndividuals()
+    {
+        var rideId = Guid.NewGuid();
+        var (filler, store, _) = Create(
+            SinglesOptionsFor(rideId, minSingles: 3, maxSingles: 3), WeatherAt(1.0));
+
+        await filler.RunFillCycleAsync(CancellationToken.None);
+
+        Assert.Equal(3, SinglesWaiting(store, rideId));
+    }
+
+    [Fact]
+    public async Task FillCycle_InTheWorstWeather_AddsNoIndividual()
+    {
+        var rideId = Guid.NewGuid();
+        var (filler, store, publisher) = Create(
+            SinglesOptionsFor(rideId, minSingles: 3, maxSingles: 3), WeatherAt(0.0));
+
+        await filler.RunFillCycleAsync(CancellationToken.None);
+
+        // Scaled to zero: the single-riders line is never even created.
+        Assert.Null(store.FindSingles(rideId));
+        publisher.Verify(
+            p => p.PublishAsync(It.IsAny<SingleRiderQueuedIntegrationEvent>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task FillCycle_ScalesIndividualsByTheWeather_LikeGroups()
+    {
+        // A fixed base of 10 and the default linear response gives floor(10 * 0.5) = 5
+        // for the singles, exactly as floor(20 * 0.5) = 10 for the people in groups.
+        var rideId = Guid.NewGuid();
+        var (filler, store, _) = Create(
+            SinglesOptionsFor(rideId, minSingles: 10, maxSingles: 10, groupMin: 20, groupMax: 20),
+            WeatherAt(0.5));
+
+        await filler.RunFillCycleAsync(CancellationToken.None);
+
+        Assert.Equal(5, SinglesWaiting(store, rideId));
+        Assert.Equal(10, store.Find(rideId)!.PeopleWaiting);
+    }
+
+    [Fact]
+    public async Task FillCycle_StopsAtTheSinglesCapacity_AndDropsTheRest()
+    {
+        var rideId = Guid.NewGuid();
+        // Five individuals are planned but the line only holds two.
+        var (filler, store, publisher) = Create(
+            SinglesOptionsFor(rideId, minSingles: 5, maxSingles: 5, maxSinglesQueue: 2));
+
+        await filler.RunFillCycleAsync(CancellationToken.None);
+
+        Assert.Equal(2, SinglesWaiting(store, rideId));
+        publisher.Verify(
+            p => p.PublishAsync(It.IsAny<SingleRiderQueuedIntegrationEvent>(), It.IsAny<CancellationToken>()),
+            Times.Exactly(2));
+
+        // A later cycle against the full line adds nobody and does not fail.
+        await filler.RunFillCycleAsync(CancellationToken.None);
+        Assert.Equal(2, SinglesWaiting(store, rideId));
+    }
+
+    [Fact]
+    public async Task FillCycle_AFullSinglesLine_DoesNotBlockGroupArrivals()
+    {
+        var rideId = Guid.NewGuid();
+        var (filler, store, _) = Create(
+            SinglesOptionsFor(rideId, minSingles: 3, maxSingles: 3, maxSinglesQueue: 1));
+        await filler.RunFillCycleAsync(CancellationToken.None);
+        Assert.False(store.FindSingles(rideId)!.CanAccept(1));
+        var groupPeopleBefore = store.Find(rideId)!.PeopleWaiting;
+
+        await filler.RunFillCycleAsync(CancellationToken.None);
+
+        Assert.InRange(store.Find(rideId)!.PeopleWaiting - groupPeopleBefore, 4, 8);
+    }
+
+    [Fact]
+    public async Task FillCycle_WithTheSinglesStreamSwitchedOff_AddsNoIndividual()
+    {
+        var rideId = Guid.NewGuid();
+        var (filler, store, _) = Create(SinglesOptionsFor(rideId, minSingles: 0, maxSingles: 0));
+
+        await filler.RunFillCycleAsync(CancellationToken.None);
+
+        Assert.Null(store.FindSingles(rideId));
+        Assert.InRange(store.Find(rideId)!.PeopleWaiting, 4, 8);
+    }
+
+    [Fact]
+    public async Task FillCycle_GroupArrivalsAreUnchanged_ByTheSinglesStream()
+    {
+        // Two fillers on the same seed: one with the singles stream switched off, one
+        // with it on. The stream is planned after the groups and shares no headcount
+        // budget with them, so the group sizes must match cycle for cycle.
+        var withoutRide = Guid.NewGuid();
+        var (without, withoutStore, _) = Create(SinglesOptionsFor(withoutRide, minSingles: 0, maxSingles: 0));
+
+        var withRide = Guid.NewGuid();
+        var (with, withStore, _) = Create(SinglesOptionsFor(withRide, minSingles: 1, maxSingles: 3));
+
+        for (var cycle = 0; cycle < 10; cycle++)
+        {
+            await without.RunFillCycleAsync(CancellationToken.None);
+            await with.RunFillCycleAsync(CancellationToken.None);
+
+            Assert.Equal(
+                withoutStore.Find(withoutRide)!.SnapshotGroups().Select(g => g.Size),
+                withStore.Find(withRide)!.SnapshotGroups().Select(g => g.Size));
+        }
+
+        Assert.True(SinglesWaiting(withStore, withRide) >= 10, "The singles stream should have run every cycle.");
+        Assert.Equal(0, SinglesWaiting(withoutStore, withoutRide));
+    }
+
+    [Fact]
+    public async Task FillCycle_SinglesStream_IsReproducibleFromTheSeed()
+    {
+        var firstRide = Guid.NewGuid();
+        var (first, firstStore, _) = Create(SinglesOptionsFor(firstRide, minSingles: 1, maxSingles: 3, seed: 77));
+        var secondRide = Guid.NewGuid();
+        var (second, secondStore, _) = Create(SinglesOptionsFor(secondRide, minSingles: 1, maxSingles: 3, seed: 77));
+
+        for (var cycle = 0; cycle < 10; cycle++)
+        {
+            await first.RunFillCycleAsync(CancellationToken.None);
+            await second.RunFillCycleAsync(CancellationToken.None);
+
+            Assert.Equal(SinglesWaiting(firstStore, firstRide), SinglesWaiting(secondStore, secondRide));
+        }
+    }
+
+    [Fact]
+    public async Task FillCycle_ArrivingIndividuals_NeverJoinTheGroupQueue()
+    {
+        var rideId = Guid.NewGuid();
+        // No group arrivals at all, so anything in the regular queue would be a leak.
+        var (filler, store, _) = Create(
+            SinglesOptionsFor(rideId, minSingles: 2, maxSingles: 2, groupMin: 0, groupMax: 0));
+
+        await filler.RunFillCycleAsync(CancellationToken.None);
+
+        Assert.Equal(2, SinglesWaiting(store, rideId));
+        Assert.Null(store.Find(rideId));
     }
 
     /// <summary>

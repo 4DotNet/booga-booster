@@ -45,6 +45,12 @@ public sealed class QueueBackgroundTelemetryTests : IDisposable
         Assert.Equal(rideId, activity.GetTagItem("queue.ride.id"));
         Assert.Equal(waiting, activity.GetTagItem("queue.people.added"));
         Assert.True((int)activity.GetTagItem("queue.groups.added")! > 0);
+
+        // The single-riders stream is its own figure on the span; it never leaks into
+        // the people-in-groups count asserted above.
+        var singlesWaiting = store.FindSingles(rideId)!.PeopleWaiting;
+        Assert.InRange(singlesWaiting, 1, 3);
+        Assert.Equal(singlesWaiting, activity.GetTagItem("queue.single_riders.added"));
     }
 
     [Fact]
@@ -67,6 +73,7 @@ public sealed class QueueBackgroundTelemetryTests : IDisposable
         var activity = _telemetry.Activity(FillOperation);
         Assert.Equal(0, activity.GetTagItem("queue.groups.added"));
         Assert.Equal(0, activity.GetTagItem("queue.people.added"));
+        Assert.Equal(0, activity.GetTagItem("queue.single_riders.added"));
     }
 
     [Fact]

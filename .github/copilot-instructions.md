@@ -225,6 +225,10 @@ dotnet user-secrets --project Aspire/FourDotnet.BoogaBooster.Aspire.AppHost \
   set Parameters:rabbitmq-password guest
 ```
 
+Or open the repo in the **dev container** (`.devcontainer/`, also a Codespace): it
+provides and provisions all of the above through `.devcontainer/post-create.sh`.
+`global.json` pins the SDK and opts `dotnet test` into Microsoft.Testing.Platform.
+
 Angular (from `src/FourDotnet.BoogaBooster.App`, package manager **npm 11**):
 
 ```bash
@@ -245,6 +249,7 @@ and `copilot mcp list` shows user-scoped servers only.
 | `4dotnet-csharp-style-guide` | **Authoritative** for all C# and solution-design decisions. Query first, every time. Needs the `4dotnet-csharp-style-guide` executable on `PATH`. |
 | `primeng` | PrimeNG 22 component API, props, events, theming, accessibility. |
 | `microsoft-learn` | Official Microsoft/Azure docs and code samples. |
+| `blender` | Drives a running Blender (`designs/3d/ride-design.blend`). Needs `uv` on `PATH` and the MCP for Blender addon running in Blender. |
 
 ## Agents and skills
 

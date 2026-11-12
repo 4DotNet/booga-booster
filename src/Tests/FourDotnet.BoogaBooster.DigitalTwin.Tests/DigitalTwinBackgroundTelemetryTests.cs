@@ -104,6 +104,7 @@ public sealed class DigitalTwinBackgroundTelemetryTests : IDisposable
         Assert.Equal(rideId, activity.GetTagItem("ride.id"));
         Assert.Equal(1, activity.GetTagItem("ride.groups.boarded"));
         Assert.Equal(4, activity.GetTagItem("ride.passengers.boarded"));
+        Assert.Equal(0, activity.GetTagItem("ride.single_riders.seated"));
     }
 
     [Fact]
@@ -119,6 +120,56 @@ public sealed class DigitalTwinBackgroundTelemetryTests : IDisposable
 
         var measurement = _telemetry.Measurement(BoardedCounter, recorded => recorded.Value == 6);
         Assert.Empty(measurement.Tags);
+    }
+
+    [Fact]
+    public async Task ALoadingPassThatOnlySeatsSingleRiders_IsTraced_AndCountsThem()
+    {
+        // A distinctive count: measurements carry no trace id, so the listener also
+        // sees what parallel test classes record.
+        const int SingleRiders = 9;
+
+        var store = NewStore();
+        store.RequestStateTransition(RideState.Loading);
+        var queue = new StubQueue();
+        queue.EnqueueSingleRiders(SingleRiders);
+        var rideId = Guid.NewGuid();
+        var coordinator = Coordinator(store, queue);
+
+        using (_telemetry.Scope())
+        {
+            await coordinator.RunLoadingPassAsync(rideId, Ct);
+        }
+
+        var activity = _telemetry.Activity(LoadingPassOperation);
+        Assert.Equal(rideId, activity.GetTagItem("ride.id"));
+        Assert.Equal(0, activity.GetTagItem("ride.groups.boarded"));
+        Assert.Equal(SingleRiders, activity.GetTagItem("ride.single_riders.seated"));
+        Assert.Equal(SingleRiders, activity.GetTagItem("ride.passengers.boarded"));
+
+        var measurement = _telemetry.Measurement(BoardedCounter, recorded => recorded.Value == SingleRiders);
+        Assert.Empty(measurement.Tags);
+    }
+
+    [Fact]
+    public async Task ALoadingPassThatBoardsAGroupAndSingleRiders_ReportsBothOnTheOneSpan()
+    {
+        var store = NewStore();
+        store.RequestStateTransition(RideState.Loading);
+        var queue = new StubQueue();
+        queue.Enqueue(GroupOf(3));
+        queue.EnqueueSingleRiders(2);
+        var coordinator = Coordinator(store, queue);
+
+        using (_telemetry.Scope())
+        {
+            await coordinator.RunLoadingPassAsync(Guid.NewGuid(), Ct);
+        }
+
+        var activity = _telemetry.Activity(LoadingPassOperation);
+        Assert.Equal(1, activity.GetTagItem("ride.groups.boarded"));
+        Assert.Equal(2, activity.GetTagItem("ride.single_riders.seated"));
+        Assert.Equal(5, activity.GetTagItem("ride.passengers.boarded"));
     }
 
     [Fact]
@@ -208,8 +259,13 @@ public sealed class DigitalTwinBackgroundTelemetryTests : IDisposable
     private sealed class StubQueue : IRideQueueService
     {
         private readonly List<QueuedGroupDto> _groups = [];
+        private readonly List<PersonDto> _singleRiders = [];
 
         internal void Enqueue(QueuedGroupDto group) => _groups.Add(group);
+
+        internal void EnqueueSingleRiders(int count)
+            => _singleRiders.AddRange(
+                Enumerable.Range(1, count).Select(number => new PersonDto(number, $"Single {number}", 75)));
 
         public Task<IReadOnlyList<QueuedGroupDto>> EnqueueGroupAsync(
             Guid rideId,
@@ -217,7 +273,13 @@ public sealed class DigitalTwinBackgroundTelemetryTests : IDisposable
             CancellationToken cancellationToken) => throw new NotSupportedException();
 
         public GetQueueStatusResponse GetStatus(Guid rideId)
-            => new(rideId, _groups.Count, _groups.Sum(group => group.Size), [.. _groups]);
+            => new(
+                rideId,
+                _groups.Count,
+                _groups.Sum(group => group.Size),
+                [.. _groups],
+                SingleRidersWaiting: 0,
+                SingleRiders: []);
 
         public Task<QueuedGroupDto?> TakeGroupAsync(
             Guid rideId,
@@ -234,6 +296,25 @@ public sealed class DigitalTwinBackgroundTelemetryTests : IDisposable
             _groups.RemoveAt(index);
             return Task.FromResult<QueuedGroupDto?>(group);
         }
+
+        public Task<PersonDto> EnqueueSingleRiderAsync(Guid rideId, CancellationToken cancellationToken)
+            => throw new NotSupportedException();
+
+        public Task<IReadOnlyList<PersonDto>> TakeSingleRidersAsync(
+            Guid rideId,
+            int count,
+            CancellationToken cancellationToken)
+        {
+            var take = Math.Clamp(count, 0, _singleRiders.Count);
+            IReadOnlyList<PersonDto> taken = _singleRiders.GetRange(0, take);
+            _singleRiders.RemoveRange(0, take);
+            return Task.FromResult(taken);
+        }
+
+        public Task RequeueSingleRidersAsync(
+            Guid rideId,
+            IReadOnlyList<PersonDto> people,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 
     private sealed class ThrowingQueue : IRideQueueService
@@ -249,6 +330,19 @@ public sealed class DigitalTwinBackgroundTelemetryTests : IDisposable
         public Task<QueuedGroupDto?> TakeGroupAsync(
             Guid rideId,
             Guid groupId,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<PersonDto> EnqueueSingleRiderAsync(Guid rideId, CancellationToken cancellationToken)
+            => throw new NotSupportedException();
+
+        public Task<IReadOnlyList<PersonDto>> TakeSingleRidersAsync(
+            Guid rideId,
+            int count,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task RequeueSingleRidersAsync(
+            Guid rideId,
+            IReadOnlyList<PersonDto> people,
             CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 }

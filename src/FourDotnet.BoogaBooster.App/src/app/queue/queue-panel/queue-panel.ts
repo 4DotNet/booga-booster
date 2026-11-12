@@ -3,8 +3,8 @@ import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { QueueStateService } from '../state/queue-state.service';
 
 /**
- * Left-rail queue panel: at-a-glance counts of groups and individual people
- * waiting for the ride. Read-only — there is nothing to command here, only
+ * Left-rail queue panel: at-a-glance counts of groups, the people in them and
+ * the single riders waiting for the ride. Read-only — there is nothing to command here, only
  * the current counts from the poll. The worded summary lives in a polite
  * live region so operators hear updates as new arrivals land.
  */
@@ -25,6 +25,10 @@ import { QueueStateService } from '../state/queue-state.service';
           <div class="metric">
             <dt>People waiting</dt>
             <dd>{{ queue.peopleWaiting() }}</dd>
+          </div>
+          <div class="metric">
+            <dt>Single riders</dt>
+            <dd>{{ queue.singleRidersWaiting() }}</dd>
           </div>
         </dl>
       } @else {

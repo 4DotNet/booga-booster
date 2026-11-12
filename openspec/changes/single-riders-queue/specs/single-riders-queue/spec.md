@@ -80,14 +80,19 @@ When individuals have been taken from the single-riders queue but could not be s
 - **WHEN** individuals A and B are taken while C is still waiting, and A and B cannot be seated
 - **THEN** A and B are returned to the front, and the line reads A, B, C
 
+#### Scenario: Returning individuals are re-admitted to a full line
+
+- **WHEN** individuals are taken, the line then fills to its configured maximum, and the taken individuals cannot be seated
+- **THEN** they are still returned to the front of the line, and nobody already waiting is displaced
+
 ### Requirement: The queue state reports both lines
 
-The queue state reported for a ride SHALL include the single-riders line — the number of individuals waiting and the individuals themselves — alongside the existing group information. The reported count of people waiting in groups SHALL continue to count only people in groups, so that single riders are reported as their own figure and never conflated with group members.
+The queue state reported for a ride SHALL include the single-riders line — the number of individuals waiting and the individuals themselves — alongside the existing group information, and a total of everyone waiting across both lines. The reported count of people waiting in groups SHALL continue to count only people in groups, so that single riders are reported as their own figure and never conflated with group members.
 
 #### Scenario: Both lines appear in the queue state
 
 - **WHEN** a ride has three groups totalling nine people and four single riders waiting
-- **THEN** the queue state reports three groups, nine people waiting in groups, and four single riders
+- **THEN** the queue state reports three groups, nine people waiting in groups, four single riders, and thirteen people waiting in total
 
 #### Scenario: Single riders do not inflate the group headcount
 

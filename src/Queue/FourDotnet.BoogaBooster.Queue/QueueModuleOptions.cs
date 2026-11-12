@@ -58,6 +58,29 @@ public sealed class QueueModuleOptions
     public int MaxQueueLength { get; set; } = 500;
 
     /// <summary>
+    /// Maximum number of individuals allowed to wait in a single ride's single-riders
+    /// line. Independent of <see cref="MaxQueueLength"/>: a full single-riders line
+    /// never blocks group arrivals, and the cap keeps a line that is starved behind
+    /// fitting groups from growing without bound. Defaults to 200.
+    /// </summary>
+    public int MaxSingleRiderQueueLength { get; set; } = 200;
+
+    /// <summary>
+    /// Minimum number of individuals to add to the single-riders line across a single
+    /// fill cycle, before weather scaling. This is an additional arrival stream: it is
+    /// never taken out of the <see cref="MinArrivalsPerCycle"/>–<see cref="MaxArrivalsPerCycle"/>
+    /// group headcount. Defaults to 1.
+    /// </summary>
+    public int MinSingleArrivalsPerCycle { get; set; } = 1;
+
+    /// <summary>
+    /// Maximum number of individuals to add to the single-riders line across a single
+    /// fill cycle, before weather scaling. Set both single-arrival bounds to zero to
+    /// switch the stream off. Defaults to 3.
+    /// </summary>
+    public int MaxSingleArrivalsPerCycle { get; set; } = 3;
+
+    /// <summary>
     /// The largest group that can ever be boarded in one pass, and therefore the
     /// size above which an arriving group is split into smaller boardable groups.
     /// Defaults to 32 — the ride's total seat capacity of 16 gondolas of 2 seats —

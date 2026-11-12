@@ -14,9 +14,12 @@ namespace FourDotnet.BoogaBooster.DigitalTwin.Application;
 /// <see cref="RideState.Loading"/>. Each pass repeatedly boards the first waiting
 /// group that fits the remaining capacity — looking ahead past a too-large front
 /// group to the next two groups to backfill smaller ones — and stops when no group
-/// in that window fits (the ride is full) or the queue empties. Because a pass is
-/// idempotent and re-runs every simulation tick, a group that joins the queue while
-/// the ride is still loading boards on the next tick.
+/// in that window fits (the ride is full for groups) or the queue empties. Only then
+/// does the same pass top up every seat that is still free — including the seat
+/// beside an existing rider — with individuals from the single-riders line, so groups
+/// always come first and single riders only plug the gaps. Because a pass is
+/// idempotent and re-runs every simulation tick, a group or single rider that joins
+/// while the ride is still loading boards on the next tick.
 /// </summary>
 /// <remarks>
 /// The Queue contract (<see cref="IRideQueueService"/>) is an optional dependency so
@@ -65,6 +68,7 @@ public sealed class RideLoadingCoordinator
         Activity? activity = null;
         var groupsBoarded = 0;
         var passengersBoarded = 0;
+        var singleRidersSeated = 0;
 
         try
         {
@@ -73,19 +77,19 @@ public sealed class RideLoadingCoordinator
                 var emptyGondolas = _store.EmptyGondolaCount;
                 if (emptyGondolas <= 0)
                 {
-                    return; // The ride is full — no empty gondola left to seat a fresh group.
+                    break; // No empty gondola left to seat a fresh group — group loading is done.
                 }
 
                 var status = _queueService.GetStatus(rideId);
                 if (status.Groups.Count == 0)
                 {
-                    return; // Nobody waiting.
+                    break; // No group waiting.
                 }
 
                 var chosen = FirstFittingGroup(status.Groups, emptyGondolas);
                 if (chosen is null)
                 {
-                    return; // None of the first three waiting groups fit — the ride is full.
+                    break; // None of the first three waiting groups fit — group loading is done.
                 }
 
                 var taken = await _queueService
@@ -114,6 +118,26 @@ public sealed class RideLoadingCoordinator
                     rideId,
                     _store.EmptyGondolaCount);
             }
+
+            // Phase two: group loading can place no further group, so single riders
+            // top up whatever seats are still free — including the seat beside an
+            // existing rider, which no group may take.
+            singleRidersSeated = await TopUpWithSingleRidersAsync(_queueService, rideId, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (singleRidersSeated > 0)
+            {
+                activity ??= StartPassActivity(rideId);
+                passengersBoarded += singleRidersSeated;
+
+                BoogaBoosterTelemetry.PassengersBoarded.Add(singleRidersSeated);
+
+                _logger.LogInformation(
+                    "Seated {Count} single rider(s) onto ride {RideId}; {FreeSeats} seat(s) still free.",
+                    singleRidersSeated,
+                    rideId,
+                    _store.FreeSeatCount);
+            }
         }
         catch (Exception exception)
         {
@@ -130,9 +154,90 @@ public sealed class RideLoadingCoordinator
             {
                 activity.SetTag(RideTelemetryAttributes.GroupsBoarded, groupsBoarded);
                 activity.SetTag(RideTelemetryAttributes.PassengersBoarded, passengersBoarded);
+                activity.SetTag(RideTelemetryAttributes.SingleRidersSeated, singleRidersSeated);
                 activity.Dispose();
             }
         }
+    }
+
+    /// <summary>
+    /// The top-up phase of a loading pass: seats waiting single riders into every
+    /// seat that is still free once group loading has stopped, and returns how many
+    /// were seated. A full ride or an empty single-riders line makes it a silent no-op.
+    /// </summary>
+    /// <remarks>
+    /// The take is bulk and from the front of the line, so riders board in arrival
+    /// order. A rider who was taken but not seated — the ride's capacity or state
+    /// moved between the take and the seating, or the seating was rejected — goes
+    /// back to the <em>front</em> of the line instead of being dropped. The store
+    /// lock is the arbiter: seating is all-or-nothing, so "not seated" is either
+    /// everyone or the tail the clamp cut off.
+    /// </remarks>
+    private async Task<int> TopUpWithSingleRidersAsync(
+        IRideQueueService queueService,
+        Guid rideId,
+        CancellationToken cancellationToken)
+    {
+        if (cancellationToken.IsCancellationRequested || _store.CurrentState != RideState.Loading)
+        {
+            return 0; // Single riders board only while the ride is still loading.
+        }
+
+        var freeSeats = _store.FreeSeatCount;
+        if (freeSeats <= 0)
+        {
+            return 0; // Every seat is taken — nobody is even asked to step forward.
+        }
+
+        var taken = await queueService
+            .TakeSingleRidersAsync(rideId, freeSeats, cancellationToken)
+            .ConfigureAwait(false);
+        if (taken.Count == 0)
+        {
+            return 0; // No single rider waiting.
+        }
+
+        var seated = 0;
+        try
+        {
+            // Clamp to the live capacity immediately before seating: the riders have
+            // already left the queue, so a seat or a state that changed since the
+            // read above must cost them nothing but a trip back to the front.
+            var seatable = _store.CurrentState == RideState.Loading
+                ? Math.Min(taken.Count, _store.FreeSeatCount)
+                : 0;
+
+            if (seatable > 0)
+            {
+                var riders = new PassengerWeight[seatable];
+                for (var i = 0; i < seatable; i++)
+                {
+                    riders[i] = new PassengerWeight(taken[i].WeightInKilograms);
+                }
+
+                _store.SeatSingleRiders(riders);
+                seated = seatable;
+            }
+        }
+        finally
+        {
+            if (seated < taken.Count)
+            {
+                // Not cancellable: abandoning the hand-back is exactly the lost guest
+                // it exists to prevent.
+                IReadOnlyList<PersonDto> unseated = seated == 0 ? taken : [.. taken.Skip(seated)];
+                await queueService
+                    .RequeueSingleRidersAsync(rideId, unseated, CancellationToken.None)
+                    .ConfigureAwait(false);
+
+                _logger.LogWarning(
+                    "Returned {Count} un-seated single rider(s) to the front of ride {RideId}'s single-riders line.",
+                    unseated.Count,
+                    rideId);
+            }
+        }
+
+        return seated;
     }
 
     private static Activity? StartPassActivity(Guid rideId)

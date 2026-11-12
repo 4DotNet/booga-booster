@@ -5,20 +5,23 @@ using Microsoft.Extensions.Options;
 namespace FourDotnet.BoogaBooster.Queue.Infrastructure;
 
 /// <summary>
-/// Thread-safe, process-lifetime <see cref="IRideQueueStore"/> backed by a
-/// <see cref="ConcurrentDictionary{TKey,TValue}"/>. Registered as a singleton so
-/// the background filler and the API share the same queues.
+/// Thread-safe, process-lifetime <see cref="IRideQueueStore"/> backed by one
+/// <see cref="ConcurrentDictionary{TKey,TValue}"/> per kind of line. Registered as
+/// a singleton so the background filler and the API share the same queues.
 /// </summary>
 internal sealed class InMemoryRideQueueStore : IRideQueueStore
 {
     private readonly ConcurrentDictionary<Guid, RideQueue> _queues = new();
+    private readonly ConcurrentDictionary<Guid, SingleRiderQueue> _singles = new();
     private readonly int _maxQueueLength;
     private readonly int _maxBoardableGroupSize;
+    private readonly int _maxSingleRiderQueueLength;
 
     public InMemoryRideQueueStore(IOptions<QueueModuleOptions> options)
     {
         _maxQueueLength = options.Value.MaxQueueLength;
         _maxBoardableGroupSize = options.Value.MaxBoardableGroupSize;
+        _maxSingleRiderQueueLength = options.Value.MaxSingleRiderQueueLength;
     }
 
     public RideQueue GetOrCreate(Guid rideId) =>
@@ -26,4 +29,10 @@ internal sealed class InMemoryRideQueueStore : IRideQueueStore
 
     public RideQueue? Find(Guid rideId) =>
         _queues.TryGetValue(rideId, out var queue) ? queue : null;
+
+    public SingleRiderQueue GetOrCreateSingles(Guid rideId) =>
+        _singles.GetOrAdd(rideId, id => new SingleRiderQueue(id, _maxSingleRiderQueueLength));
+
+    public SingleRiderQueue? FindSingles(Guid rideId) =>
+        _singles.TryGetValue(rideId, out var singles) ? singles : null;
 }

@@ -150,3 +150,20 @@ Rollback is removing the top-up phase call from the loading pass and the singles
 - Should the singles top-up also respect the **3200 kg** limit? Assumed no, consistent with group loading; the existing `Overloaded` guard still blocks `Loading → Safe`.
 - Should the frontend list waiting single riders by name, as it could for groups, or is the count enough? Assumed the count, matching the panel's at-a-glance design.
 - Is 1–3 singles per cycle the right rate against 4–8 group arrivals? Assumed yes as a starting default; it is configurable.
+
+## Implementation Notes
+
+Recorded at wrap-up (task 11.2) after re-reading both spec deltas against the code and running the system through Aspire. Every scenario in the two specs holds as written. The points below are where the implementation is more specific than this design, or behaves in a way a reader of the specs alone would not predict.
+
+- **Requeue is unconditional.** Riders returned to the front of the line are re-admitted even if the line has since reached `MaxSingleRiderQueueLength`, the requeue is not cancellable, and it publishes no event. This follows from "no guest is lost"; the `single-riders-queue` spec now states it as a scenario.
+- **A full line refuses by throwing.** `EnqueueSingleRiderAsync` raises `DomainValidationException` before publishing anything. The filler checks `CanAccept` first, so a full line drops that cycle's remainder without an error.
+- **`SeatSingleRiders` is all-or-nothing.** It validates the seat selection (count, range, distinctness) and draws the restraint delays before anyone sits. A failure seats nobody, the coordinator returns everyone to the front, and the pass then rethrows so the failure is visible on the span and in the log.
+- **The coordinator clamps again at seating time.** It seats `min(taken, FreeSeatCount)` and re-checks that the ride is still `Loading`; riders cut off by the clamp go back to the front with a warning log.
+- **Seat selection reuses `IRideEventSampler.NextGondolaSelection`** as the distinct-index picker over the free seats. No new sampler member was added.
+- **Seeded replays shift.** The singles count is drawn from the filler's existing random stream after the groups (decision 7), so each cycle consumes one extra draw. Within a build the groups are identical with the stream on or off, but a seed recorded before this change produces a different group sequence from the second cycle on.
+- **The queue response carries three new fields:** `singleRidersWaiting`, `singleRiders` and the computed `totalPeopleWaiting`. A contract test pins the camelCase names the frontend reads.
+- **Telemetry.** New span tags `queue.single_riders.waiting`, `queue.single_riders.added` and `ride.single_riders.seated`. The `ride.passengers.boarded` tag and the `PassengersBoarded` counter include seated single riders; `queue.people.added` and `QueuePeopleQueued` still count people in groups only. There is no dedicated single-riders-queued counter.
+
+### Observed trade-off: the top-up takes whole gondolas
+
+The top-up fills every free seat it can, in randomly chosen seats, as soon as no group fits or the group queue is momentarily empty. In the live run a pass that boarded 20 people in groups left 4 half-full gondolas and 6 empty seats in whole gondolas; the next arrivals of single riders took those too. A group arriving a moment later therefore finds fewer empty gondolas than it would have before this change. No published `ride-loading` scenario breaks, since a group that fits still boards immediately, but groups fit less often late in a loading window. Preferring the seat beside an existing rider over a seat in an empty gondola would soften this and is a small change in the seat selector; it is left as a follow-up decision.

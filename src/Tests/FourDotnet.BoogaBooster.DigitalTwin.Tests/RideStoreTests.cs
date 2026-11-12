@@ -74,6 +74,77 @@ public sealed class RideStoreTests
     }
 
     [Fact]
+    public void Free_seat_count_includes_the_seat_beside_a_lone_rider()
+    {
+        var store = new RideStore(new RandomRideEventSampler(seed: 1));
+        var totalSeats = RideParameters.HubCount * RideParameters.GondolasPerHub * RideParameters.SeatsPerGondola;
+        Assert.Equal(totalSeats, store.FreeSeatCount);
+
+        store.BoardGroup([new PassengerWeight(75d)]);
+
+        // The lone rider's gondola is no longer empty, yet its other seat is still free.
+        Assert.Equal(totalSeats - 1, store.FreeSeatCount);
+        Assert.Equal((totalSeats / RideParameters.SeatsPerGondola) - 1, store.EmptyGondolaCount);
+    }
+
+    [Fact]
+    public void Seating_single_riders_fills_distinct_free_seats_and_reports_the_load()
+    {
+        var store = new RideStore(new RandomRideEventSampler(seed: 5));
+        var riders = new[] { new PassengerWeight(60d), new PassengerWeight(70d), new PassengerWeight(80d) };
+
+        var telemetry = store.SeatSingleRiders(riders);
+
+        Assert.Equal(3, telemetry.BoardedPassengerCount);
+        Assert.Equal(RideState.Loading, telemetry.State);
+        Assert.Equal(210d, telemetry.Mill.PassengerLoadKg);
+        Assert.Equal(
+            [60d, 70d, 80d],
+            telemetry.Gondolas.SelectMany(g => g.Seats).Where(s => s.IsOccupied).Select(s => s.OccupiedKg).Order());
+    }
+
+    [Fact]
+    public void Seating_single_riders_is_reproducible_from_the_sampler_seed()
+    {
+        static (int Hub, int Gondola, SeatPosition Seat)[] SeatsTaken(int seed)
+        {
+            var store = new RideStore(new RandomRideEventSampler(seed));
+            var telemetry = store.SeatSingleRiders([new PassengerWeight(75d), new PassengerWeight(75d)]);
+            return
+            [
+                .. from gondola in telemetry.Gondolas
+                   from seat in gondola.Seats
+                   where seat.IsOccupied
+                   select (gondola.HubIndex, gondola.Index, seat.Position),
+            ];
+        }
+
+        Assert.Equal(SeatsTaken(seed: 42), SeatsTaken(seed: 42));
+    }
+
+    [Fact]
+    public void Seating_more_single_riders_than_free_seats_is_rejected_and_seats_nobody()
+    {
+        var store = new RideStore(new RandomRideEventSampler(seed: 1));
+        var totalSeats = RideParameters.HubCount * RideParameters.GondolasPerHub * RideParameters.SeatsPerGondola;
+        store.BoardGroup([.. Enumerable.Range(0, totalSeats - 1).Select(_ => new PassengerWeight(75d))]);
+        Assert.Equal(1, store.FreeSeatCount);
+
+        Assert.Throws<DomainValidationException>(
+            () => store.SeatSingleRiders([new PassengerWeight(75d), new PassengerWeight(75d)]));
+
+        Assert.Equal(1, store.FreeSeatCount);
+    }
+
+    [Fact]
+    public void Seating_single_riders_requires_a_rider_list()
+    {
+        var store = new RideStore(new RandomRideEventSampler(seed: 1));
+
+        Assert.Throws<ArgumentNullException>(() => store.SeatSingleRiders(null!));
+    }
+
+    [Fact]
     public void The_simulation_service_tick_advances_the_store()
     {
         var store = new RideStore(new RandomRideEventSampler(seed: 1));

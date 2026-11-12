@@ -1,4 +1,5 @@
 using System.Diagnostics.Metrics;
+using System.Runtime.CompilerServices;
 using FourDotnet.BoogaBooster.Core.Observability;
 using Xunit;
 
@@ -133,10 +134,15 @@ public sealed class DomainInstrumentTests : IDisposable
     /// <summary>
     /// Finds the published instrument by name. Declared instruments publish on the
     /// listener's <see cref="MeterListener.Start"/>, so a static-field initialiser is
-    /// enough for it to be found — no measurement required.
+    /// enough for it to be found — no measurement required. That initialiser must have
+    /// run, though: <see cref="BoogaBoosterTelemetry.SourceName"/> is a constant and
+    /// does not trigger it, so it is forced here rather than left to whichever test
+    /// happened to touch the class first.
     /// </summary>
     private Instrument? InstrumentNamed(string name)
     {
+        RuntimeHelpers.RunClassConstructor(typeof(BoogaBoosterTelemetry).TypeHandle);
+
         Instrument? found = null;
 
         using var listener = new MeterListener

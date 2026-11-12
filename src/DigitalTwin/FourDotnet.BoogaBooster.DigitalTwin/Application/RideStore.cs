@@ -61,6 +61,17 @@ public sealed class RideStore : IRideStore, IRideTelemetryProvider
         }
     }
 
+    public int FreeSeatCount
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _ride.FreeSeatCount;
+            }
+        }
+    }
+
     public RideTelemetry Advance(TimeSpan dt)
     {
         lock (_gate)
@@ -124,6 +135,20 @@ public sealed class RideStore : IRideStore, IRideTelemetryProvider
         lock (_gate)
         {
             _ride.BoardGroup(members, _sampler.NextRestraintCloseDelay, _sampler.NextGondolaSelection);
+            return _ride.ToTelemetry();
+        }
+    }
+
+    public RideTelemetry SeatSingleRiders(IReadOnlyList<PassengerWeight> riders)
+    {
+        ArgumentNullException.ThrowIfNull(riders);
+
+        lock (_gate)
+        {
+            // The sampler's distinct-index selection is not gondola-specific: here it
+            // picks which of the free seats the riders take, so singles spread across
+            // the mill the same way boarding groups do.
+            _ride.SeatSingleRiders(riders, _sampler.NextRestraintCloseDelay, _sampler.NextGondolaSelection);
             return _ride.ToTelemetry();
         }
     }

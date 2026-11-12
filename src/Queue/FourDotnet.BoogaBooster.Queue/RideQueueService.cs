@@ -14,7 +14,9 @@ namespace FourDotnet.BoogaBooster.Queue;
 /// <summary>
 /// Default <see cref="IRideQueueService"/>. Enqueues arriving groups onto the
 /// in-memory per-ride queues and publishes a <see cref="GroupQueuedIntegrationEvent"/>
-/// for every group that joins a line.
+/// for every group that joins a line; individuals join the ride's separate
+/// single-riders line and are announced with a
+/// <see cref="SingleRiderQueuedIntegrationEvent"/>.
 /// </summary>
 internal sealed class RideQueueService : IRideQueueService
 {
@@ -100,21 +102,26 @@ internal sealed class RideQueueService : IRideQueueService
 
     public GetQueueStatusResponse GetStatus(Guid rideId)
     {
-        var queue = _store.Find(rideId);
-        if (queue is null)
-        {
-            return new GetQueueStatusResponse(rideId, GroupCount: 0, PeopleWaiting: 0, Groups: []);
-        }
+        // Either line may not exist yet — a ride nobody has joined reports both empty.
+        // Each line is snapshotted once, and its count derived from that snapshot, so
+        // a count can never disagree with the list beside it.
+        QueuedGroupDto[] groups = _store.Find(rideId) is { } queue
+            ? [.. queue.SnapshotGroups().Select(ToDto)]
+            : [];
 
-        var groups = queue.SnapshotGroups()
-            .Select(ToDto)
-            .ToArray();
+        PersonDto[] singleRiders = _store.FindSingles(rideId) is { } singles
+            ? ToDtos(singles.SnapshotPeople())
+            : [];
 
+        // PeopleWaiting keeps meaning "people waiting in groups": single riders are
+        // their own figure and never inflate the group headcount.
         return new GetQueueStatusResponse(
             rideId,
             GroupCount: groups.Length,
             PeopleWaiting: groups.Sum(g => g.Size),
-            Groups: groups);
+            Groups: groups,
+            SingleRidersWaiting: singleRiders.Length,
+            SingleRiders: singleRiders);
     }
 
     public Task<QueuedGroupDto?> TakeGroupAsync(
@@ -141,12 +148,118 @@ internal sealed class RideQueueService : IRideQueueService
         return Task.FromResult<QueuedGroupDto?>(ToDto(removed));
     }
 
+    public async Task<PersonDto> EnqueueSingleRiderAsync(Guid rideId, CancellationToken cancellationToken)
+    {
+        var singles = _store.GetOrCreateSingles(rideId);
+
+        // The aggregate is the arbiter of its own capacity: a full line throws here,
+        // before anything is logged or published.
+        var person = _personGenerator.Next();
+        singles.Enqueue(person);
+
+        // The person's number only — never the name — so no personal data is logged.
+        _logger.LogInformation(
+            "Single rider {PersonNumber} ({Weight} kg) joined ride {RideId}'s single-riders line; " +
+            "{SingleRidersWaiting} now waiting.",
+            person.Number,
+            person.WeightInKilograms,
+            rideId,
+            singles.PeopleWaiting);
+
+        var integrationEvent = new SingleRiderQueuedIntegrationEvent(
+            RideId: rideId,
+            PersonNumber: person.Number,
+            QueuedAt: _timeProvider.GetUtcNow());
+
+        await _publisher.PublishAsync(integrationEvent, cancellationToken);
+
+        return ToDto(person);
+    }
+
+    public Task<IReadOnlyList<PersonDto>> TakeSingleRidersAsync(
+        Guid rideId,
+        int count,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // A ride nobody has joined has no line yet; that is "nobody waiting", not an
+        // error, and asking must not create the line as a side effect.
+        var singles = _store.FindSingles(rideId);
+        var taken = singles?.TakeUpTo(count);
+        if (singles is null || taken is null || taken.Count == 0)
+        {
+            return Task.FromResult<IReadOnlyList<PersonDto>>([]);
+        }
+
+        _logger.LogInformation(
+            "{Count} single rider(s) left ride {RideId}'s single-riders line to board; " +
+            "{SingleRidersWaiting} still waiting.",
+            taken.Count,
+            rideId,
+            singles.PeopleWaiting);
+
+        return Task.FromResult<IReadOnlyList<PersonDto>>(ToDtos(taken));
+    }
+
+    /// <remarks>
+    /// Deliberately not cancellable: this is the compensation for a take whose riders
+    /// could not be seated, and abandoning it half-way is exactly the lost guest it
+    /// exists to prevent. The work is a single in-memory step, so there is nothing to
+    /// wait for either.
+    /// </remarks>
+    public Task RequeueSingleRidersAsync(
+        Guid rideId,
+        IReadOnlyList<PersonDto> people,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(people);
+
+        if (people.Count == 0)
+        {
+            return Task.CompletedTask;
+        }
+
+        var returning = new Person[people.Count];
+        for (var i = 0; i < returning.Length; i++)
+        {
+            var person = people[i];
+            returning[i] = new Person(person.Number, person.Name, person.WeightInKilograms);
+        }
+
+        var singles = _store.GetOrCreateSingles(rideId);
+        singles.RequeueFront(returning);
+
+        _logger.LogInformation(
+            "{Count} single rider(s) returned to the front of ride {RideId}'s single-riders line; " +
+            "{SingleRidersWaiting} now waiting.",
+            returning.Length,
+            rideId,
+            singles.PeopleWaiting);
+
+        return Task.CompletedTask;
+    }
+
     private static QueuedGroupDto ToDto(QueuedGroup group)
     {
         var people = group.Members
-            .Select(p => new PersonDto(p.Number, p.Name, p.WeightInKilograms))
+            .Select(ToDto)
             .ToArray();
 
         return new QueuedGroupDto(group.GroupId, people);
+    }
+
+    private static PersonDto ToDto(Person person) =>
+        new(person.Number, person.Name, person.WeightInKilograms);
+
+    private static PersonDto[] ToDtos(IReadOnlyList<Person> people)
+    {
+        var dtos = new PersonDto[people.Count];
+        for (var i = 0; i < dtos.Length; i++)
+        {
+            dtos[i] = ToDto(people[i]);
+        }
+
+        return dtos;
     }
 }

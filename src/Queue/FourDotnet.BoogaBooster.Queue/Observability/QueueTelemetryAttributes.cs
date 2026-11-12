@@ -21,11 +21,17 @@ internal static class QueueTelemetryAttributes
     /// <summary>How many people are waiting — a count, never the people themselves.</summary>
     internal const string PeopleWaiting = "queue.people.waiting";
 
+    /// <summary>How many individuals are waiting in the single-riders line — a count only.</summary>
+    internal const string SingleRidersWaiting = "queue.single_riders.waiting";
+
     /// <summary>Groups a fill pass added to the line.</summary>
     internal const string GroupsAdded = "queue.groups.added";
 
     /// <summary>People a fill pass added to the line.</summary>
     internal const string PeopleAdded = "queue.people.added";
+
+    /// <summary>Individuals a fill pass added to the single-riders line.</summary>
+    internal const string SingleRidersAdded = "queue.single_riders.added";
 
     /// <summary>The nice-weather reading an update carried.</summary>
     internal const string NiceWeatherObserved = "queue.weather.nice_weather.observed";

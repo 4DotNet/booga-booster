@@ -32,29 +32,51 @@ describe('QueuePanel', () => {
     const el = render();
 
     expect(el.textContent).toContain('Queue unavailable');
+    expect(el.textContent).not.toContain('Single riders');
   });
 
-  it('renders the group and people counts once ready', () => {
+  it('renders the group, people and single-rider counts once ready', () => {
     source.setStatus('ready');
-    source.setQueue(createQueueStatus({ groupCount: 12, peopleWaiting: 34 }));
+    source.setQueue(
+      createQueueStatus({ groupCount: 12, peopleWaiting: 34, singleRidersWaiting: 4 }),
+    );
 
-    const text = render().textContent ?? '';
+    const el = render();
+    const metrics = Array.from(el.querySelectorAll('.metric')).map((metric) => [
+      metric.querySelector('dt')?.textContent?.trim(),
+      metric.querySelector('dd')?.textContent?.trim(),
+    ]);
 
-    expect(text).toContain('Groups queued');
-    expect(text).toContain('12');
-    expect(text).toContain('People waiting');
-    expect(text).toContain('34');
+    expect(metrics).toEqual([
+      ['Groups queued', '12'],
+      ['People waiting', '34'],
+      ['Single riders', '4'],
+    ]);
   });
 
-  it('pluralizes a single group and a single person correctly', () => {
+  it('announces the single riders in the live-region summary', () => {
     source.setStatus('ready');
-    source.setQueue(createQueueStatus({ groupCount: 1, peopleWaiting: 1 }));
+    source.setQueue(
+      createQueueStatus({ groupCount: 12, peopleWaiting: 34, singleRidersWaiting: 4 }),
+    );
 
-    const text = render().textContent ?? '';
+    const summary = render().querySelector('[role="status"]');
+
+    expect(summary?.textContent).toContain('4 single riders');
+  });
+
+  it('pluralizes a single group, person and single rider correctly', () => {
+    source.setStatus('ready');
+    source.setQueue(
+      createQueueStatus({ groupCount: 1, peopleWaiting: 1, singleRidersWaiting: 1 }),
+    );
+
+    const text = render().querySelector('[role="status"]')?.textContent ?? '';
 
     expect(text).toContain('1 group queued');
     expect(text).not.toContain('1 groups queued');
     expect(text).toContain('1 person waiting');
     expect(text).not.toContain('1 people waiting');
+    expect(text).toContain('1 single rider.');
   });
 });

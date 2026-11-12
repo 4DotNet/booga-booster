@@ -12,7 +12,8 @@ namespace FourDotnet.BoogaBooster.Queue.Filling;
 /// <summary>
 /// Hosted background service that continuously fills each configured ride's queue
 /// with arriving guests — a mix of lone guests and groups — four to eight at a time
-/// (configurable). The wait between cycles is re-drawn after every cycle from a
+/// (configurable) — and, as an additional stream, each ride's single-riders line
+/// with one to three individuals per cycle. The wait between cycles is re-drawn after every cycle from a
 /// weather-dependent band: ten to thirty seconds in fair weather, thirty to sixty
 /// once the weather turns bad. Timing runs off an injected
 /// <see cref="TimeProvider"/> so the loop is deterministic under test, and arrivals
@@ -96,9 +97,10 @@ internal sealed class RideQueueFillerService : BackgroundService
     }
 
     /// <summary>
-    /// Fills one ride's line. The pass acts every ten seconds at most, so it is worth
-    /// a span of its own (ADR-0009) — including the passes that add nobody, which is
-    /// the answer to "why is the line not growing".
+    /// Fills one ride's lines: the group arrivals first, then the single-riders
+    /// stream. The pass acts every ten seconds at most, so it is worth a span of its
+    /// own (ADR-0009) — including the passes that add nobody, which is the answer to
+    /// "why is the line not growing".
     /// </summary>
     private async Task FillRideAsync(Guid rideId, CancellationToken cancellationToken)
     {
@@ -107,9 +109,14 @@ internal sealed class RideQueueFillerService : BackgroundService
 
         var groupsAdded = 0;
         var peopleAdded = 0;
+        var singleRidersAdded = 0;
 
         try
         {
+            // One weather read for the whole cycle, so parties and lone guests are
+            // scaled by the same reading even if an update lands mid-cycle.
+            var niceWeather = _weatherInfluence.Current;
+
             var baseCount = ArrivalPlanner.PlanArrivalCount(
                 _options.MinArrivalsPerCycle,
                 _options.MaxArrivalsPerCycle,
@@ -117,43 +124,75 @@ internal sealed class RideQueueFillerService : BackgroundService
 
             // Track the crowd to the weather: scale the planned headcount by the latest
             // NiceWeather indicator before partitioning into groups. In the worst
-            // weather this floors to zero and nobody arrives this cycle.
+            // weather this floors to zero and no group arrives this cycle.
             var totalPeople = ArrivalPlanner.ScaleForWeather(
                 baseCount,
-                _weatherInfluence.Current,
+                niceWeather,
                 _options);
 
-            if (totalPeople == 0)
+            if (totalPeople > 0)
             {
-                return;
+                var groupSizes = ArrivalPlanner.PlanGroupSizes(
+                    totalPeople,
+                    _options.MinGroupSize,
+                    _options.MaxGroupSize,
+                    _rng);
+
+                var queue = _store.GetOrCreate(rideId);
+
+                foreach (var size in groupSizes)
+                {
+                    if (!queue.CanAccept(size))
+                    {
+                        _logger.LogDebug(
+                            "Ride {RideId} queue is full ({PeopleWaiting}/{Max}); skipping remaining arrivals.",
+                            rideId,
+                            queue.PeopleWaiting,
+                            queue.MaxPeople);
+                        break;
+                    }
+
+                    var enqueued = await _queueService.EnqueueGroupAsync(rideId, size, cancellationToken);
+
+                    // A party too large to board in one pass joins as several groups, so
+                    // count what actually went into the line rather than what was planned.
+                    groupsAdded += enqueued.Count;
+                    peopleAdded += enqueued.Sum(group => group.Size);
+                }
             }
 
-            var groupSizes = ArrivalPlanner.PlanGroupSizes(
-                totalPeople,
-                _options.MinGroupSize,
-                _options.MaxGroupSize,
-                _rng);
+            // The single-riders stream is an additional arrival stream, planned and
+            // enqueued only after the groups: it draws from the same seeded source and
+            // the same weather reading, but shares no headcount budget with them, so
+            // it never reduces how many people arrive in groups.
+            var singleRiders = ArrivalPlanner.ScaleForWeather(
+                ArrivalPlanner.PlanArrivalCount(
+                    _options.MinSingleArrivalsPerCycle,
+                    _options.MaxSingleArrivalsPerCycle,
+                    _rng),
+                niceWeather,
+                _options);
 
-            var queue = _store.GetOrCreate(rideId);
-
-            foreach (var size in groupSizes)
+            if (singleRiders > 0)
             {
-                if (!queue.CanAccept(size))
+                var singles = _store.GetOrCreateSingles(rideId);
+
+                for (var i = 0; i < singleRiders; i++)
                 {
-                    _logger.LogDebug(
-                        "Ride {RideId} queue is full ({PeopleWaiting}/{Max}); skipping remaining arrivals.",
-                        rideId,
-                        queue.PeopleWaiting,
-                        queue.MaxPeople);
-                    break;
+                    if (!singles.CanAccept(1))
+                    {
+                        _logger.LogDebug(
+                            "Ride {RideId} single-riders queue is full ({PeopleWaiting}/{Max}); " +
+                            "skipping remaining single riders.",
+                            rideId,
+                            singles.PeopleWaiting,
+                            singles.MaxPeople);
+                        break;
+                    }
+
+                    await _queueService.EnqueueSingleRiderAsync(rideId, cancellationToken);
+                    singleRidersAdded++;
                 }
-
-                var enqueued = await _queueService.EnqueueGroupAsync(rideId, size, cancellationToken);
-
-                // A party too large to board in one pass joins as several groups, so
-                // count what actually went into the line rather than what was planned.
-                groupsAdded += enqueued.Count;
-                peopleAdded += enqueued.Sum(group => group.Size);
             }
         }
         catch (Exception exception)
@@ -168,6 +207,7 @@ internal sealed class RideQueueFillerService : BackgroundService
             {
                 activity.SetTag(QueueTelemetryAttributes.GroupsAdded, groupsAdded);
                 activity.SetTag(QueueTelemetryAttributes.PeopleAdded, peopleAdded);
+                activity.SetTag(QueueTelemetryAttributes.SingleRidersAdded, singleRidersAdded);
             }
         }
     }

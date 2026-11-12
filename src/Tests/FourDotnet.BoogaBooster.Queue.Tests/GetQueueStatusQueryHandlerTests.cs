@@ -20,7 +20,13 @@ public sealed class GetQueueStatusQueryHandlerTests
             .ToArray();
         var groups = new[] { new QueuedGroupDto(Guid.NewGuid(), people) };
 
-        return new GetQueueStatusResponse(rideId, GroupCount: 1, PeopleWaiting: groupSize, Groups: groups);
+        return new GetQueueStatusResponse(
+            rideId,
+            GroupCount: 1,
+            PeopleWaiting: groupSize,
+            Groups: groups,
+            SingleRidersWaiting: 0,
+            SingleRiders: []);
     }
 
     [Fact]
@@ -46,7 +52,13 @@ public sealed class GetQueueStatusQueryHandlerTests
         // The service reports an empty line for an unknown ride rather than failing,
         // and the handler passes that through untouched.
         var rideId = Guid.NewGuid();
-        var empty = new GetQueueStatusResponse(rideId, GroupCount: 0, PeopleWaiting: 0, Groups: []);
+        var empty = new GetQueueStatusResponse(
+            rideId,
+            GroupCount: 0,
+            PeopleWaiting: 0,
+            Groups: [],
+            SingleRidersWaiting: 0,
+            SingleRiders: []);
         var service = new Mock<IRideQueueService>();
         service.Setup(s => s.GetStatus(rideId)).Returns(empty);
         var handler = new GetQueueStatusQueryHandler(service.Object);
@@ -58,6 +70,21 @@ public sealed class GetQueueStatusQueryHandlerTests
         Assert.Equal(rideId, result.RideId);
         Assert.Empty(result.Groups);
         Assert.Equal(0, result.PeopleWaiting);
+    }
+
+    [Fact]
+    public void Response_TotalPeopleWaiting_AddsSingleRidersToThePeopleInGroups()
+    {
+        var singles = new[] { new PersonDto(10, "Single 1", 70), new PersonDto(11, "Single 2", 90) };
+        var response = SnapshotFor(Guid.NewGuid(), groupSize: 3) with
+        {
+            SingleRidersWaiting = singles.Length,
+            SingleRiders = singles,
+        };
+
+        // The group headcount keeps counting groups only; the headline adds the singles.
+        Assert.Equal(3, response.PeopleWaiting);
+        Assert.Equal(5, response.TotalPeopleWaiting);
     }
 
     [Fact]

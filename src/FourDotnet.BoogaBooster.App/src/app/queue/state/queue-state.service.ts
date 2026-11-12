@@ -24,8 +24,11 @@ export class QueueStateService {
   /** Number of groups currently queued. */
   readonly groupCount = computed(() => this.queue()?.groupCount ?? 0);
 
-  /** Number of individual people currently waiting. */
+  /** Number of people currently waiting in groups. */
   readonly peopleWaiting = computed(() => this.queue()?.peopleWaiting ?? 0);
+
+  /** Number of individuals currently waiting in the single-riders line. */
+  readonly singleRidersWaiting = computed(() => this.queue()?.singleRidersWaiting ?? 0);
 
   /** A worded, one-line summary for a live region. */
   readonly summary = computed(() => summaryText(this.queue()));
