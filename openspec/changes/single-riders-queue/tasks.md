@@ -58,7 +58,7 @@
 - [x] 9.1 Extend `RideLoadingCoordinatorTests`: a fitting group boards before any single rider; the top-up runs only after no group fits; the top-up runs when the group queue is empty; every free seat is filled when riders are available; fewer riders than seats leaves seats free; nothing happens when the ride is full or the singles line is empty.
 - [x] 9.2 Add tests that no rider is taken or seated while the ride is `Idle`, `Safe` or `Started`.
 - [x] 9.3 Add a test that a rider joining mid-loading is seated on a subsequent pass, and one that a seating failure returns the riders to the front of the line.
-- [ ] 9.4 Run `dotnet test BoogaBooster.slnx` and confirm the whole solution is green with DigitalTwin coverage at or above 80%.
+- [x] 9.4 Run `dotnet test BoogaBooster.slnx` and confirm the whole solution is green with DigitalTwin coverage at or above 80%.
 
 ## 10. Frontend
 
