@@ -102,8 +102,20 @@ public sealed class Ride : DomainModel
     /// </summary>
     public int EmptyGondolaCount => _mill.EmptyGondolaCount;
 
-    /// <summary>The free seats a boarding group can take — two per empty gondola.</summary>
-    public int FreeSeats => _mill.EmptyGondolaCount * RideParameters.SeatsPerGondola;
+    /// <summary>
+    /// The seats a boarding <em>group</em> can take — two per empty gondola. A
+    /// group-oriented figure: the free seat beside an existing rider is not counted,
+    /// because a group never shares a gondola. For the literal number of unoccupied
+    /// seats use <see cref="FreeSeatCount"/>.
+    /// </summary>
+    public int GroupBoardableSeats => _mill.EmptyGondolaCount * RideParameters.SeatsPerGondola;
+
+    /// <summary>
+    /// The number of unoccupied seats on the ride, including the seat beside an
+    /// existing rider — the capacity single riders are seated against
+    /// (<see cref="SeatSingleRiders"/>).
+    /// </summary>
+    public int FreeSeatCount => _mill.FreeSeatCount;
 
     /// <summary><c>true</c> when the ride is at rest and safe to be loaded/started.</summary>
     public bool IsSafeToStart =>
@@ -259,6 +271,88 @@ public sealed class Ride : DomainModel
             {
                 gondola.Board(SeatPosition.Right, new Passenger(members[member++]), restraintCloseDelay());
             }
+        }
+
+        _state = RideState.Loading;
+        MarkChanged();
+    }
+
+    /// <summary>
+    /// Seats individual single riders into free seats while the ride is idle or
+    /// loading. This is the one place the "members of different parties never share
+    /// a gondola" rule is relaxed: a single rider may take <em>any</em> unoccupied
+    /// seat, including the one beside a rider from an earlier group or beside another
+    /// single rider. Groups are unaffected — <see cref="BoardGroup"/> still takes
+    /// only whole empty gondolas. Seating is all-or-nothing: every rider gets a
+    /// distinct free seat, or nobody is seated. Each rider's natural restraint-close
+    /// delay is drawn from <paramref name="restraintCloseDelay"/>. Seating moves the
+    /// ride into <see cref="RideState.Loading"/>.
+    /// </summary>
+    /// <param name="selectSeats">
+    /// Chooses which free seats the riders take: given the number of free seats and
+    /// the number of riders, it returns that many distinct indices into the free-seat
+    /// list (<see cref="GreatMill.FreeSeats"/>), the i-th rider taking the i-th index.
+    /// In production a random selection is supplied; when omitted the free seats are
+    /// filled in their natural order (the deterministic default used by tests).
+    /// </param>
+    /// <exception cref="DomainValidationException">
+    /// There are no riders, the ride is not idle or loading, there are more riders
+    /// than free seats, a restraint-close delay is negative, or
+    /// <paramref name="selectSeats"/> did not return one distinct, valid seat per
+    /// rider. Nobody is seated in any of these cases.
+    /// </exception>
+    public void SeatSingleRiders(
+        IReadOnlyList<PassengerWeight> riders,
+        Func<TimeSpan> restraintCloseDelay,
+        Func<int, int, IReadOnlyList<int>>? selectSeats = null)
+    {
+        ArgumentNullException.ThrowIfNull(riders);
+        ArgumentNullException.ThrowIfNull(restraintCloseDelay);
+
+        if (riders.Count == 0)
+        {
+            throw new DomainValidationException("At least one single rider is required.");
+        }
+
+        if (_state is not (RideState.Idle or RideState.Loading))
+        {
+            throw new DomainValidationException($"Single riders can only board while the ride is idle or loading (state: {_state}).");
+        }
+
+        var freeSeats = _mill.FreeSeats().ToArray();
+        if (riders.Count > freeSeats.Length)
+        {
+            throw new DomainValidationException(
+                $"{riders.Count} single rider(s) need a seat each but only {freeSeats.Length} seat(s) are free.");
+        }
+
+        // Resolve everything that can fail — the seat picks, the passengers and the
+        // delays — before the first rider sits down, so a rejected call seats nobody
+        // and the caller can hand every rider back to the queue.
+        var picks = selectSeats is null ? null : selectSeats(freeSeats.Length, riders.Count);
+        EnsureValidSeatSelection(picks, freeSeats.Length, riders.Count);
+
+        var passengers = new Passenger[riders.Count];
+        var delays = new TimeSpan[riders.Count];
+        for (var i = 0; i < riders.Count; i++)
+        {
+            if (riders[i] is null)
+            {
+                throw new DomainValidationException("A single rider's weight cannot be null.");
+            }
+
+            passengers[i] = new Passenger(riders[i]);
+            delays[i] = restraintCloseDelay();
+            if (delays[i] < TimeSpan.Zero)
+            {
+                throw new DomainValidationException("The restraint-close delay cannot be negative.");
+            }
+        }
+
+        for (var i = 0; i < riders.Count; i++)
+        {
+            var (gondola, seat) = freeSeats[picks is null ? i : picks[i]];
+            gondola.Board(seat, passengers[i], delays[i]);
         }
 
         _state = RideState.Loading;
@@ -480,6 +574,45 @@ public sealed class Ride : DomainModel
     {
         _mill.ReleaseBrakes();
         _mill.ReleaseAllRestraints();
+    }
+
+    /// <summary>
+    /// Rejects a seat selection that does not name exactly one distinct, in-range
+    /// free seat per rider. A <c>null</c> selection means "natural order" and is
+    /// always valid.
+    /// </summary>
+    private static void EnsureValidSeatSelection(IReadOnlyList<int>? picks, int freeSeatCount, int riderCount)
+    {
+        if (picks is null)
+        {
+            return;
+        }
+
+        if (picks.Count != riderCount)
+        {
+            throw new DomainValidationException(
+                $"The seat selection named {picks.Count} seat(s) for {riderCount} single rider(s).");
+        }
+
+        // At most 32 seats, so a stack-allocated flag per seat beats a HashSet.
+        Span<bool> chosen = stackalloc bool[freeSeatCount];
+        chosen.Clear();
+        foreach (var index in picks)
+        {
+            if (index < 0 || index >= freeSeatCount)
+            {
+                throw new DomainValidationException(
+                    $"The seat selection named seat {index}, but only seats 0 to {freeSeatCount - 1} are free.");
+            }
+
+            if (chosen[index])
+            {
+                throw new DomainValidationException(
+                    $"The seat selection named free seat {index} more than once.");
+            }
+
+            chosen[index] = true;
+        }
     }
 
     private RideSafetyReason EvaluateSafety()
