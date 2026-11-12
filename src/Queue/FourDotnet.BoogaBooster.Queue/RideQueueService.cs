@@ -103,7 +103,13 @@ internal sealed class RideQueueService : IRideQueueService
         var queue = _store.Find(rideId);
         if (queue is null)
         {
-            return new GetQueueStatusResponse(rideId, GroupCount: 0, PeopleWaiting: 0, Groups: []);
+            return new GetQueueStatusResponse(
+                rideId,
+                GroupCount: 0,
+                PeopleWaiting: 0,
+                Groups: [],
+                SingleRidersWaiting: 0,
+                SingleRiders: []);
         }
 
         var groups = queue.SnapshotGroups()
@@ -114,7 +120,9 @@ internal sealed class RideQueueService : IRideQueueService
             rideId,
             GroupCount: groups.Length,
             PeopleWaiting: groups.Sum(g => g.Size),
-            Groups: groups);
+            Groups: groups,
+            SingleRidersWaiting: 0,
+            SingleRiders: []);
     }
 
     public Task<QueuedGroupDto?> TakeGroupAsync(

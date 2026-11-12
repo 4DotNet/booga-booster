@@ -217,7 +217,13 @@ public sealed class DigitalTwinBackgroundTelemetryTests : IDisposable
             CancellationToken cancellationToken) => throw new NotSupportedException();
 
         public GetQueueStatusResponse GetStatus(Guid rideId)
-            => new(rideId, _groups.Count, _groups.Sum(group => group.Size), [.. _groups]);
+            => new(
+                rideId,
+                _groups.Count,
+                _groups.Sum(group => group.Size),
+                [.. _groups],
+                SingleRidersWaiting: 0,
+                SingleRiders: []);
 
         public Task<QueuedGroupDto?> TakeGroupAsync(
             Guid rideId,
