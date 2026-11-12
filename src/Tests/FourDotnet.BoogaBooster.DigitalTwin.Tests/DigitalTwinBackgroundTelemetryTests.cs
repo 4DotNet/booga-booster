@@ -240,6 +240,20 @@ public sealed class DigitalTwinBackgroundTelemetryTests : IDisposable
             _groups.RemoveAt(index);
             return Task.FromResult<QueuedGroupDto?>(group);
         }
+
+        public Task<PersonDto> EnqueueSingleRiderAsync(Guid rideId, CancellationToken cancellationToken)
+            => throw new NotSupportedException();
+
+        // No single riders ever wait in this stub: these tests are about group boarding.
+        public Task<IReadOnlyList<PersonDto>> TakeSingleRidersAsync(
+            Guid rideId,
+            int count,
+            CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<PersonDto>>([]);
+
+        public Task RequeueSingleRidersAsync(
+            Guid rideId,
+            IReadOnlyList<PersonDto> people,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 
     private sealed class ThrowingQueue : IRideQueueService
@@ -255,6 +269,19 @@ public sealed class DigitalTwinBackgroundTelemetryTests : IDisposable
         public Task<QueuedGroupDto?> TakeGroupAsync(
             Guid rideId,
             Guid groupId,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<PersonDto> EnqueueSingleRiderAsync(Guid rideId, CancellationToken cancellationToken)
+            => throw new NotSupportedException();
+
+        public Task<IReadOnlyList<PersonDto>> TakeSingleRidersAsync(
+            Guid rideId,
+            int count,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task RequeueSingleRidersAsync(
+            Guid rideId,
+            IReadOnlyList<PersonDto> people,
             CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 }

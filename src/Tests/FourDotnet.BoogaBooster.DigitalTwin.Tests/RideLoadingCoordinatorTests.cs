@@ -303,5 +303,14 @@ public sealed class RideLoadingCoordinatorTests
             _groups.RemoveAt(index);
             return Task.FromResult<QueuedGroupDto?>(group);
         }
+
+        public Task<PersonDto> EnqueueSingleRiderAsync(Guid rideId, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<IReadOnlyList<PersonDto>> TakeSingleRidersAsync(Guid rideId, int count, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<PersonDto>>([]);
+
+        public Task RequeueSingleRidersAsync(Guid rideId, IReadOnlyList<PersonDto> people, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
     }
 }

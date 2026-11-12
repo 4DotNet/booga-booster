@@ -149,6 +149,24 @@ internal sealed class RideQueueService : IRideQueueService
         return Task.FromResult<QueuedGroupDto?>(ToDto(removed));
     }
 
+    // The single-riders operations are contract-only for now: the line itself (the
+    // aggregate and its store) arrives with tasks 3.x-4.x of the single-riders-queue
+    // change, which replace these placeholders.
+    public Task<PersonDto> EnqueueSingleRiderAsync(Guid rideId, CancellationToken cancellationToken) =>
+        throw new NotImplementedException();
+
+    public Task<IReadOnlyList<PersonDto>> TakeSingleRidersAsync(
+        Guid rideId,
+        int count,
+        CancellationToken cancellationToken) =>
+        throw new NotImplementedException();
+
+    public Task RequeueSingleRidersAsync(
+        Guid rideId,
+        IReadOnlyList<PersonDto> people,
+        CancellationToken cancellationToken) =>
+        throw new NotImplementedException();
+
     private static QueuedGroupDto ToDto(QueuedGroup group)
     {
         var people = group.Members

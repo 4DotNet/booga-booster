@@ -6,8 +6,8 @@
 
 - [x] 2.1 Create `DataTransferObjects/` in `FourDotnet.BoogaBooster.Queue.Abstractions` and move `PersonDto` and `QueuedGroupDto` into it (namespace `...Queue.Abstractions.DataTransferObjects`), one type per file.
 - [x] 2.2 Add `DataTransferObjects/GetQueueStatus/GetQueueStatusResponse.cs` with `RideId`, `GroupCount`, `PeopleWaiting`, `Groups`, `SingleRidersWaiting`, `SingleRiders` and a computed `TotalPeopleWaiting`; delete `QueueStatusDto.cs`.
-- [ ] 2.3 Extend `IRideQueueService` with `EnqueueSingleRiderAsync(Guid rideId, CancellationToken)`, `TakeSingleRidersAsync(Guid rideId, int count, CancellationToken)` and `RequeueSingleRidersAsync(Guid rideId, IReadOnlyList<PersonDto> people, CancellationToken)`, and change `GetStatus` to return `GetQueueStatusResponse`; document the take's "up to count, possibly empty, never throws" and the requeue's front-of-line semantics in XML docs.
-- [ ] 2.4 Fix up the resulting compile errors in existing consumers (`QueueEndpoints`, `RideQueueService`, `RideLoadingCoordinator`, existing tests) so the solution builds before any behaviour is added.
+- [x] 2.3 Extend `IRideQueueService` with `EnqueueSingleRiderAsync(Guid rideId, CancellationToken)`, `TakeSingleRidersAsync(Guid rideId, int count, CancellationToken)` and `RequeueSingleRidersAsync(Guid rideId, IReadOnlyList<PersonDto> people, CancellationToken)`, and change `GetStatus` to return `GetQueueStatusResponse`; document the take's "up to count, possibly empty, never throws" and the requeue's front-of-line semantics in XML docs.
+- [x] 2.4 Fix up the resulting compile errors in existing consumers (`QueueEndpoints`, `RideQueueService`, `RideLoadingCoordinator`, existing tests) so the solution builds before any behaviour is added.
 
 ## 3. Queue domain — the single-riders line
 
