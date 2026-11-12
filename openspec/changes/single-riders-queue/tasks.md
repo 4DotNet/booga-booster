@@ -11,10 +11,10 @@
 
 ## 3. Queue domain — the single-riders line
 
-- [ ] 3.1 Add `Domain/SingleRiderQueue.cs`: aggregate root deriving from `DomainModel`, validating `rideId` and `maxPeople` with `DomainValidationException`, holding a `LinkedList<Person>` behind a `Lock`, exposing `RideId`, `MaxPeople`, `PeopleWaiting`, `CanAccept(int)`, `Enqueue(Person)`, `TakeUpTo(int)`, `RequeueFront(IReadOnlyList<Person>)` and `SnapshotPeople()`.
-- [ ] 3.2 Make `TakeUpTo` return an empty list for a count of zero or less and for an empty line, return everyone when asked for more than are waiting, and mark the aggregate changed only when it actually removed someone.
-- [ ] 3.3 Make `Enqueue` throw `DomainValidationException` when the line is at `MaxPeople`, leaving the waiting people untouched.
-- [ ] 3.4 Make `RequeueFront` insert the given people at the head in their original relative order.
+- [x] 3.1 Add `Domain/SingleRiderQueue.cs`: aggregate root deriving from `DomainModel`, validating `rideId` and `maxPeople` with `DomainValidationException`, holding a `LinkedList<Person>` behind a `Lock`, exposing `RideId`, `MaxPeople`, `PeopleWaiting`, `CanAccept(int)`, `Enqueue(Person)`, `TakeUpTo(int)`, `RequeueFront(IReadOnlyList<Person>)` and `SnapshotPeople()`.
+- [x] 3.2 Make `TakeUpTo` return an empty list for a count of zero or less and for an empty line, return everyone when asked for more than are waiting, and mark the aggregate changed only when it actually removed someone.
+- [x] 3.3 Make `Enqueue` throw `DomainValidationException` when the line is at `MaxPeople`, leaving the waiting people untouched.
+- [x] 3.4 Make `RequeueFront` insert the given people at the head in their original relative order.
 
 ## 4. Queue infrastructure and service
 
@@ -32,7 +32,7 @@
 
 ## 6. Queue tests
 
-- [ ] 6.1 Add `SingleRiderQueueTests`: arrival order, `TakeUpTo` for fewer/more/zero/empty, capacity refusal, `RequeueFront` ordering, and validation on construction.
+- [x] 6.1 Add `SingleRiderQueueTests`: arrival order, `TakeUpTo` for fewer/more/zero/empty, capacity refusal, `RequeueFront` ordering, and validation on construction.
 - [ ] 6.2 Extend `RideQueueServiceTests`: enqueueing a single rider publishes `single-rider-queued`, taking returns and removes from the front, requeueing restores the front, and `GetStatus` reports both lines with group counts unaffected by singles.
 - [ ] 6.3 Extend the filler tests: individuals are added each cycle within bounds, worst weather adds none, the singles capacity stops the stream early, and group arrivals are unchanged with the singles stream enabled (seeded `RandomSeed` for determinism).
 - [ ] 6.4 Run `dotnet test` for the Queue tests and confirm the module stays at or above 80% line coverage.
