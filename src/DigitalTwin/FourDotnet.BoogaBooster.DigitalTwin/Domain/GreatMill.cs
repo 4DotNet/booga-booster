@@ -229,6 +229,40 @@ public sealed class GreatMill : DomainModel
         }
     }
 
+    /// <summary>
+    /// How many seats across the ride are unoccupied — every free seat, whether its
+    /// gondola is empty or already holds a rider. This is the capacity a
+    /// <em>single rider</em> boards against; a group still boards against
+    /// <see cref="EmptyGondolaCount"/>, because a group never shares a gondola.
+    /// </summary>
+    public int FreeSeatCount =>
+        (RideParameters.HubCount * RideParameters.GondolasPerHub * RideParameters.SeatsPerGondola)
+        - BoardedPassengerCount;
+
+    /// <summary>
+    /// The unoccupied seats across the ride, hub by hub and gondola by gondola in the
+    /// same stable order as <see cref="EmptyGondolas"/>, left seat before right. A
+    /// partly-occupied gondola yields its one free seat.
+    /// </summary>
+    public IEnumerable<(Gondola Gondola, SeatPosition Seat)> FreeSeats()
+    {
+        foreach (var hub in _hubs)
+        {
+            foreach (var gondola in hub.Gondolas)
+            {
+                if (!gondola.GetSeat(SeatPosition.Left).IsOccupied)
+                {
+                    yield return (gondola, SeatPosition.Left);
+                }
+
+                if (!gondola.GetSeat(SeatPosition.Right).IsOccupied)
+                {
+                    yield return (gondola, SeatPosition.Right);
+                }
+            }
+        }
+    }
+
     /// <summary>Returns the hub at <paramref name="index"/>.</summary>
     public Hub GetHub(int index)
     {

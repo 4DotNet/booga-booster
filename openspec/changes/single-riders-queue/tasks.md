@@ -39,7 +39,7 @@
 
 ## 7. DigitalTwin domain — free seats and stranger pairing
 
-- [ ] 7.1 Add `FreeSeatCount` and `FreeSeats()` (yielding gondola/seat pairs in the existing stable hub-then-gondola order) to `GreatMill`, counting every unoccupied seat regardless of whether the gondola is partly occupied.
+- [x] 7.1 Add `FreeSeatCount` and `FreeSeats()` (yielding gondola/seat pairs in the existing stable hub-then-gondola order) to `GreatMill`, counting every unoccupied seat regardless of whether the gondola is partly occupied.
 - [ ] 7.2 Rename `Ride.FreeSeats` to `Ride.GroupBoardableSeats` (still `EmptyGondolaCount * SeatsPerGondola`) and update every caller; add `Ride.FreeSeatCount` delegating to the mill.
 - [ ] 7.3 Add `Ride.SeatSingleRiders(IReadOnlyList<PassengerWeight> riders, Func<TimeSpan> restraintCloseDelay, Func<int, int, IReadOnlyList<int>>? selectSeats = null)`: reject an empty rider list and a ride not `Idle`/`Loading`, throw `DomainValidationException` when `riders.Count > FreeSeatCount`, seat each rider into a distinct free seat, force `Loading` and mark changed.
 - [ ] 7.4 Confirm `Ride.BoardGroup` and `GreatMill.EmptyGondolaCount` are unchanged, so groups still take only whole empty gondolas.
