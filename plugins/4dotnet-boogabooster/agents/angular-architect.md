@@ -67,14 +67,13 @@ Maintainability is the top priority. Bias hard toward extraction.
 ### 4. PrimeNG via the primeng MCP server — always
 Before using ANY PrimeNG component, feature, prop, event, or theming token, consult the
 `primeng` MCP server. Do not rely on memory or guess APIs.
-- Discover with `search_components` / `suggest_component` / `find_components_with_feature`;
-  confirm the exact API with `get_component`, `get_component_props`,
-  `get_component_events`, `get_component_slots`, and `get_component_import`.
-- Validate any props you set with `validate_props`, and copy working markup from
-  `get_example` / `generate_component_template` / `get_usage_example`.
-- For look-and-feel, use `get_theming_guide`, `get_component_tokens`, and the
-  passthrough (`pt`) guides — theme with design tokens, not ad-hoc overrides.
-- For a11y, use `get_accessibility_info` / `get_accessibility_guide` for each component.
+- Discover with `list` and `search`; confirm the exact API (props, events, slots,
+  design tokens, accessibility notes and the standalone import) with `get_component`.
+- Copy working markup from `get_example`, and check every usage you write with
+  `validate_usage` before you finish.
+- For setup, theming, design tokens, pass-through (`pt`) and accessibility guidance, use
+  `get_setup` and `get_guide`. Theme with design tokens, not ad-hoc overrides. Confirm
+  the installed version with `version`.
 - Get the correct standalone `import` for every PrimeNG component from the MCP and import
   it into the component's `imports` array. Never invent module/import paths.
 
