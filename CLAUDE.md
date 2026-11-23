@@ -259,14 +259,17 @@ Detailed frontend rules live in `src/FourDotnet.BoogaBooster.App/.claude/CLAUDE.
 
 This repo is set up so **Claude Code and GitHub Copilot (CLI, VS Code and Visual Studio) share the same MCP servers, agents, skills and commands**. Every asset has one canonical source under `.claude/` (or `.mcp.json` / `CLAUDE.md`); where a product cannot read it, a mirror is derived from it:
 
-| Asset | Canonical source | Claude Code | Copilot CLI | VS Code | Visual Studio | Mirror |
-| --- | --- | :-: | :-: | :-: | :-: | --- |
-| MCP servers | `.mcp.json` (repo root) | ✅ | ✅ | ✅ | — | `src/.mcp.json` (`servers` key, solution dir) |
-| Agents | `.claude/agents/*.md` | ✅ | ✅ | ✅ | — | — |
-| Skills | `.claude/skills/<name>/SKILL.md` | ✅ | ✅ | ✅ | — | `.github/skills/` (OpenSpec-generated twins only) |
-| Instructions | `CLAUDE.md` | ✅ | ✅ | — | — | `.github/copilot-instructions.md` (condensed, by hand) |
-| Slash commands | `.claude/commands/<ns>/<name>.md` | ✅ | — | — | — | `.github/prompts/<ns>-<name>.prompt.md` |
-| CI code review | `.github/code-review/` + `.github/workflows/code-quality-check.yml` | — | ✅ (headless, in Actions) | — | — | — |
+| Asset | Canonical source | Claude Code | Copilot CLI | VS Code | Visual Studio | Copilot cloud agent | Mirror (what Copilot surfaces read) |
+| --- | --- | :-: | :-: | :-: | :-: | :-: | --- |
+| MCP servers | `.mcp.json` (repo root) | ✅ | ✅ | ✅ | — | — (repo settings, by hand) | `src/.mcp.json` (`servers` key, solution dir) |
+| Agents | `.claude/agents/*.md` | ✅ | ✅ | ✅ | — | — | `.github/agents/<name>.agent.md` (generated for **every** agent, Copilot tool names) |
+| Skills | `.claude/skills/<name>/SKILL.md` | ✅ | ✅ | — | ✅ | ✅ | `.github/skills/<name>/` (copied for **every** skill) |
+| Instructions | `CLAUDE.md` | ✅ | ✅ | ✅ | — | ✅ | `.github/copilot-instructions.md` (condensed, by hand) |
+| Slash commands | `.claude/commands/<ns>/<name>.md` | ✅ | ✅ | — | — | — | `.github/prompts/<ns>-<name>.prompt.md` (and every command has an equivalent skill) |
+| CI code review | `.github/code-review/` + `.github/workflows/code-quality-check.yml` | — | ✅ (headless, in Actions) | — | — | — | — |
+
+**`.github/agents/` and `.github/skills/` are generated — never edit them.** Edit the
+`.claude/` file and run the sync script with `--fix`.
 
 **Keep them in sync with the `ai-tooling-sync` skill.** After touching any agent, skill,
 command, MCP server, the plugin or either instruction file, run
@@ -320,24 +323,36 @@ reviewers: one model catching a MUST violation alone still fails the check.
 
 ### Agents and skills
 
-- **Agents** — `csharp-expert` (any `.cs`/`.csproj`/`.slnx` work; style-guide and
-  ADR-driven) and `angular-architect` (anything under the Angular app; zoneless,
-  signal-first, PrimeNG-aware).
+- **Agents** — authors: `csharp-expert` (any `.cs`/`.csproj`/`.slnx` work; style-guide
+  and ADR-driven) and `angular-architect` (anything under the Angular app; zoneless,
+  signal-first, PrimeNG-aware). Critics (read-only, CI severity scale):
+  `csharp-critic` and `angular-critic` — run the matching one on every change before
+  committing or opening a PR. Contract: `api-contract-guardian` owns the HTTP/SSE wire
+  between the C# DTOs and the TypeScript models; any DTO, route or enum change on either
+  side goes through it so both sides change together. Tests: `test-writer` (writes
+  xUnit/Vitest/axe tests only, never production code) and `test-runner` (runs suites and
+  coverage, edits nothing, returns a triaged verdict). Issues: `issue-triager` triages
+  exactly one GitHub issue; the `github-issue-triage` skill runs one per issue in
+  parallel.
 - **Skills** — the C# style-guide set (`csharp-solution-structure`,
   `csharp-feature-slices`, `csharp-minimal-api-endpoints`, `csharp-domain-model`,
   `csharp-observability`, `csharp-aspire`, `csharp-unit-testing`), `dto-organization`
   (DTO placement), `test-coverage` (≥ 80 % backend line coverage),
   `git-workflow` (`development` branch model; worktree + branch from
   `development` → frequent logical commits → push → PR for every
-  OpenSpec change), `github-issue-triage` (labels and fleshes out unlabelled
-  issues, proposes an OpenSpec change for each on `development`, and keeps issue and
-  change in sync), `ai-tooling-sync` (Claude ⇄ Copilot parity for all of the
+  OpenSpec change), `github-issue-triage` (orchestrator: starts one `issue-triager`
+  agent per open issue without the `triaged` or `unclear` label; each fleshes its issue
+  out, proposes and links an OpenSpec change on `development`, and adds `triaged` last,
+  or asks questions and adds `unclear`, which pauses triage until a human removes it;
+  also keeps issue and change in sync), `ai-tooling-sync` (Claude ⇄ Copilot parity for all of the
   above), and the `openspec-*` change-workflow skills.
 
 **Rules when adding tooling:**
 
 - **MCP server** → add it to the root `.mcp.json`. Do not add it machine-locally (`claude mcp add`, `copilot mcp add`), or teammates won't get it.
-- **Agent or skill** → put it under `.claude/`. Both tools pick it up. If it is part of the distributable plugin, also sync it into `plugins/4dotnet-boogabooster/` and bump the plugin version.
+- **Agent or skill** → put it under `.claude/`, then run the sync script with `--fix`:
+  it generates `.github/agents/<name>.agent.md` / `.github/skills/<name>/`, which Visual
+  Studio, the Copilot cloud agent and VS Code's Copilot harness need. If it is part of the distributable plugin, also sync it into `plugins/4dotnet-boogabooster/` and bump the plugin version.
 - **Slash command** → must be written twice: `.claude/commands/<ns>/<name>.md` for Claude and `.github/prompts/<ns>-<name>.prompt.md` for Copilot. Keep the two in sync.
 - **Repo-wide instructions** → also written twice: this file (canonical, read by Claude
   Code and Copilot CLI) and `.github/copilot-instructions.md` (condensed mirror, read by

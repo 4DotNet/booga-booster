@@ -255,9 +255,14 @@ and `copilot mcp list` shows user-scoped servers only.
 
 Shared with Claude Code from `.claude/`; Copilot CLI and VS Code read them natively.
 
-- **Agents** — `csharp-expert` (any `.cs`/`.csproj`/`.slnx` work; style-guide and
-  ADR-driven) and `angular-architect` (anything under the Angular app; zoneless,
-  signal-first, PrimeNG-aware).
+- **Agents** — authors `csharp-expert` (C#; style-guide and ADR-driven) and
+  `angular-architect` (Angular; zoneless, signal-first, PrimeNG-aware); read-only critics
+  `csharp-critic` and `angular-critic` (run on every change before commit/PR);
+  `api-contract-guardian` (C# DTOs ⇄ TypeScript models — both sides change together);
+  `test-writer` (tests only, never production code) and `test-runner` (runs suites and
+  coverage, edits nothing); `issue-triager` (triages one GitHub issue; the
+  `github-issue-triage` skill runs one per issue without `triaged`/`unclear`, and
+  `unclear` pauses triage until a human removes it).
 - **Skills** — the C# style-guide set (`csharp-solution-structure`,
   `csharp-feature-slices`, `csharp-minimal-api-endpoints`, `csharp-domain-model`,
   `csharp-observability`, `csharp-aspire`, `csharp-unit-testing`), `dto-organization`,
@@ -271,9 +276,12 @@ mirrors the root `.mcp.json` (with a `servers` key). It is generated — edit th
 
 - **MCP server** → root `.mcp.json`. Never machine-local (`copilot mcp add`), or
   teammates won't get it.
-- **Agent or skill** → `.claude/` (Copilot CLI reads it natively; it also scans
-  `.github/skills/`). If it belongs in the distributable plugin, sync it into
-  `plugins/4dotnet-boogabooster/` and bump the plugin version.
+- **Agent or skill** → `.claude/` is canonical. `.github/agents/<name>.agent.md` and
+  `.github/skills/<name>/` are **generated** mirrors (Visual Studio, the cloud agent and
+  VS Code's Copilot harness read only `.github/`) — never edit them; run
+  `node .claude/skills/ai-tooling-sync/scripts/sync-ai-tooling.mjs --fix`. If it belongs
+  in the distributable plugin, sync it into `plugins/4dotnet-boogabooster/` and bump the
+  plugin version.
 - **Slash command** → written twice: `.claude/commands/<ns>/<name>.md` **and**
   `.github/prompts/<ns>-<name>.prompt.md`. Keep them in sync.
 - **Repo-wide instructions** → written twice: `CLAUDE.md` (canonical) **and** this file.

@@ -423,17 +423,23 @@ This is the part worth studying. Claude Code and GitHub Copilot — CLI, VS Code
 Visual Studio — **share the same tooling**: `.claude/` is the single source of truth,
 and where a product cannot read it a mirror is generated from it.
 
-| Asset | Lives in | Claude Code | Copilot CLI | VS Code | Visual Studio |
-| --- | --- | :-: | :-: | :-: | :-: |
-| MCP servers | `.mcp.json` | ✅ | ✅ | ✅ | — |
-| MCP servers | `src/.mcp.json` (generated mirror) | — | — | — | ✅ |
-| Agents | `.claude/agents/*.md` | ✅ | ✅ | ✅ | — |
-| Skills | `.claude/skills/<name>/SKILL.md` | ✅ | ✅ | ✅ | — |
-| Instructions | `CLAUDE.md` (canonical) | ✅ | ✅ | — | — |
-| Instructions | `.github/copilot-instructions.md` (mirror) | — | — | ✅ | ✅ |
-| Slash commands | `.claude/commands/` | ✅ | — | — | — |
-| Slash commands | `.github/prompts/*.prompt.md` (generated mirror) | — | ✅ | ✅ | — |
-| CI code review | `.github/code-review/` + `.github/workflows/code-quality-check.yml` | — | ✅ headless | — | — |
+| Asset | Lives in | Claude Code | Copilot CLI | VS Code | Visual Studio | Copilot cloud agent |
+| --- | --- | :-: | :-: | :-: | :-: | :-: |
+| MCP servers | `.mcp.json` | ✅ | ✅ | ✅ | — | — |
+| MCP servers | `src/.mcp.json` (generated mirror) | — | — | — | ✅ | — |
+| MCP servers | repository settings on github.com (by hand) | — | — | — | — | ✅ |
+| Agents | `.claude/agents/*.md` (canonical) | ✅ | ✅ | ✅ | — | — |
+| Agents | `.github/agents/*.agent.md` (generated mirror) | — | ✅ | ✅ | ✅ | ✅ |
+| Skills | `.claude/skills/<name>/SKILL.md` (canonical) | ✅ | ✅ | — | ✅ | ✅ |
+| Skills | `.github/skills/<name>/` (generated mirror) | — | ✅ | ✅ | ✅ | ✅ |
+| Instructions | `CLAUDE.md` (canonical) | ✅ | ✅ | ✅ | — | ✅ |
+| Instructions | `.github/copilot-instructions.md` (mirror) | — | ✅ | ✅ | ✅ | ✅ |
+| Slash commands | `.claude/commands/` | ✅ | ✅ | — | — | — |
+| Slash commands | `.github/prompts/*.prompt.md` (generated mirror) | — | — | ✅ (Local harness) | ✅ | — |
+| CI code review | `.github/code-review/` + `.github/workflows/code-quality-check.yml` | — | ✅ headless | — | — | — |
+
+Every Copilot surface is covered by `.github/` alone and Claude Code by `.claude/` alone.
+The `.github/agents` and `.github/skills` mirrors are generated: never edit them by hand.
 
 The `ai-tooling-sync` skill keeps the two sides together:
 `node .claude/skills/ai-tooling-sync/scripts/sync-ai-tooling.mjs` reports drift, and `--fix` regenerates the mirrors.
@@ -456,6 +462,23 @@ reviewed by Copilot CLI in `-p` mode against the rules in the rows above it. See
   MCP server and verifies ADR compliance before writing a line.
 - **`angular-architect`** — anything under the Angular app. Zoneless, signal-first,
   PrimeNG-aware.
+- **`csharp-critic`** / **`angular-critic`** — read-only reviewers for the backend and
+  the frontend. They use the CI review's severity scale (`blocking` / `major` / `minor` /
+  `nit`), cite the rule behind every finding, and end with a ship / do-not-ship verdict.
+  Run the matching critic after an author agent finishes and before you commit.
+- **`api-contract-guardian`** — keeps the C# DTOs in the `.Abstractions` projects and the
+  TypeScript `*.models.ts` interfaces in lockstep (names, nullability, enums, routes,
+  the SSE payload), and pins the contract with tests on both sides.
+- **`test-writer`** — writes deterministic, spec-derived xUnit v3 / Vitest / axe tests.
+  It never touches production code and reports the bugs its tests expose.
+- **`issue-triager`** — triages exactly one GitHub issue. The `github-issue-triage` skill
+  starts one per open issue that has neither `triaged` nor `unclear`, in parallel. Each
+  one fleshes out the issue, proposes an OpenSpec change that links to it, links the
+  issue back to the change, and adds `triaged` last. If the issue is too vague for a
+  precise proposal, it asks questions and adds `unclear` instead; triage then waits
+  until a human removes that label.
+- **`test-runner`** — runs the backend and/or frontend suites (optionally with per-module
+  coverage against the 80 % floor) and returns a short, triaged verdict instead of a log.
 
 ### Skills (`.claude/skills/`)
 
