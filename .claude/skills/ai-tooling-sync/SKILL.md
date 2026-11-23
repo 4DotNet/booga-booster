@@ -21,25 +21,48 @@ and never let the two drift.
 
 ## Who reads what
 
-| Asset | Canonical source | Claude Code | Copilot CLI | VS Code Copilot | Visual Studio Copilot | Mirror |
-| --- | --- | :-: | :-: | :-: | :-: | --- |
-| MCP servers | `.mcp.json` (`mcpServers`) | ✅ | ✅ | ✅ | ❌ (solution dir only) | `src/.mcp.json` (`servers`) |
-| Agents | `.claude/agents/*.md` | ✅ | ✅ | ✅ (Claude format) | — | — |
-| Skills | `.claude/skills/<name>/SKILL.md` | ✅ | ✅ | ✅ | — | `.github/skills/<name>/` only for OpenSpec-generated twins |
-| Slash commands | `.claude/commands/<ns>/<name>.md` | ✅ | ❌ | ❌ | — | `.github/prompts/<ns>-<name>.prompt.md` |
-| Instructions | `CLAUDE.md` | ✅ | ✅ | — | — | `.github/copilot-instructions.md` (condensed, hand-written) |
-| Plugin | `.claude/{agents,skills}`, `.mcp.json` | ✅ | ✅ | — | — | `plugins/4dotnet-boogabooster/` |
+| Asset | Canonical source | Claude Code | Copilot CLI | VS Code (Copilot harness) | Visual Studio 2026 | Copilot cloud agent (github.com) | Mirror |
+| --- | --- | :-: | :-: | :-: | :-: | :-: | --- |
+| MCP servers | `.mcp.json` (`mcpServers`) | ✅ | ✅ | ✅ | ❌ (solution dir only) | ❌ (repo settings) | `src/.mcp.json` (`servers`) |
+| Agents | `.claude/agents/*.md` | ✅ | ✅ | ✅ | ❌ | ❌ | `.github/agents/<name>.agent.md` (generated, **every** agent) |
+| Skills | `.claude/skills/<name>/SKILL.md` | ✅ | ✅ | ❓ (documents `.github/skills` only) | ✅ | ✅ | `.github/skills/<name>/` (copied, **every** skill) |
+| Slash commands | `.claude/commands/<ns>/<name>.md` | ✅ | ✅ | ❌ | ❌ | ❌ | `.github/prompts/<ns>-<name>.prompt.md` |
+| Instructions | `CLAUDE.md` | ✅ | ✅ | ✅ | ❌ | ✅ | `.github/copilot-instructions.md` (condensed, hand-written) |
+| Plugin | `.claude/{agents,skills}`, `.mcp.json` | ✅ | ✅ | — | — | — | `plugins/4dotnet-boogabooster/` |
 
-Facts behind the table (re-verify when a product changes — see *Keeping this skill true*):
+Every Copilot surface is therefore covered by `.github/` alone, and Claude Code by
+`.claude/` alone. Copilot CLI reads both and, on a name clash, prefers `.github` — so the
+generated mirror is what Copilot runs, and it must be equivalent to the canonical file.
 
-- **VS Code** reads agents from `.github/agents/*.agent.md` **and** `.claude/agents/*.md`
-  (Claude sub-agent format, Claude tool names mapped); skills from `.github/skills`,
-  `.claude/skills` and `.agents/skills`; MCP from `.vscode/mcp.json` (`servers`) **and**
-  the root `.mcp.json` (`mcpServers`). It does **not** read `.claude/commands`.
-- **Visual Studio** reads MCP only from `%USERPROFILE%\.mcp.json` and
-  `<SOLUTIONDIR>\{.mcp.json,.vs\mcp.json,.vscode\mcp.json}`, with a `servers` key.
-  The solution is `src/BoogaBooster.slnx`, so the root `.mcp.json` is invisible to it —
-  hence the `src/.mcp.json` mirror.
+Facts behind the table (verified 2026-11-23 against the docs listed in *Keeping this
+skill true*; re-verify when a product changes):
+
+- **VS Code** now runs sessions on a *harness*: **Copilot** (the Copilot CLI runtime —
+  the recommended one), **Claude** (Claude Agent SDK, reads `.claude/` natively),
+  Codex, or **Local** (the old chat, deprecated, removed Feb 2027). For the Copilot
+  harness the docs list `.github/skills` and `.github/agents`; `.claude/*` is only
+  documented for Local. Prompt files (`.github/prompts`) run only in Local — the docs say
+  to convert them to skills, which is why every `/opsx:*` command also exists as an
+  `openspec-*` skill. MCP: the root `.mcp.json` (`mcpServers`); `.vscode/mcp.json` is
+  Local-only and deprecated.
+- **Visual Studio 2026** reads agents only from `.github/agents/*.agent.md` (frontmatter
+  `name`, `description`, `model`, `tools`; its own tool names such as `readfile`,
+  `editfiles`, `code_search` — unknown names are ignored), skills from `.github/skills`,
+  `.claude/skills` and `.agents/skills`, instructions only from
+  `.github/copilot-instructions.md` and `*.instructions.md`, and MCP only from
+  `%USERPROFILE%\.mcp.json` and `<SOLUTIONDIR>\{.mcp.json,.vs\mcp.json,.vscode\mcp.json}`
+  with a `servers` key. The solution is `src/BoogaBooster.slnx`, so the root `.mcp.json`
+  is invisible to it — hence the `src/.mcp.json` mirror.
+- **Copilot cloud agent (github.com)** documents agents only under `.github/agents`;
+  skills from `.github/skills`, `.claude/skills`, `.agents/skills`; instructions from
+  `CLAUDE.md`, `AGENTS.md` and `copilot-instructions.md`. Its MCP servers are configured
+  in the repository's settings on github.com, not from a file — a maintainer must mirror
+  `.mcp.json` there by hand.
+- **Copilot CLI** reads agents from `.github/agents` **and** `.claude/agents`, skills from
+  `.github/skills`, `.agents/skills` and `.claude/skills`, commands from
+  `.claude/commands`, instructions from `CLAUDE.md`, `AGENTS.md`,
+  `copilot-instructions.md` and `*.instructions.md`, and MCP from `.mcp.json` /
+  `.github/mcp.json` (trusted folders only).
 - **Copilot agent tools**: built-in aliases `execute` (≙ `Bash`, `shell`, `powershell`),
   `read` (≙ `Read`), `edit` (≙ `Edit`, `Write`, `MultiEdit`), `search` (≙ `Grep`, `Glob`),
   `agent` (≙ `Task`), `web` (≙ `WebFetch`, `WebSearch`), `todo`. MCP tools are
@@ -57,13 +80,13 @@ Facts behind the table (re-verify when a product changes — see *Keeping this s
 | You want to… | Edit | Then |
 | --- | --- | --- |
 | Add/change an MCP server | `.mcp.json` | run the script (`--fix` regenerates `src/.mcp.json` and plugin entries) |
-| Add/change an agent | `.claude/agents/<name>.md` | check its `tools:` line (step 3); sync the plugin copy if bundled |
-| Add/change a skill | `.claude/skills/<name>/SKILL.md` | `name:` must equal the folder name; sync the plugin copy if bundled |
+| Add/change an agent | `.claude/agents/<name>.md` | check its `tools:` line (step 3); `--fix` generates `.github/agents/<name>.agent.md`; sync the plugin copy if bundled |
+| Add/change a skill | `.claude/skills/<name>/SKILL.md` | `name:` must equal the folder name; `--fix` copies it to `.github/skills/<name>/`; sync the plugin copy if bundled |
 | Add/change a slash command | `.claude/commands/<ns>/<name>.md` | `--fix` regenerates `.github/prompts/<ns>-<name>.prompt.md` |
 | Change repo-wide rules | `CLAUDE.md` | port the change into `.github/copilot-instructions.md` by hand (step 4) |
 
 If someone edited a **mirror** directly (a `.github/prompts/*.prompt.md`, a
-`.github/skills/*` twin, a plugin copy), port that edit back into the canonical file
+`.github/skills/*` twin, a `.github/agents/*.agent.md`, a plugin copy), port that edit back into the canonical file
 **first** — `--fix` overwrites mirrors from the canonical side and would discard it.
 Check with `git diff` before fixing.
 
@@ -79,10 +102,13 @@ node .claude/skills/ai-tooling-sync/scripts/sync-ai-tooling.mjs          # repor
 node .claude/skills/ai-tooling-sync/scripts/sync-ai-tooling.mjs --fix    # regenerate mechanical mirrors, then re-check
 ```
 
-`--fix` handles: command → prompt mirrors, `src/.mcp.json`, plugin MCP entries, and
-re-copying `.github/skills/*` and plugin skill/agent twins from `.claude/`. It never
-creates new twins, deletes canonical files, edits agents, bumps versions or touches
-instructions — those need judgement and are reported as findings.
+`--fix` handles: command → prompt mirrors, `src/.mcp.json`, plugin MCP entries, a
+`.github/skills/<name>/` copy of **every** skill, a generated `.github/agents/<name>.agent.md`
+for **every** agent (Copilot tool names only — `mcp__…` entries dropped, Claude built-ins
+mapped to `read`/`edit`/`search`/`execute`/… — and no `model:`, since Claude's model
+aliases mean nothing to Copilot), and re-copying existing plugin twins. It never deletes a
+Copilot-only file, creates new plugin twins, edits canonical agents, bumps versions or
+touches instructions — those need judgement and are reported as findings.
 
 The script has its own tests — run them after changing it:
 `node --test .claude/skills/ai-tooling-sync/scripts/sync-ai-tooling.test.mjs`.
@@ -150,11 +176,15 @@ tools: Read, Write, Edit, Glob, Grep, Bash, mcp__primeng__get_component, mcp__pr
 The product facts above drift faster than the code. When a finding surprises you, or
 a product release mentions agents/skills/MCP/prompt files, re-verify against:
 
-- VS Code — `code.visualstudio.com/docs/copilot/customization/` (`custom-agents`,
-  `agent-skills`, `mcp-servers`, `prompt-files`)
-- Copilot custom agents — `docs.github.com/en/copilot/reference/custom-agents-configuration`
-- Visual Studio MCP — `learn.microsoft.com/visualstudio/ide/mcp-servers` (the
-  `microsoft-learn` MCP server can fetch it)
+- VS Code — `code.visualstudio.com/docs/agents/reference/custom-agent-file-reference`,
+  `…/docs/agent-customization/agent-skills`, `…/docs/agent-customization/prompt-files`,
+  `…/docs/agents/reference/mcp-configuration`, `…/docs/agents/run/agent-harnesses`
+- Copilot custom agents — `docs.github.com/en/copilot/reference/custom-agents-configuration`;
+  CLI — `…/copilot/reference/copilot-cli-reference/cli-command-reference`; cloud agent
+  skills/MCP — `…/copilot/how-tos/use-copilot-agents/cloud-agent/`
+- Visual Studio — `learn.microsoft.com/visualstudio/ide/` `mcp-servers`,
+  `copilot-specialized-agents`, `copilot-agent-skills` (the `microsoft-learn` MCP
+  server can fetch them)
 - Claude Code — `code.claude.com/docs` (sub-agents, skills, slash commands, MCP)
 
 If a product starts reading a canonical source natively (e.g. VS Code learns

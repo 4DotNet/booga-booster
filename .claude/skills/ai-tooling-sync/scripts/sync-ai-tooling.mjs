@@ -7,10 +7,12 @@
 //   ... --json                                                               machine-readable findings
 //
 // Canonical sources and the mirrors derived from them:
-//   .claude/commands/<ns>/<name>.md  ->  .github/prompts/<ns>-<name>.prompt.md   (Copilot has no .claude/commands)
+//   .claude/commands/<ns>/<name>.md  ->  .github/prompts/<ns>-<name>.prompt.md   (VS Code / Visual Studio have no .claude/commands)
 //   .mcp.json (mcpServers)           ->  src/.mcp.json (servers)                 (Visual Studio reads <SOLUTIONDIR>)
 //   .mcp.json                        ->  plugins/*/.mcp.json entries             (same definition per server)
-//   .claude/skills/<name>/           ->  .github/skills/<name>/                  (only where a twin already exists)
+//   .claude/skills/<name>/           ->  .github/skills/<name>/                  (every skill; VS Code's Copilot harness reads .github/skills)
+//   .claude/agents/<name>.md         ->  .github/agents/<name>.agent.md          (every agent, Copilot tool names only; Visual Studio
+//                                                                                 and the github.com cloud agent read only .github/agents)
 //   .claude/{agents,skills}/         ->  plugins/*/{agents,skills}/              (only where a twin already exists)
 // Checked but never rewritten (they need judgement): agent tools: lines, plugin version bumps,
 // and whether CLAUDE.md and .github/copilot-instructions.md both name every asset.
@@ -35,6 +37,7 @@ export function run({ root, fix = false }) {
   syncPlugins(ctx, servers);
   syncSkillMirrors(ctx);
   checkAgents(ctx, servers);
+  syncAgentMirrors(ctx);
   checkInstructions(ctx, servers);
 
   return { findings, fixed };
@@ -291,14 +294,13 @@ function checkPluginVersion(ctx, base, manifestRel, manifest) {
 
 // ---------------------------------------------------------------- .github/skills mirrors
 
+// Every skill gets a .github/skills twin: VS Code's Copilot harness documents only .github/skills.
 function syncSkillMirrors(ctx) {
   for (const name of listDirs(ctx, ".github/skills")) {
     if (!exists(ctx, `.claude/skills/${name}`)) {
       report(ctx, "error", "skills", `.github/skills/${name}`,
-        "skill exists only under .github/skills, so Claude Code cannot see it; move it to .claude/skills (both tools read that)");
-      continue;
+        "skill exists only under .github/skills, so Claude Code cannot see it; move it to .claude/skills (the canonical side)");
     }
-    syncTwin(ctx, "skills", `.claude/skills/${name}`, `.github/skills/${name}`, true);
   }
   for (const name of listDirs(ctx, ".claude/skills")) {
     if (!exists(ctx, `.claude/skills/${name}/SKILL.md`)) {
@@ -311,8 +313,81 @@ function syncSkillMirrors(ctx) {
       report(ctx, "error", "skills", `.claude/skills/${name}/SKILL.md`,
         `name: is "${declared ?? ""}" but the folder is "${name}"; Copilot and VS Code require them to match`);
     }
-    if (!frontmatterValue(frontmatter, "description")) {
+    const description = frontmatterValue(frontmatter, "description");
+    if (!description) {
       report(ctx, "error", "skills", `.claude/skills/${name}/SKILL.md`, "skill has no description:, so neither tool can decide when to load it");
+    } else if (description.length > 1024) {
+      report(ctx, "error", "skills", `.claude/skills/${name}/SKILL.md`,
+        `description is ${description.length} characters; VS Code and Visual Studio silently skip skills over 1024`);
+    }
+    if (!/^[a-z0-9-]{1,64}$/.test(name)) {
+      report(ctx, "error", "skills", `.claude/skills/${name}`,
+        "skill folder/name must be lowercase letters, digits and hyphens, at most 64 characters, or VS Code will not load it");
+    }
+    const mirrorRel = `.github/skills/${name}`;
+    if (!exists(ctx, mirrorRel)) {
+      report(ctx, "error", "skills", mirrorRel, `missing Copilot mirror of .claude/skills/${name}`);
+      if (ctx.fix) copyTree(ctx, `.claude/skills/${name}`, mirrorRel);
+    } else {
+      syncTwin(ctx, "skills", `.claude/skills/${name}`, mirrorRel, true);
+    }
+  }
+}
+
+// ---------------------------------------------------------------- .github/agents mirrors
+
+// Visual Studio and the github.com coding agent only read .github/agents/*.agent.md, so every
+// agent gets a generated twin there. Copilot CLI prefers .github on a name clash, so the twin
+// is what Copilot runs: it carries Copilot's tool vocabulary only, and no Claude model alias.
+const AGENT_KEYS_NOT_MIRRORED = new Set(["tools", "model"]);
+
+export function copilotTools(tools) {
+  const out = [];
+  for (const tool of tools) {
+    if (/^mcp__/.test(tool)) continue; // Claude-only spelling; Copilot uses <server>/*
+    const mapped = CLAUDE_TO_COPILOT[tool] ?? tool;
+    if (!out.includes(mapped)) out.push(mapped);
+  }
+  return out;
+}
+
+export function copilotAgent(source, sourceRel) {
+  const { frontmatter, body } = splitFrontmatter(source);
+  const kept = [];
+  let skipping = false;
+  for (const line of frontmatter.split("\n")) {
+    const key = /^([\w-]+):/.exec(line)?.[1];
+    if (key) skipping = AGENT_KEYS_NOT_MIRRORED.has(key);
+    if (!skipping) kept.push(line);
+  }
+  const toolsValue = frontmatterValue(frontmatter, "tools");
+  if (toolsValue !== undefined) {
+    kept.push(`tools: [${copilotTools(parseTools(toolsValue)).map((t) => JSON.stringify(t)).join(", ")}]`);
+  }
+  return `---\n${kept.join("\n")}\n---\n\n<!-- Generated from ${sourceRel} by the ai-tooling-sync skill. Edit that file, then run sync-ai-tooling.mjs --fix. -->\n\n${body.replace(/^\n+/, "")}`;
+}
+
+function syncAgentMirrors(ctx) {
+  const expected = new Set();
+  for (const file of listFiles(ctx, ".claude/agents", ".md")) {
+    const sourceRel = `.claude/agents/${file}`;
+    const mirrorRel = `.github/agents/${file.replace(/\.md$/, "")}.agent.md`;
+    expected.add(mirrorRel);
+    const wanted = copilotAgent(readText(ctx, sourceRel), sourceRel);
+    if (!exists(ctx, mirrorRel)) {
+      report(ctx, "error", "agent-mirrors", mirrorRel, `missing Copilot mirror of ${sourceRel} (Visual Studio and the cloud agent read only .github/agents)`);
+    } else if (lf(readText(ctx, mirrorRel)) !== wanted) {
+      report(ctx, "error", "agent-mirrors", mirrorRel, `out of step with ${sourceRel}`);
+    } else {
+      continue;
+    }
+    if (ctx.fix) writeText(ctx, mirrorRel, wanted);
+  }
+  for (const file of listFiles(ctx, ".github/agents", ".md")) {
+    const rel = `.github/agents/${file}`;
+    if (!expected.has(rel)) {
+      report(ctx, "error", "agent-mirrors", rel,
+        "Copilot agent has no Claude twin; add it as .claude/agents/<name>.md (the canonical side) and let --fix generate this file, or delete it");
     }
   }
 }
