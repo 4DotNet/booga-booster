@@ -69,8 +69,9 @@ public interface IRideStore
 
     /// <summary>
     /// Seats single riders (idle/loading only), each into a distinct free seat — which
-    /// may be beside a stranger. The free seats taken are drawn at random from the
-    /// sampler, as is each rider's natural restraint-close delay. When there are more
+    /// may be beside a stranger. Seats beside an existing rider are filled first, then
+    /// singles pair up in empty gondolas, so group capacity is preserved; each rider's
+    /// natural restraint-close delay is drawn from the sampler. When there are more
     /// riders than free seats the domain rejects the call and nobody is seated.
     /// </summary>
     RideTelemetry SeatSingleRiders(IReadOnlyList<PassengerWeight> riders);

@@ -145,9 +145,10 @@ public sealed class RideStore : IRideStore, IRideTelemetryProvider
 
         lock (_gate)
         {
-            // The sampler's distinct-index selection picks random free seats just as it
-            // picks random empty gondolas for a group.
-            _ride.SeatSingleRiders(riders, _sampler.NextRestraintCloseDelay, _sampler.NextGondolaSelection);
+            // No random seat selection: the domain's capacity-saving default fills the
+            // seat beside a lone rider before opening an empty gondola, so single riders
+            // never take a whole gondola a later group could have used.
+            _ride.SeatSingleRiders(riders, _sampler.NextRestraintCloseDelay);
             return _ride.ToTelemetry();
         }
     }

@@ -288,11 +288,13 @@ public sealed class Ride : DomainModel
     /// <see cref="RideState.Loading"/>.
     /// </summary>
     /// <param name="selectSeats">
-    /// Chooses which free seats the riders take: given the number of free seats and the
-    /// number of riders, it returns that many distinct indices into the free-seat list
-    /// (in the stable order of <see cref="GreatMill.FreeSeats"/>). In production a
-    /// random selection is supplied; when omitted the free seats are filled in their
-    /// natural order (the deterministic default used by tests).
+    /// Overrides which free seats the riders take: given the number of free seats and
+    /// the number of riders, it returns that many distinct indices into the
+    /// capacity-saving free-seat list (seats beside an existing rider first, then the
+    /// seats of empty gondolas, each part in the stable order of
+    /// <see cref="GreatMill.FreeSeats"/>). When omitted — as in production — the riders
+    /// take that list from the front, which fills every lone rider's neighbouring seat
+    /// before opening an empty gondola and keeps whole gondolas free for groups.
     /// </param>
     /// <exception cref="DomainValidationException">
     /// The rider list is empty, the ride is not idle or loading, there are more riders
@@ -317,7 +319,14 @@ public sealed class Ride : DomainModel
             throw new DomainValidationException($"Single riders can only board while the ride is idle or loading (state: {_state}).");
         }
 
-        var free = _mill.FreeSeats().ToArray();
+        // Capacity-saving order: the seat beside someone already riding comes first,
+        // then the seats of empty gondolas in their stable order (so singles pair up
+        // two to a gondola). Spreading singles one per empty gondola would cost later
+        // groups — who need whole empty gondolas — capacity they could have had.
+        // OrderBy is stable, so each partition keeps the hub-then-gondola order.
+        var free = _mill.FreeSeats()
+            .OrderBy(slot => slot.Gondola.IsEmpty ? 1 : 0)
+            .ToArray();
         if (riders.Count > free.Length)
         {
             throw new DomainValidationException(

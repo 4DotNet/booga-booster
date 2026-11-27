@@ -206,6 +206,48 @@ public sealed class RideSeatSingleRidersTests
     }
 
     [Fact]
+    public void SeatSingleRiders_DefaultPlacement_FillsTheSeatBesideALoneRider_BeforeAnEmptyGondola()
+    {
+        var ride = Ride.Create();
+        // A lone group member in hub 2, gondola 1 (index 9 in the empty-gondola list).
+        ride.BoardGroup(Riders(1), NoDelay, selectGondolas: (_, _) => [9]);
+        Assert.Equal(TotalGondolas - 1, ride.EmptyGondolaCount);
+
+        ride.SeatSingleRiders(Riders(1), NoDelay);
+
+        var shared = Assert.Single(AllGondolas(ride), g => !g.IsEmpty);
+        Assert.Equal((2, 1), (shared.HubIndex, shared.Index));
+        Assert.Equal(2, shared.OccupiedSeatCount);
+        Assert.Equal(TotalGondolas - 1, ride.EmptyGondolaCount); // no gondola taken from groups
+    }
+
+    [Fact]
+    public void SeatSingleRiders_DefaultPlacement_PairsSinglesRatherThanSpreadingThem()
+    {
+        var ride = Ride.Create();
+
+        ride.SeatSingleRiders(Riders(4), NoDelay);
+
+        Assert.Equal(TotalGondolas - 2, ride.EmptyGondolaCount);
+        Assert.All(AllGondolas(ride).Where(g => !g.IsEmpty), g => Assert.Equal(2, g.OccupiedSeatCount));
+    }
+
+    [Fact]
+    public void RideStore_SeatSingleRiders_UsesTheCapacitySavingPlacement()
+    {
+        // The production path: a real store with its random sampler. Whichever gondola
+        // the random group selection put the lone rider in, the single sits beside them.
+        var store = new RideStore(new RandomRideEventSampler(seed: 42));
+        store.BoardGroup([new PassengerWeight(80d)]);
+        Assert.Equal(TotalGondolas - 1, store.EmptyGondolaCount);
+
+        store.SeatSingleRiders([new PassengerWeight(70d)]);
+
+        Assert.Equal(TotalGondolas - 1, store.EmptyGondolaCount);
+        Assert.Equal(TotalSeats - 2, store.FreeSeatCount);
+    }
+
+    [Fact]
     public void RideStore_SeatSingleRiders_SeatsUnderTheStoreAndReportsFreeSeats()
     {
         var store = new RideStore(new RandomRideEventSampler(seed: 1));
