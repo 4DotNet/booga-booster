@@ -35,7 +35,7 @@
 - [x] 6.1 Add `SingleRiderQueueTests`: arrival order, `TakeUpTo` for fewer/more/zero/empty, capacity refusal, `RequeueFront` ordering, and validation on construction.
 - [x] 6.2 Extend `RideQueueServiceTests`: enqueueing a single rider publishes `single-rider-queued`, taking returns and removes from the front, requeueing restores the front, and `GetStatus` reports both lines with group counts unaffected by singles.
 - [x] 6.3 Extend the filler tests: individuals are added each cycle within bounds, worst weather adds none, the singles capacity stops the stream early, and group arrivals are unchanged with the singles stream enabled (seeded `RandomSeed` for determinism).
-- [ ] 6.4 Run `dotnet test` for the Queue tests and confirm the module stays at or above 80% line coverage.
+- [x] 6.4 Run `dotnet test` for the Queue tests and confirm the module stays at or above 80% line coverage.
 
 ## 7. DigitalTwin domain — free seats and stranger pairing
 
@@ -58,7 +58,7 @@
 - [x] 9.1 Extend `RideLoadingCoordinatorTests`: a fitting group boards before any single rider; the top-up runs only after no group fits; the top-up runs when the group queue is empty; every free seat is filled when riders are available; fewer riders than seats leaves seats free; nothing happens when the ride is full or the singles line is empty.
 - [x] 9.2 Add tests that no rider is taken or seated while the ride is `Idle`, `Safe` or `Started`.
 - [x] 9.3 Add a test that a rider joining mid-loading is seated on a subsequent pass, and one that a seating failure returns the riders to the front of the line.
-- [ ] 9.4 Run `dotnet test BoogaBooster.slnx` and confirm the whole solution is green with DigitalTwin coverage at or above 80%.
+- [x] 9.4 Run `dotnet test BoogaBooster.slnx` and confirm the whole solution is green with DigitalTwin coverage at or above 80%.
 
 ## 10. Frontend
 
