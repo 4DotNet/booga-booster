@@ -55,7 +55,7 @@ SeatSingleRiders(
 
 which seats each rider into a distinct free seat and requires `riders.Count <= FreeSeatCount`, throwing `DomainValidationException` otherwise exactly as `BoardGroup` does. `Ride.FreeSeats` today returns `EmptyGondolaCount * SeatsPerGondola` — a group-oriented figure — and is renamed `GroupBoardableSeats` so the new, literal `FreeSeatCount` can take the honest name.
 
-Introducing a second measure rather than redefining `EmptyGondolaCount` is what keeps the relaxation surgical: group boarding keeps asking "how many *whole* gondolas are free", single-rider boarding asks "how many *seats* are free", and the no-mixing rule is relaxed by exactly one caller. Seat selection is injected the way `BoardGroup` injects gondola selection, so production randomizes which seats singles take while tests fill in natural order.
+Introducing a second measure rather than redefining `EmptyGondolaCount` is what keeps the relaxation surgical: group boarding keeps asking "how many *whole* gondolas are free", single-rider boarding asks "how many *seats* are free", and the no-mixing rule is relaxed by exactly one caller. Seat selection is injectable the way `BoardGroup` injects gondola selection, but production does **not** randomize it: by default singles take the free seats in a capacity-saving order — every seat beside someone already riding first, then the seats of empty gondolas in stable order, so singles pair up two to a gondola. (Changed during apply, from review: a uniformly random pick usually dropped a single into an empty gondola, leaving the seat beside a lone rider empty and costing a later group a whole gondola — contrary to the "fills the seat beside a group's lone member" scenario.)
 
 - *Alternative — let `BoardGroup` also use free seats:* would silently let two different groups share a gondola. Rejected outright; that rule is the point of the gondola-boarding capability.
 - *Alternative — the coordinator computes seat coordinates and calls `BoardPassenger` per seat:* leaks seat allocation out of the aggregate and races the simulation. Rejected per ADR-0003.
@@ -83,7 +83,7 @@ If seating throws after a take, the riders have already left the queue. The coor
 
 `IRideQueueService` gains:
 
-- `Task<PersonDto> EnqueueSingleRiderAsync(Guid rideId, CancellationToken ct)` — generates one person, appends them to the singles line, publishes `SingleRiderQueuedIntegrationEvent`.
+- `Task<PersonDto?> EnqueueSingleRiderAsync(Guid rideId, CancellationToken ct)` — generates one person, appends them to the singles line, publishes `SingleRiderQueuedIntegrationEvent`. Admission is atomic (`SingleRiderQueue.TryEnqueue`): a full line returns `null` rather than throwing, so a requeue racing the filler's capacity check can never fault the hosted filler. (Changed during apply, from review.)
 - `Task<IReadOnlyList<PersonDto>> TakeSingleRidersAsync(Guid rideId, int count, CancellationToken ct)` — up to `count` from the front; returns empty rather than throwing when the line is empty.
 - `Task RequeueSingleRidersAsync(Guid rideId, IReadOnlyList<PersonDto> people, CancellationToken ct)` — the compensation of decision 5.
 
@@ -128,7 +128,9 @@ A new `SingleRiderQueuedIntegrationEvent(Guid RideId, long PersonNumber, DateTim
 - **`QueueStatusDto` → `GetQueueStatusResponse` touches every consumer at once** → the DTO relocation and the shape change land together. Mitigation: only two consumers exist (the coordinator and the Angular panel) and both are in this change; doing the relocation now avoids reshaping the same contract twice.
 - **Singles can starve behind groups** → while groups keep fitting, no single boards. Mitigation: accepted and intended — group consistency keeps priority by request. The singles line has its own cap so a starved line stops growing rather than growing without bound.
 - **Odd seats are only filled when singles are waiting** → with an empty singles line the ride departs with the same stranded seats as today. Accepted; the arrival stream keeps the line stocked.
-- **Two takes per pass at ~120 Hz** → one extra in-memory snapshot and at most one bulk take per tick. Mitigation: the top-up phase exits immediately when `FreeSeatCount` is zero or the singles line is empty, matching the existing fast-path discipline.
+- **Two takes per pass at ~120 Hz** → one extra in-memory snapshot and at most one bulk take per tick. Mitigation: the top-up phase exits immediately when `FreeSeatCount` is zero or the singles line is empty, matching the existing fast-path discipline. Accepted: `GetStatus` — read by phase 1 every tick — now also snapshots the singles line (up to `MaxSingleRiderQueueLength` people); a groups-only read for the coordinator is a possible follow-up.
+- **Weather floors a small stream harder** → the singles count uses the same `ScaleForWeather` floor as groups, so with a base of 1–3 moderate weather suppresses singles proportionally more than a base of 4–8 suppresses groups (below `NiceWeather` ≈ 1/3 no single arrives). Accepted: the requirement is "the same way", and stochastic rounding can follow if the proportion matters.
+- **Requeue is a compensation path** → a pass that has to return riders tags `ride.single_riders.requeued` on its span, and a requeue that itself fails is logged at error with the person numbers rather than masking the seating failure.
 
 ## Migration Plan
 
