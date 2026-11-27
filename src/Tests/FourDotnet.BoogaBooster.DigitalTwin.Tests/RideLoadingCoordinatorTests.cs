@@ -6,6 +6,7 @@ using FourDotnet.BoogaBooster.Queue.Abstractions;
 using FourDotnet.BoogaBooster.Queue.Abstractions.DataTransferObjects;
 using FourDotnet.BoogaBooster.Queue.Abstractions.DataTransferObjects.GetQueueStatus;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using Xunit;
 
 namespace FourDotnet.BoogaBooster.DigitalTwin.Tests;
@@ -267,6 +268,266 @@ public sealed class RideLoadingCoordinatorTests
         Assert.Equal(RideState.Loading, store.CurrentState);
     }
 
+    // Single riders — the top-up phase after group loading.
+
+    private const int TotalSeats = TotalGondolas * RideParameters.SeatsPerGondola;
+
+    private static PersonDto MakePerson() =>
+        new(_nextPersonNumber++, Faker.Name.FullName(), Faker.Random.Int(30, 150));
+
+    private static PersonDto[] EnqueueSingles(FakeRideQueueService queue, int count) =>
+        [.. Enumerable.Range(0, count).Select(_ => queue.EnqueueSingle(MakePerson()))];
+
+    /// <summary>Seats riders (as one group) until exactly <paramref name="freeSeats"/> seats remain.</summary>
+    private static void LeaveFreeSeats(RideStore store, int freeSeats)
+    {
+        var members = Enumerable.Range(0, TotalSeats - freeSeats).Select(_ => new PassengerWeight(75d)).ToArray();
+        store.BoardGroup(members);
+        Assert.Equal(freeSeats, store.FreeSeatCount);
+    }
+
+    [Fact]
+    public async Task RunLoadingPass_BoardsAFittingGroup_BeforeAnySingleRider()
+    {
+        var (coordinator, store, queue, rideId) = Loading();
+        LeaveEmptyGondolas(store, 1);
+        queue.Enqueue(MakeGroup(2));
+        EnqueueSingles(queue, 2);
+
+        await coordinator.RunLoadingPassAsync(rideId, Ct);
+
+        Assert.Empty(queue.Groups);
+        Assert.Equal(2, queue.SingleRiders.Count);
+        Assert.Equal(0, queue.SingleRiderTakeCount);
+        Assert.Equal(0, store.FreeSeatCount);
+    }
+
+    [Fact]
+    public async Task RunLoadingPass_LookAheadIsUnchanged_AndSinglesOnlyFillWhatIsLeft()
+    {
+        var (coordinator, store, queue, rideId) = Loading();
+        LeaveEmptyGondolas(store, 2);
+        var big = queue.Enqueue(MakeGroup(6));   // needs 3 gondolas — does not fit
+        var mid = queue.Enqueue(MakeGroup(3));   // needs 2 — backfilled exactly as before
+        var tail = queue.Enqueue(MakeGroup(9));
+        EnqueueSingles(queue, 3);
+
+        await coordinator.RunLoadingPassAsync(rideId, Ct);
+
+        Assert.DoesNotContain(queue.Groups, g => g.GroupId == mid.GroupId);
+        Assert.Equal(new[] { big.GroupId, tail.GroupId }, queue.Groups.Select(g => g.GroupId));
+        // The group of three left one seat beside its lone member; one single takes it.
+        Assert.Equal(2, queue.SingleRiders.Count);
+        Assert.Equal(0, store.FreeSeatCount);
+    }
+
+    [Fact]
+    public async Task RunLoadingPass_TopsUp_OnceNoWaitingGroupFits_WithoutSplittingTheGroup()
+    {
+        var (coordinator, store, queue, rideId) = Loading();
+        LeaveEmptyGondolas(store, 2);
+        var big = queue.Enqueue(MakeGroup(6)); // never fits two gondolas
+        EnqueueSingles(queue, 5);
+
+        await coordinator.RunLoadingPassAsync(rideId, Ct);
+
+        var waiting = Assert.Single(queue.Groups);
+        Assert.Equal(big.GroupId, waiting.GroupId);
+        Assert.Equal(6, waiting.Size);
+        Assert.Single(queue.SingleRiders);
+        Assert.Equal(0, store.FreeSeatCount);
+    }
+
+    [Fact]
+    public async Task RunLoadingPass_TopsUp_WhenTheGroupQueueIsEmpty()
+    {
+        var (coordinator, store, queue, rideId) = Loading();
+        EnqueueSingles(queue, 5);
+
+        await coordinator.RunLoadingPassAsync(rideId, Ct);
+
+        Assert.Empty(queue.SingleRiders);
+        Assert.Equal(TotalSeats - 5, store.FreeSeatCount);
+    }
+
+    [Fact]
+    public async Task RunLoadingPass_FillsEveryFreeSeat_IncludingTheSeatBesideALoneRider()
+    {
+        var (coordinator, store, queue, rideId) = Loading();
+        LeaveFreeSeats(store, 5); // two empty gondolas plus the seat beside a lone rider
+        Assert.Equal(2, store.EmptyGondolaCount);
+        var singles = EnqueueSingles(queue, 7);
+
+        await coordinator.RunLoadingPassAsync(rideId, Ct);
+
+        Assert.Equal(0, store.FreeSeatCount);
+        Assert.Equal(singles[5..], queue.SingleRiders);
+    }
+
+    [Fact]
+    public async Task RunLoadingPass_FewerRidersThanSeats_SeatsEveryoneAndLeavesSeatsFree()
+    {
+        var (coordinator, store, queue, rideId) = Loading();
+        LeaveFreeSeats(store, 5);
+        EnqueueSingles(queue, 2);
+
+        await coordinator.RunLoadingPassAsync(rideId, Ct);
+
+        Assert.Empty(queue.SingleRiders);
+        Assert.Equal(3, store.FreeSeatCount);
+    }
+
+    [Fact]
+    public async Task RunLoadingPass_SeatsSingleRidersInArrivalOrder()
+    {
+        var (coordinator, store, queue, rideId) = Loading();
+        LeaveFreeSeats(store, 2);
+        var singles = EnqueueSingles(queue, 3);
+
+        await coordinator.RunLoadingPassAsync(rideId, Ct);
+
+        var remaining = Assert.Single(queue.SingleRiders);
+        Assert.Equal(singles[2], remaining);
+        Assert.Equal(0, store.FreeSeatCount);
+    }
+
+    [Fact]
+    public async Task RunLoadingPass_OnAFullRide_TakesNoSingleRider()
+    {
+        var (coordinator, store, queue, rideId) = Loading();
+        LeaveFreeSeats(store, 0);
+        EnqueueSingles(queue, 3);
+
+        await coordinator.RunLoadingPassAsync(rideId, Ct);
+
+        Assert.Equal(0, queue.SingleRiderTakeCount);
+        Assert.Equal(3, queue.SingleRiders.Count);
+    }
+
+    [Fact]
+    public async Task RunLoadingPass_WithAnEmptySinglesLine_SeatsNobody()
+    {
+        var (coordinator, store, queue, rideId) = Loading();
+        LeaveFreeSeats(store, 3);
+
+        await coordinator.RunLoadingPassAsync(rideId, Ct);
+
+        Assert.Equal(3, store.FreeSeatCount);
+        Assert.Equal(RideState.Loading, store.CurrentState);
+    }
+
+    [Theory]
+    [InlineData(RideState.Idle)]
+    [InlineData(RideState.Safe)]
+    [InlineData(RideState.Started)]
+    public async Task RunLoadingPass_OutsideLoading_TakesAndSeatsNoSingleRider(RideState state)
+    {
+        var store = NewStore();
+        if (state is not RideState.Idle)
+        {
+            // An empty ride is safe, so it can be driven to Safe and on to Started.
+            store.RequestStateTransition(RideState.Loading);
+            store.RequestStateTransition(RideState.Safe);
+            if (state is RideState.Started)
+            {
+                store.RequestStateTransition(RideState.Started);
+            }
+        }
+
+        Assert.Equal(state, store.CurrentState);
+        var queue = new FakeRideQueueService();
+        EnqueueSingles(queue, 3);
+
+        await NewCoordinator(store, queue).RunLoadingPassAsync(Guid.NewGuid(), Ct);
+
+        Assert.Equal(0, queue.SingleRiderTakeCount);
+        Assert.Equal(3, queue.SingleRiders.Count);
+        Assert.Equal(TotalSeats, store.FreeSeatCount);
+    }
+
+    [Fact]
+    public async Task RunLoadingPass_ASingleRiderJoiningMidLoading_IsSeatedOnALaterPass()
+    {
+        var (coordinator, store, queue, rideId) = Loading();
+        LeaveFreeSeats(store, 1);
+
+        await coordinator.RunLoadingPassAsync(rideId, Ct);
+        Assert.Equal(1, store.FreeSeatCount);
+
+        EnqueueSingles(queue, 1);
+        await coordinator.RunLoadingPassAsync(rideId, Ct);
+
+        Assert.Empty(queue.SingleRiders);
+        Assert.Equal(0, store.FreeSeatCount);
+    }
+
+    [Fact]
+    public async Task RunLoadingPass_WhenSeatingFails_ReturnsTheRidersToTheFrontInOrder()
+    {
+        var store = new Moq.Mock<IRideStore>();
+        store.SetupGet(s => s.CurrentState).Returns(RideState.Loading);
+        store.SetupGet(s => s.EmptyGondolaCount).Returns(0);
+        store.SetupGet(s => s.FreeSeatCount).Returns(2);
+        store
+            .Setup(s => s.SeatSingleRiders(Moq.It.IsAny<IReadOnlyList<PassengerWeight>>()))
+            .Throws(new FourDotnet.BoogaBooster.Core.DomainValidationException("seat taken"));
+        var queue = new FakeRideQueueService();
+        var singles = EnqueueSingles(queue, 3);
+        var coordinator = new RideLoadingCoordinator(store.Object, NullLogger<RideLoadingCoordinator>.Instance, queue);
+
+        await Assert.ThrowsAsync<FourDotnet.BoogaBooster.Core.DomainValidationException>(
+            () => coordinator.RunLoadingPassAsync(Guid.NewGuid(), Ct));
+
+        Assert.Equal(singles, queue.SingleRiders);
+    }
+
+    [Fact]
+    public async Task RunLoadingPass_WhenTheRequeueAlsoFails_TheSeatingFailureStillSurfaces()
+    {
+        var store = new Moq.Mock<IRideStore>();
+        store.SetupGet(s => s.CurrentState).Returns(RideState.Loading);
+        store.SetupGet(s => s.EmptyGondolaCount).Returns(0);
+        store.SetupGet(s => s.FreeSeatCount).Returns(1);
+        store
+            .Setup(s => s.SeatSingleRiders(Moq.It.IsAny<IReadOnlyList<PassengerWeight>>()))
+            .Throws(new FourDotnet.BoogaBooster.Core.DomainValidationException("seat taken"));
+        var queue = new Moq.Mock<IRideQueueService>();
+        queue
+            .Setup(q => q.TakeSingleRidersAsync(Moq.It.IsAny<Guid>(), 1, Moq.It.IsAny<CancellationToken>()))
+            .ReturnsAsync([MakePerson()]);
+        queue
+            .Setup(q => q.RequeueSingleRidersAsync(
+                Moq.It.IsAny<Guid>(), Moq.It.IsAny<IReadOnlyList<PersonDto>>(), Moq.It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("queue unreachable"));
+        var coordinator = new RideLoadingCoordinator(store.Object, NullLogger<RideLoadingCoordinator>.Instance, queue.Object);
+
+        await Assert.ThrowsAsync<FourDotnet.BoogaBooster.Core.DomainValidationException>(
+            () => coordinator.RunLoadingPassAsync(Guid.NewGuid(), Ct));
+    }
+
+    [Fact]
+    public async Task RunLoadingPass_WhenCapacityShrinksAfterTheTake_SeatsWhatFitsAndRequeuesTheRest()
+    {
+        var store = new Moq.Mock<IRideStore>();
+        store.SetupGet(s => s.CurrentState).Returns(RideState.Loading);
+        store.SetupGet(s => s.EmptyGondolaCount).Returns(0);
+        store.SetupSequence(s => s.FreeSeatCount).Returns(3).Returns(1).Returns(0);
+        IReadOnlyList<PassengerWeight>? seated = null;
+        store
+            .Setup(s => s.SeatSingleRiders(Moq.It.IsAny<IReadOnlyList<PassengerWeight>>()))
+            .Callback<IReadOnlyList<PassengerWeight>>(riders => seated = riders);
+        var queue = new FakeRideQueueService();
+        var singles = EnqueueSingles(queue, 4);
+        var coordinator = new RideLoadingCoordinator(store.Object, NullLogger<RideLoadingCoordinator>.Instance, queue);
+
+        await coordinator.RunLoadingPassAsync(Guid.NewGuid(), Ct);
+
+        Assert.NotNull(seated);
+        var rider = Assert.Single(seated);
+        Assert.Equal(singles[0].WeightInKilograms, rider.Kilograms);
+        Assert.Equal(singles[1..], queue.SingleRiders);
+    }
+
     /// <summary>
     /// In-memory <see cref="IRideQueueService"/> for the coordinator tests: an ordered
     /// list of groups that supports the status snapshot and take-by-id the coordinator
@@ -276,8 +537,14 @@ public sealed class RideLoadingCoordinatorTests
     private sealed class FakeRideQueueService : IRideQueueService
     {
         private readonly List<QueuedGroupDto> _groups = [];
+        private readonly List<PersonDto> _singles = [];
 
         public IReadOnlyList<QueuedGroupDto> Groups => _groups;
+
+        public IReadOnlyList<PersonDto> SingleRiders => _singles;
+
+        /// <summary>How many times the coordinator asked for single riders.</summary>
+        public int SingleRiderTakeCount { get; private set; }
 
         public QueuedGroupDto Enqueue(QueuedGroupDto group)
         {
@@ -285,11 +552,35 @@ public sealed class RideLoadingCoordinatorTests
             return group;
         }
 
+        public PersonDto EnqueueSingle(PersonDto person)
+        {
+            _singles.Add(person);
+            return person;
+        }
+
         public Task<IReadOnlyList<QueuedGroupDto>> EnqueueGroupAsync(Guid rideId, int groupSize, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
         public GetQueueStatusResponse GetStatus(Guid rideId) =>
-            new(rideId, _groups.Count, _groups.Sum(g => g.Size), [.. _groups]);
+            new(rideId, _groups.Count, _groups.Sum(g => g.Size), [.. _groups], _singles.Count, [.. _singles]);
+
+        public Task<PersonDto?> EnqueueSingleRiderAsync(Guid rideId, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<IReadOnlyList<PersonDto>> TakeSingleRidersAsync(Guid rideId, int count, CancellationToken cancellationToken)
+        {
+            SingleRiderTakeCount++;
+            var take = Math.Clamp(count, 0, _singles.Count);
+            IReadOnlyList<PersonDto> taken = [.. _singles.Take(take)];
+            _singles.RemoveRange(0, take);
+            return Task.FromResult(taken);
+        }
+
+        public Task RequeueSingleRidersAsync(Guid rideId, IReadOnlyList<PersonDto> people, CancellationToken cancellationToken)
+        {
+            _singles.InsertRange(0, people);
+            return Task.CompletedTask;
+        }
 
         public Task<QueuedGroupDto?> TakeGroupAsync(Guid rideId, Guid groupId, CancellationToken cancellationToken)
         {

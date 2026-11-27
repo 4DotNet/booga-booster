@@ -70,4 +70,19 @@ public class IntegrationEventContractTests
         Assert.Equal(queuedAt, @event.QueuedAt);
         Assert.IsAssignableFrom<IIntegrationEvent>(@event);
     }
+
+    [Fact]
+    public void SingleRiderQueuedEvent_DeclaresTopic_AndCarriesPayload()
+    {
+        var rideId = Guid.NewGuid();
+        var queuedAt = DateTimeOffset.UnixEpoch;
+
+        var @event = new SingleRiderQueuedIntegrationEvent(rideId, PersonNumber: 42, queuedAt);
+
+        Assert.Equal("single-rider-queued", TopicNameResolver.Resolve<SingleRiderQueuedIntegrationEvent>());
+        Assert.Equal(rideId, @event.RideId);
+        Assert.Equal(42, @event.PersonNumber);
+        Assert.Equal(queuedAt, @event.QueuedAt);
+        Assert.IsAssignableFrom<IIntegrationEvent>(@event);
+    }
 }

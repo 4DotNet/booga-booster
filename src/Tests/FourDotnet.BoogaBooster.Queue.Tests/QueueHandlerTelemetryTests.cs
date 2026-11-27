@@ -50,7 +50,9 @@ public sealed class QueueHandlerTelemetryTests : IDisposable
             rideId,
             GroupCount: 1,
             PeopleWaiting: 1,
-            Groups: [new QueuedGroupDto(Guid.NewGuid(), [person])]);
+            Groups: [new QueuedGroupDto(Guid.NewGuid(), [person])],
+            SingleRidersWaiting: 1,
+            SingleRiders: [new PersonDto(2, "Person 2", 70)]);
         var service = new Mock<IRideQueueService>();
         service.Setup(s => s.GetStatus(rideId)).Returns(snapshot);
 
@@ -62,9 +64,12 @@ public sealed class QueueHandlerTelemetryTests : IDisposable
         Assert.Equal(rideId, activity.GetTagItem("queue.ride.id"));
         Assert.Equal(1, activity.GetTagItem("queue.group.count"));
         Assert.Equal(1, activity.GetTagItem("queue.people.waiting"));
+        Assert.Equal(1, activity.GetTagItem("queue.single_riders.waiting"));
         Assert.DoesNotContain(
             activity.Tags,
-            tag => tag.Value is not null && tag.Value.Contains(person.Name, StringComparison.Ordinal));
+            tag => tag.Value is not null
+                && (tag.Value.Contains(person.Name, StringComparison.Ordinal)
+                    || tag.Value.Contains("Person 2", StringComparison.Ordinal)));
     }
 
     [Fact]

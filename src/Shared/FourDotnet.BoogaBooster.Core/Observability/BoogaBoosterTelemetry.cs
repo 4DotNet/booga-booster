@@ -90,6 +90,15 @@ public static class BoogaBoosterTelemetry
         description: "Number of people added to a ride queue.");
 
     /// <summary>
+    /// Counts individuals joining a ride's single-riders line. Kept apart from
+    /// <see cref="QueuePeopleQueued"/> so single riders never inflate the group headcount.
+    /// </summary>
+    public static readonly Counter<long> QueueSingleRidersQueued = Meter.CreateCounter<long>(
+        "boogabooster.queue.single_riders.queued",
+        unit: "{person}",
+        description: "Number of individuals added to a ride's single-riders line.");
+
+    /// <summary>
     /// Counts weather disturbances an operator raised, tagged by kind
     /// (<c>precipitation</c> / <c>strong-wind</c>).
     /// </summary>

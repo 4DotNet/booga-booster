@@ -214,6 +214,53 @@ public sealed class GreatMill : DomainModel
         }
     }
 
+    /// <summary>
+    /// How many seats across the ride are unoccupied, counting every free seat —
+    /// including the free seat beside a passenger in a partly-occupied gondola. This
+    /// is the capacity single riders can take; group boarding uses
+    /// <see cref="EmptyGondolaCount"/> instead, because groups never share a gondola.
+    /// </summary>
+    public int FreeSeatCount
+    {
+        get
+        {
+            var count = 0;
+            foreach (var hub in _hubs)
+            {
+                foreach (var gondola in hub.Gondolas)
+                {
+                    count += RideParameters.SeatsPerGondola - gondola.OccupiedSeatCount;
+                }
+            }
+
+            return count;
+        }
+    }
+
+    /// <summary>
+    /// Every unoccupied seat across the ride, as gondola/seat pairs, hub by hub and
+    /// gondola by gondola (left seat before right) — the same stable order as
+    /// <see cref="EmptyGondolas"/>.
+    /// </summary>
+    public IEnumerable<(Gondola Gondola, SeatPosition Seat)> FreeSeats()
+    {
+        foreach (var hub in _hubs)
+        {
+            foreach (var gondola in hub.Gondolas)
+            {
+                if (!gondola.GetSeat(SeatPosition.Left).IsOccupied)
+                {
+                    yield return (gondola, SeatPosition.Left);
+                }
+
+                if (!gondola.GetSeat(SeatPosition.Right).IsOccupied)
+                {
+                    yield return (gondola, SeatPosition.Right);
+                }
+            }
+        }
+    }
+
     /// <summary>The empty gondolas across the ride, hub by hub, in a stable order.</summary>
     public IEnumerable<Gondola> EmptyGondolas()
     {

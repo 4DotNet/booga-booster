@@ -41,5 +41,6 @@ public sealed class GetQueueStatusQueryHandler : QueryHandler<GetQueueStatusQuer
     {
         activity.SetTag(QueueTelemetryAttributes.GroupCount, response.GroupCount);
         activity.SetTag(QueueTelemetryAttributes.PeopleWaiting, response.PeopleWaiting);
+        activity.SetTag(QueueTelemetryAttributes.SingleRidersWaiting, response.SingleRidersWaiting);
     }
 }

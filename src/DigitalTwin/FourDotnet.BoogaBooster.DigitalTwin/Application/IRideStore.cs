@@ -31,6 +31,12 @@ public interface IRideStore
     /// </summary>
     int EmptyGondolaCount { get; }
 
+    /// <summary>
+    /// The number of unoccupied seats across the ride, including the free seat beside
+    /// a passenger in a partly-occupied gondola — the capacity single riders can take.
+    /// </summary>
+    int FreeSeatCount { get; }
+
     /// <summary>Advances the simulation by one fixed <paramref name="dt"/> step.</summary>
     RideTelemetry Advance(TimeSpan dt);
 
@@ -60,6 +66,15 @@ public interface IRideStore
     /// is seated. Each member's natural restraint-close delay is drawn from the sampler.
     /// </summary>
     RideTelemetry BoardGroup(IReadOnlyList<PassengerWeight> members);
+
+    /// <summary>
+    /// Seats single riders (idle/loading only), each into a distinct free seat — which
+    /// may be beside a stranger. Seats beside an existing rider are filled first, then
+    /// singles pair up in empty gondolas, so group capacity is preserved; each rider's
+    /// natural restraint-close delay is drawn from the sampler. When there are more
+    /// riders than free seats the domain rejects the call and nobody is seated.
+    /// </summary>
+    RideTelemetry SeatSingleRiders(IReadOnlyList<PassengerWeight> riders);
 
     /// <summary>Engages or releases a specific gondola's yaw brake.</summary>
     RideTelemetry SetGondolaBrake(int hubIndex, int gondolaIndex, GondolaBrakeState brake);

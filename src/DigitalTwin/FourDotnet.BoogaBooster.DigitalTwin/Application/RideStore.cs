@@ -61,6 +61,17 @@ public sealed class RideStore : IRideStore, IRideTelemetryProvider
         }
     }
 
+    public int FreeSeatCount
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _ride.FreeSeatCount;
+            }
+        }
+    }
+
     public RideTelemetry Advance(TimeSpan dt)
     {
         lock (_gate)
@@ -124,6 +135,20 @@ public sealed class RideStore : IRideStore, IRideTelemetryProvider
         lock (_gate)
         {
             _ride.BoardGroup(members, _sampler.NextRestraintCloseDelay, _sampler.NextGondolaSelection);
+            return _ride.ToTelemetry();
+        }
+    }
+
+    public RideTelemetry SeatSingleRiders(IReadOnlyList<PassengerWeight> riders)
+    {
+        ArgumentNullException.ThrowIfNull(riders);
+
+        lock (_gate)
+        {
+            // No random seat selection: the domain's capacity-saving default fills the
+            // seat beside a lone rider before opening an empty gondola, so single riders
+            // never take a whole gondola a later group could have used.
+            _ride.SeatSingleRiders(riders, _sampler.NextRestraintCloseDelay);
             return _ride.ToTelemetry();
         }
     }
