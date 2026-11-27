@@ -39,6 +39,7 @@ describe('HttpQueueSource', () => {
 
     expect(source.queue()?.groupCount).toBe(12);
     expect(source.queue()?.peopleWaiting).toBe(34);
+    expect(source.queue()?.singleRidersWaiting).toBe(5);
     expect(source.status()).toBe('ready');
   });
 
