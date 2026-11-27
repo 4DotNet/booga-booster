@@ -39,15 +39,15 @@
 
 ## 7. DigitalTwin domain — free seats and stranger pairing
 
-- [ ] 7.1 Add `FreeSeatCount` and `FreeSeats()` (yielding gondola/seat pairs in the existing stable hub-then-gondola order) to `GreatMill`, counting every unoccupied seat regardless of whether the gondola is partly occupied.
-- [ ] 7.2 Rename `Ride.FreeSeats` to `Ride.GroupBoardableSeats` (still `EmptyGondolaCount * SeatsPerGondola`) and update every caller; add `Ride.FreeSeatCount` delegating to the mill.
-- [ ] 7.3 Add `Ride.SeatSingleRiders(IReadOnlyList<PassengerWeight> riders, Func<TimeSpan> restraintCloseDelay, Func<int, int, IReadOnlyList<int>>? selectSeats = null)`: reject an empty rider list and a ride not `Idle`/`Loading`, throw `DomainValidationException` when `riders.Count > FreeSeatCount`, seat each rider into a distinct free seat, force `Loading` and mark changed.
-- [ ] 7.4 Confirm `Ride.BoardGroup` and `GreatMill.EmptyGondolaCount` are unchanged, so groups still take only whole empty gondolas.
-- [ ] 7.5 Add domain tests: a single rider fills the seat beside an earlier group's lone member, two singles share an empty gondola, a group is still refused a partly-occupied gondola, seating more riders than free seats throws, seat selection is honoured, and seating from a non-loadable state throws.
+- [x] 7.1 Add `FreeSeatCount` and `FreeSeats()` (yielding gondola/seat pairs in the existing stable hub-then-gondola order) to `GreatMill`, counting every unoccupied seat regardless of whether the gondola is partly occupied.
+- [x] 7.2 Rename `Ride.FreeSeats` to `Ride.GroupBoardableSeats` (still `EmptyGondolaCount * SeatsPerGondola`) and update every caller; add `Ride.FreeSeatCount` delegating to the mill.
+- [x] 7.3 Add `Ride.SeatSingleRiders(IReadOnlyList<PassengerWeight> riders, Func<TimeSpan> restraintCloseDelay, Func<int, int, IReadOnlyList<int>>? selectSeats = null)`: reject an empty rider list and a ride not `Idle`/`Loading`, throw `DomainValidationException` when `riders.Count > FreeSeatCount`, seat each rider into a distinct free seat, force `Loading` and mark changed.
+- [x] 7.4 Confirm `Ride.BoardGroup` and `GreatMill.EmptyGondolaCount` are unchanged, so groups still take only whole empty gondolas.
+- [x] 7.5 Add domain tests: a single rider fills the seat beside an earlier group's lone member, two singles share an empty gondola, a group is still refused a partly-occupied gondola, seating more riders than free seats throws, seat selection is honoured, and seating from a non-loadable state throws.
 
 ## 8. DigitalTwin application — the top-up phase
 
-- [ ] 8.1 Expose `int FreeSeatCount { get; }` and `RideTelemetry SeatSingleRiders(IReadOnlyList<PassengerWeight> riders)` on `IRideStore`, implementing them in `RideStore` under the existing store lock and drawing the restraint delay and seat selection from `_sampler`.
+- [x] 8.1 Expose `int FreeSeatCount { get; }` and `RideTelemetry SeatSingleRiders(IReadOnlyList<PassengerWeight> riders)` on `IRideStore`, implementing them in `RideStore` under the existing store lock and drawing the restraint delay and seat selection from `_sampler`.
 - [ ] 8.2 Extend `RideLoadingCoordinator.RunLoadingPassAsync` with the top-up phase after the existing group loop: return unless still `Loading`; read `FreeSeatCount` and return when zero; take up to that many single riders; return when none came back.
 - [ ] 8.3 Clamp the take to `Math.Min(taken.Count, _store.FreeSeatCount)` immediately before seating, and on any failure return the un-seated riders to the front of the line via `RequeueSingleRidersAsync`.
 - [ ] 8.4 Log the top-up outcome (riders seated, seats still free) in the style of the existing group-boarding log, keeping the pass a silent no-op when nothing happens.
