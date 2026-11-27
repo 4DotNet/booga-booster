@@ -26,7 +26,7 @@
 
 ## 5. Queue background filler
 
-- [x] 5.1 In `RideQueueFillerService.FillRideAsync`, plan the singles headcount with `ArrivalPlanner.PlanArrivalCount(MinSingleArrivalsPerCycle, MaxSingleArrivalsPerCycle, _rng)` followed by `ArrivalPlanner.ScaleForWeather(...)`, using the same `_rng` and the same weather read as the group stream.
+- [x] 5.1 In `RideQueueFillerService.FillRideAsync`, plan the singles headcount with `ArrivalPlanner.PlanArrivalCount(MinSingleArrivalsPerCycle, MaxSingleArrivalsPerCycle, _singlesRng)` followed by `ArrivalPlanner.ScaleForWeather(...)`, using the same weather read as the group stream and a dedicated `_singlesRng` seeded from `RandomSeed` (see design decision 7) so the group draws are never shifted.
 - [x] 5.2 Enqueue that many individuals one at a time via `EnqueueSingleRiderAsync`, breaking out early (with a debug log, like the group path) when the singles line reports it cannot accept another person.
 - [x] 5.3 Verify the group arrival planning is untouched — the singles stream is planned and enqueued after the groups and shares no budget with them.
 
