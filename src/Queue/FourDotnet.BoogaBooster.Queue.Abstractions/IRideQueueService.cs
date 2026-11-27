@@ -44,4 +44,40 @@ public interface IRideQueueService
     /// treat <c>null</c> as "already gone" and move on rather than retry.
     /// </returns>
     Task<QueuedGroupDto?> TakeGroupAsync(Guid rideId, Guid groupId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Generates one individual guest, appends them to the back of the given ride's
+    /// single-riders line, publishes a single-rider-queued integration event and
+    /// returns the person as enqueued.
+    /// </summary>
+    /// <remarks>
+    /// A single rider is a guest who consented to being seated beside a stranger. They
+    /// are held apart from the regular queue: a group of one is not a single rider.
+    /// </remarks>
+    /// <remarks>
+    /// Throws a domain validation exception when the single-riders line is already at
+    /// its configured capacity; callers that must not fail check capacity first.
+    /// </remarks>
+    Task<PersonDto> EnqueueSingleRiderAsync(Guid rideId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Removes up to <paramref name="count"/> individuals from the front of the given
+    /// ride's single-riders line, in arrival order, and returns them.
+    /// </summary>
+    /// <returns>
+    /// The removed individuals in arrival order — possibly fewer than
+    /// <paramref name="count"/> when the line is shorter, and empty when nobody is
+    /// waiting, the ride has no single-riders line yet, or <paramref name="count"/> is
+    /// zero or less. This method never throws for an empty line.
+    /// </returns>
+    Task<IReadOnlyList<PersonDto>> TakeSingleRidersAsync(Guid rideId, int count, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Returns individuals previously taken with <see cref="TakeSingleRidersAsync"/>
+    /// but not seated to the <em>front</em> of the given ride's single-riders line, in
+    /// their original relative order, so a failed boarding neither loses a guest nor
+    /// costs them their place. Requeueing ignores the line's capacity: these guests
+    /// were already admitted.
+    /// </summary>
+    Task RequeueSingleRidersAsync(Guid rideId, IReadOnlyList<PersonDto> people, CancellationToken cancellationToken);
 }

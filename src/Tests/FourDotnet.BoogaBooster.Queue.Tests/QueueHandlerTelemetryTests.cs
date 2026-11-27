@@ -50,7 +50,9 @@ public sealed class QueueHandlerTelemetryTests : IDisposable
             rideId,
             GroupCount: 1,
             PeopleWaiting: 1,
-            Groups: [new QueuedGroupDto(Guid.NewGuid(), [person])]);
+            Groups: [new QueuedGroupDto(Guid.NewGuid(), [person])],
+            SingleRidersWaiting: 0,
+            SingleRiders: []);
         var service = new Mock<IRideQueueService>();
         service.Setup(s => s.GetStatus(rideId)).Returns(snapshot);
 

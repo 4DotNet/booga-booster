@@ -12,9 +12,10 @@ using Microsoft.Extensions.Logging;
 namespace FourDotnet.BoogaBooster.Queue;
 
 /// <summary>
-/// Default <see cref="IRideQueueService"/>. Enqueues arriving groups onto the
-/// in-memory per-ride queues and publishes a <see cref="GroupQueuedIntegrationEvent"/>
-/// for every group that joins a line.
+/// Default <see cref="IRideQueueService"/>. Enqueues arriving groups and single
+/// riders onto the in-memory per-ride lines, publishing a
+/// <see cref="GroupQueuedIntegrationEvent"/> for every group and a
+/// <see cref="SingleRiderQueuedIntegrationEvent"/> for every single rider that joins.
 /// </summary>
 internal sealed class RideQueueService : IRideQueueService
 {
@@ -100,21 +101,23 @@ internal sealed class RideQueueService : IRideQueueService
 
     public GetQueueStatusResponse GetStatus(Guid rideId)
     {
-        var queue = _store.Find(rideId);
-        if (queue is null)
-        {
-            return new GetQueueStatusResponse(rideId, GroupCount: 0, PeopleWaiting: 0, Groups: []);
-        }
+        QueuedGroupDto[] groups = _store.Find(rideId) is { } queue
+            ? [.. queue.SnapshotGroups().Select(ToDto)]
+            : [];
 
-        var groups = queue.SnapshotGroups()
-            .Select(ToDto)
-            .ToArray();
+        PersonDto[] singles = _store.FindSingles(rideId) is { } singlesLine
+            ? [.. singlesLine.SnapshotPeople().Select(ToDto)]
+            : [];
 
+        // PeopleWaiting deliberately counts people in groups only: single riders are
+        // their own figure and never inflate the group headcount the loading pass reads.
         return new GetQueueStatusResponse(
             rideId,
             GroupCount: groups.Length,
             PeopleWaiting: groups.Sum(g => g.Size),
-            Groups: groups);
+            Groups: groups,
+            SingleRidersWaiting: singles.Length,
+            SingleRiders: singles);
     }
 
     public Task<QueuedGroupDto?> TakeGroupAsync(
@@ -141,12 +144,83 @@ internal sealed class RideQueueService : IRideQueueService
         return Task.FromResult<QueuedGroupDto?>(ToDto(removed));
     }
 
-    private static QueuedGroupDto ToDto(QueuedGroup group)
+    public async Task<PersonDto> EnqueueSingleRiderAsync(Guid rideId, CancellationToken cancellationToken)
     {
-        var people = group.Members
-            .Select(p => new PersonDto(p.Number, p.Name, p.WeightInKilograms))
-            .ToArray();
+        var singles = _store.GetOrCreateSingles(rideId);
 
-        return new QueuedGroupDto(group.GroupId, people);
+        var person = _personGenerator.Next();
+        singles.Enqueue(person);
+
+        _logger.LogInformation(
+            "Single rider {PersonNumber} ({Weight} kg) joined ride {RideId}'s single-riders line; {SingleRidersWaiting} now waiting.",
+            person.Number,
+            person.WeightInKilograms,
+            rideId,
+            singles.PeopleWaiting);
+
+        // Untagged, like the group counters: ride id and person number are unbounded.
+        BoogaBoosterTelemetry.QueueSingleRidersQueued.Add(1);
+
+        var integrationEvent = new SingleRiderQueuedIntegrationEvent(
+            RideId: rideId,
+            PersonNumber: person.Number,
+            QueuedAt: _timeProvider.GetUtcNow());
+
+        await _publisher.PublishAsync(integrationEvent, cancellationToken);
+
+        return ToDto(person);
     }
+
+    public Task<IReadOnlyList<PersonDto>> TakeSingleRidersAsync(
+        Guid rideId,
+        int count,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var singles = _store.FindSingles(rideId);
+        var taken = singles?.TakeUpTo(count) ?? [];
+        if (taken.Count == 0)
+        {
+            return Task.FromResult<IReadOnlyList<PersonDto>>([]);
+        }
+
+        _logger.LogInformation(
+            "{Count} single rider(s) left ride {RideId}'s single-riders line to board; {SingleRidersWaiting} still waiting.",
+            taken.Count,
+            rideId,
+            singles!.PeopleWaiting);
+
+        return Task.FromResult<IReadOnlyList<PersonDto>>([.. taken.Select(ToDto)]);
+    }
+
+    public Task RequeueSingleRidersAsync(
+        Guid rideId,
+        IReadOnlyList<PersonDto> people,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(people);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (people.Count == 0)
+        {
+            return Task.CompletedTask;
+        }
+
+        Person[] returning = [.. people.Select(p => new Person(p.Number, p.Name, p.WeightInKilograms))];
+        _store.GetOrCreateSingles(rideId).RequeueFront(returning);
+
+        _logger.LogWarning(
+            "{Count} single rider(s) could not be seated on ride {RideId} and returned to the front of the line.",
+            returning.Length,
+            rideId);
+
+        return Task.CompletedTask;
+    }
+
+    private static QueuedGroupDto ToDto(QueuedGroup group) =>
+        new(group.GroupId, [.. group.Members.Select(ToDto)]);
+
+    private static PersonDto ToDto(Person person) =>
+        new(person.Number, person.Name, person.WeightInKilograms);
 }

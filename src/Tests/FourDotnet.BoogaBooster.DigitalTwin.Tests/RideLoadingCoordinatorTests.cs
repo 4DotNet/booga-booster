@@ -276,8 +276,14 @@ public sealed class RideLoadingCoordinatorTests
     private sealed class FakeRideQueueService : IRideQueueService
     {
         private readonly List<QueuedGroupDto> _groups = [];
+        private readonly List<PersonDto> _singles = [];
 
         public IReadOnlyList<QueuedGroupDto> Groups => _groups;
+
+        public IReadOnlyList<PersonDto> SingleRiders => _singles;
+
+        /// <summary>How many times the coordinator asked for single riders.</summary>
+        public int SingleRiderTakeCount { get; private set; }
 
         public QueuedGroupDto Enqueue(QueuedGroupDto group)
         {
@@ -285,11 +291,35 @@ public sealed class RideLoadingCoordinatorTests
             return group;
         }
 
+        public PersonDto EnqueueSingle(PersonDto person)
+        {
+            _singles.Add(person);
+            return person;
+        }
+
         public Task<IReadOnlyList<QueuedGroupDto>> EnqueueGroupAsync(Guid rideId, int groupSize, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
         public GetQueueStatusResponse GetStatus(Guid rideId) =>
-            new(rideId, _groups.Count, _groups.Sum(g => g.Size), [.. _groups]);
+            new(rideId, _groups.Count, _groups.Sum(g => g.Size), [.. _groups], _singles.Count, [.. _singles]);
+
+        public Task<PersonDto> EnqueueSingleRiderAsync(Guid rideId, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<IReadOnlyList<PersonDto>> TakeSingleRidersAsync(Guid rideId, int count, CancellationToken cancellationToken)
+        {
+            SingleRiderTakeCount++;
+            var take = Math.Clamp(count, 0, _singles.Count);
+            IReadOnlyList<PersonDto> taken = [.. _singles.Take(take)];
+            _singles.RemoveRange(0, take);
+            return Task.FromResult(taken);
+        }
+
+        public Task RequeueSingleRidersAsync(Guid rideId, IReadOnlyList<PersonDto> people, CancellationToken cancellationToken)
+        {
+            _singles.InsertRange(0, people);
+            return Task.CompletedTask;
+        }
 
         public Task<QueuedGroupDto?> TakeGroupAsync(Guid rideId, Guid groupId, CancellationToken cancellationToken)
         {

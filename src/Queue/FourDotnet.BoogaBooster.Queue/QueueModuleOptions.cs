@@ -67,6 +67,26 @@ public sealed class QueueModuleOptions
     public int MaxBoardableGroupSize { get; set; } = 32;
 
     /// <summary>
+    /// Maximum number of individuals allowed to wait in a single ride's single-riders
+    /// line. Independent of <see cref="MaxQueueLength"/>: a full singles line never
+    /// blocks group arrivals and vice versa. Defaults to 200.
+    /// </summary>
+    public int MaxSingleRiderQueueLength { get; set; } = 200;
+
+    /// <summary>
+    /// Minimum number of single riders to add to each ride's single-riders line per
+    /// fill cycle, before weather scaling. This is an additional arrival stream on top
+    /// of <see cref="MinArrivalsPerCycle"/>, never carved out of it. Defaults to 1.
+    /// </summary>
+    public int MinSingleArrivalsPerCycle { get; set; } = 1;
+
+    /// <summary>
+    /// Maximum number of single riders to add to each ride's single-riders line per
+    /// fill cycle, before weather scaling. Defaults to 3.
+    /// </summary>
+    public int MaxSingleArrivalsPerCycle { get; set; } = 3;
+
+    /// <summary>
     /// Optional fixed seed for the arrival randomness. Set for deterministic
     /// behaviour (tests); leave null to use a time-varying source in production.
     /// </summary>
