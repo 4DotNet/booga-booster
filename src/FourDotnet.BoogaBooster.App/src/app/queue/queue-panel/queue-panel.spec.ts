@@ -32,11 +32,14 @@ describe('QueuePanel', () => {
     const el = render();
 
     expect(el.textContent).toContain('Queue unavailable');
+    expect(el.textContent).not.toContain('Single riders');
   });
 
   it('renders the group and people counts once ready', () => {
     source.setStatus('ready');
-    source.setQueue(createQueueStatus({ groupCount: 12, peopleWaiting: 34 }));
+    source.setQueue(
+      createQueueStatus({ groupCount: 12, peopleWaiting: 34, singleRidersWaiting: 7 }),
+    );
 
     const text = render().textContent ?? '';
 
@@ -44,11 +47,13 @@ describe('QueuePanel', () => {
     expect(text).toContain('12');
     expect(text).toContain('People waiting');
     expect(text).toContain('34');
+    expect(text).toContain('Single riders');
+    expect(text).toContain('7');
   });
 
   it('pluralizes a single group and a single person correctly', () => {
     source.setStatus('ready');
-    source.setQueue(createQueueStatus({ groupCount: 1, peopleWaiting: 1 }));
+    source.setQueue(createQueueStatus({ groupCount: 1, peopleWaiting: 1, singleRidersWaiting: 1 }));
 
     const text = render().textContent ?? '';
 
@@ -56,5 +61,7 @@ describe('QueuePanel', () => {
     expect(text).not.toContain('1 groups queued');
     expect(text).toContain('1 person waiting');
     expect(text).not.toContain('1 people waiting');
+    expect(text).toContain('1 single rider.');
+    expect(text).not.toContain('1 single riders');
   });
 });

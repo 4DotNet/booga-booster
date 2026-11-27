@@ -12,6 +12,7 @@ const DTO: QueueStatusDto = {
   rideId: RIDE_ID,
   groupCount: 12,
   peopleWaiting: 34,
+  singleRidersWaiting: 5,
 };
 
 const POLL_MS = 5000;
