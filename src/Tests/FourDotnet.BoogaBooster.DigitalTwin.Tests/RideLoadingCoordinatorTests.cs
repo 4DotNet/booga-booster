@@ -6,6 +6,7 @@ using FourDotnet.BoogaBooster.Queue.Abstractions;
 using FourDotnet.BoogaBooster.Queue.Abstractions.DataTransferObjects;
 using FourDotnet.BoogaBooster.Queue.Abstractions.DataTransferObjects.GetQueueStatus;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using Xunit;
 
 namespace FourDotnet.BoogaBooster.DigitalTwin.Tests;
@@ -481,6 +482,30 @@ public sealed class RideLoadingCoordinatorTests
     }
 
     [Fact]
+    public async Task RunLoadingPass_WhenTheRequeueAlsoFails_TheSeatingFailureStillSurfaces()
+    {
+        var store = new Moq.Mock<IRideStore>();
+        store.SetupGet(s => s.CurrentState).Returns(RideState.Loading);
+        store.SetupGet(s => s.EmptyGondolaCount).Returns(0);
+        store.SetupGet(s => s.FreeSeatCount).Returns(1);
+        store
+            .Setup(s => s.SeatSingleRiders(Moq.It.IsAny<IReadOnlyList<PassengerWeight>>()))
+            .Throws(new FourDotnet.BoogaBooster.Core.DomainValidationException("seat taken"));
+        var queue = new Moq.Mock<IRideQueueService>();
+        queue
+            .Setup(q => q.TakeSingleRidersAsync(Moq.It.IsAny<Guid>(), 1, Moq.It.IsAny<CancellationToken>()))
+            .ReturnsAsync([MakePerson()]);
+        queue
+            .Setup(q => q.RequeueSingleRidersAsync(
+                Moq.It.IsAny<Guid>(), Moq.It.IsAny<IReadOnlyList<PersonDto>>(), Moq.It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("queue unreachable"));
+        var coordinator = new RideLoadingCoordinator(store.Object, NullLogger<RideLoadingCoordinator>.Instance, queue.Object);
+
+        await Assert.ThrowsAsync<FourDotnet.BoogaBooster.Core.DomainValidationException>(
+            () => coordinator.RunLoadingPassAsync(Guid.NewGuid(), Ct));
+    }
+
+    [Fact]
     public async Task RunLoadingPass_WhenCapacityShrinksAfterTheTake_SeatsWhatFitsAndRequeuesTheRest()
     {
         var store = new Moq.Mock<IRideStore>();
@@ -539,7 +564,7 @@ public sealed class RideLoadingCoordinatorTests
         public GetQueueStatusResponse GetStatus(Guid rideId) =>
             new(rideId, _groups.Count, _groups.Sum(g => g.Size), [.. _groups], _singles.Count, [.. _singles]);
 
-        public Task<PersonDto> EnqueueSingleRiderAsync(Guid rideId, CancellationToken cancellationToken) =>
+        public Task<PersonDto?> EnqueueSingleRiderAsync(Guid rideId, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
         public Task<IReadOnlyList<PersonDto>> TakeSingleRidersAsync(Guid rideId, int count, CancellationToken cancellationToken)

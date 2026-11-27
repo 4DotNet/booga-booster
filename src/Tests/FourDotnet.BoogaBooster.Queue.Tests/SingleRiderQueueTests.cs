@@ -79,6 +79,23 @@ public class SingleRiderQueueTests
         Assert.Equal([1L, 2L], Numbers(queue.SnapshotPeople()));
     }
 
+    [Fact]
+    public void TryEnqueue_WithRoom_AppendsAndReturnsTrue_AtCapacity_ReturnsFalse()
+    {
+        var queue = new SingleRiderQueue(Guid.NewGuid(), maxPeople: 1);
+
+        Assert.True(queue.TryEnqueue(QueueTestData.Person(number: 1)));
+        Assert.False(queue.TryEnqueue(QueueTestData.Person(number: 2)));
+
+        Assert.Equal([1L], Numbers(queue.SnapshotPeople()));
+    }
+
+    [Fact]
+    public void TryEnqueue_Null_Throws()
+    {
+        Assert.Throws<ArgumentNullException>(() => NewQueue().TryEnqueue(null!));
+    }
+
     [Theory]
     [InlineData(0, 1, true)]
     [InlineData(1, 1, true)]

@@ -53,12 +53,13 @@ public interface IRideQueueService
     /// <remarks>
     /// A single rider is a guest who consented to being seated beside a stranger. They
     /// are held apart from the regular queue: a group of one is not a single rider.
+    /// The capacity check and the append are one atomic step.
     /// </remarks>
-    /// <remarks>
-    /// Throws a domain validation exception when the single-riders line is already at
-    /// its configured capacity; callers that must not fail check capacity first.
-    /// </remarks>
-    Task<PersonDto> EnqueueSingleRiderAsync(Guid rideId, CancellationToken cancellationToken);
+    /// <returns>
+    /// The enqueued person, or <c>null</c> when the single-riders line is already at its
+    /// configured capacity — nobody is added and no event is published.
+    /// </returns>
+    Task<PersonDto?> EnqueueSingleRiderAsync(Guid rideId, CancellationToken cancellationToken);
 
     /// <summary>
     /// Removes up to <paramref name="count"/> individuals from the front of the given

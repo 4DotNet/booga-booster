@@ -40,7 +40,7 @@ public sealed class RideQueueServiceSingleRiderTests
         var numbers = new long[count];
         for (var i = 0; i < count; i++)
         {
-            numbers[i] = (await service.EnqueueSingleRiderAsync(rideId, CancellationToken.None)).Number;
+            numbers[i] = (await service.EnqueueSingleRiderAsync(rideId, CancellationToken.None))!.Number;
         }
 
         return numbers;
@@ -52,7 +52,7 @@ public sealed class RideQueueServiceSingleRiderTests
         var (service, publisher, _) = Create();
         var rideId = Guid.NewGuid();
 
-        var person = await service.EnqueueSingleRiderAsync(rideId, CancellationToken.None);
+        var person = (await service.EnqueueSingleRiderAsync(rideId, CancellationToken.None))!;
 
         publisher.Verify(
             p => p.PublishAsync(
@@ -81,15 +81,14 @@ public sealed class RideQueueServiceSingleRiderTests
     }
 
     [Fact]
-    public async Task EnqueueSingleRiderAsync_WhenTheLineIsFull_ThrowsAndPublishesNothing()
+    public async Task EnqueueSingleRiderAsync_WhenTheLineIsFull_ReturnsNullAndPublishesNothing()
     {
         var (service, publisher, _) = Create(maxSingleRiderQueueLength: 1);
         var rideId = Guid.NewGuid();
         await service.EnqueueSingleRiderAsync(rideId, CancellationToken.None);
         publisher.Invocations.Clear();
 
-        await Assert.ThrowsAsync<DomainValidationException>(
-            () => service.EnqueueSingleRiderAsync(rideId, CancellationToken.None));
+        Assert.Null(await service.EnqueueSingleRiderAsync(rideId, CancellationToken.None));
 
         Assert.Equal(1, service.GetStatus(rideId).SingleRidersWaiting);
         Assert.Empty(publisher.Invocations);

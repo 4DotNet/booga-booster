@@ -144,12 +144,19 @@ internal sealed class RideQueueService : IRideQueueService
         return Task.FromResult<QueuedGroupDto?>(ToDto(removed));
     }
 
-    public async Task<PersonDto> EnqueueSingleRiderAsync(Guid rideId, CancellationToken cancellationToken)
+    public async Task<PersonDto?> EnqueueSingleRiderAsync(Guid rideId, CancellationToken cancellationToken)
     {
         var singles = _store.GetOrCreateSingles(rideId);
 
         var person = _personGenerator.Next();
-        singles.Enqueue(person);
+        if (!singles.TryEnqueue(person))
+        {
+            _logger.LogDebug(
+                "Ride {RideId} single-riders line is full ({Max}); single rider not admitted.",
+                rideId,
+                singles.MaxPeople);
+            return null;
+        }
 
         _logger.LogInformation(
             "Single rider {PersonNumber} ({Weight} kg) joined ride {RideId}'s single-riders line; {SingleRidersWaiting} now waiting.",

@@ -68,6 +68,7 @@ public sealed class RideLoadingCoordinator
         var groupsBoarded = 0;
         var passengersBoarded = 0;
         var singleRidersSeated = 0;
+        var singleRidersRequeued = 0;
 
         try
         {
@@ -122,8 +123,9 @@ public sealed class RideLoadingCoordinator
             }
 
             // Phase 2 — top up every remaining free seat with single riders.
-            singleRidersSeated = await TopUpWithSingleRidersAsync(rideId, cancellationToken).ConfigureAwait(false);
-            if (singleRidersSeated > 0)
+            (singleRidersSeated, singleRidersRequeued) =
+                await TopUpWithSingleRidersAsync(rideId, cancellationToken).ConfigureAwait(false);
+            if (singleRidersSeated > 0 || singleRidersRequeued > 0)
             {
                 activity ??= StartPassActivity(rideId);
                 passengersBoarded += singleRidersSeated;
@@ -145,6 +147,7 @@ public sealed class RideLoadingCoordinator
                 activity.SetTag(RideTelemetryAttributes.GroupsBoarded, groupsBoarded);
                 activity.SetTag(RideTelemetryAttributes.PassengersBoarded, passengersBoarded);
                 activity.SetTag(RideTelemetryAttributes.SingleRidersSeated, singleRidersSeated);
+                activity.SetTag(RideTelemetryAttributes.SingleRidersRequeued, singleRidersRequeued);
                 activity.Dispose();
             }
         }
@@ -158,18 +161,21 @@ public sealed class RideLoadingCoordinator
     /// single-riders line. Riders taken but not seated go back to the front of the
     /// line, so a failed seating never loses a guest or their place.
     /// </summary>
-    /// <returns>The number of single riders seated.</returns>
-    private async Task<int> TopUpWithSingleRidersAsync(Guid rideId, CancellationToken cancellationToken)
+    /// <returns>
+    /// How many single riders were seated, and how many were taken but returned to the
+    /// front of the line because the live capacity shrank before they could be seated.
+    /// </returns>
+    private async Task<(int Seated, int Requeued)> TopUpWithSingleRidersAsync(Guid rideId, CancellationToken cancellationToken)
     {
         if (cancellationToken.IsCancellationRequested || _store.CurrentState != RideState.Loading)
         {
-            return 0;
+            return (0, 0);
         }
 
         var freeSeats = _store.FreeSeatCount;
         if (freeSeats <= 0)
         {
-            return 0; // The ride is full.
+            return (0, 0); // The ride is full.
         }
 
         var taken = await _queueService!
@@ -177,7 +183,7 @@ public sealed class RideLoadingCoordinator
             .ConfigureAwait(false);
         if (taken.Count == 0)
         {
-            return 0; // Nobody in the single-riders line.
+            return (0, 0); // Nobody in the single-riders line.
         }
 
         // Re-read the live capacity right before seating: the store lock is the arbiter,
@@ -201,16 +207,14 @@ public sealed class RideLoadingCoordinator
         {
             if (seated < taken.Count)
             {
-                // Not cancellable: these guests must never be dropped on the floor.
-                await _queueService
-                    .RequeueSingleRidersAsync(rideId, [.. taken.Skip(seated)], CancellationToken.None)
-                    .ConfigureAwait(false);
+                await RequeueAsync(rideId, [.. taken.Skip(seated)]).ConfigureAwait(false);
             }
         }
 
+        var requeued = taken.Count - seated;
         if (seated == 0)
         {
-            return 0;
+            return (0, requeued);
         }
 
         BoogaBoosterTelemetry.PassengersBoarded.Add(seated);
@@ -221,7 +225,31 @@ public sealed class RideLoadingCoordinator
             rideId,
             _store.FreeSeatCount);
 
-        return seated;
+        return (seated, requeued);
+    }
+
+    /// <summary>
+    /// Returns taken-but-unseated riders to the front of the single-riders line. Never
+    /// cancellable — these guests must not be dropped — and never throws: a failed
+    /// requeue is logged at error level with the riders' numbers instead of masking the
+    /// seating failure that is already propagating out of the pass.
+    /// </summary>
+    private async Task RequeueAsync(Guid rideId, IReadOnlyList<PersonDto> riders)
+    {
+        try
+        {
+            await _queueService!
+                .RequeueSingleRidersAsync(rideId, riders, CancellationToken.None)
+                .ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(
+                exception,
+                "Could not return single riders {PersonNumbers} to ride {RideId}'s line; they are no longer queued.",
+                riders.Select(rider => rider.Number).ToArray(),
+                rideId);
+        }
     }
 
     private static Activity? StartPassActivity(Guid rideId)

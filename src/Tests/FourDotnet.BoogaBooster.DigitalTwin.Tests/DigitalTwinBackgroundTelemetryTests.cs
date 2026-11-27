@@ -219,7 +219,7 @@ public sealed class DigitalTwinBackgroundTelemetryTests : IDisposable
         public GetQueueStatusResponse GetStatus(Guid rideId)
             => new(rideId, _groups.Count, _groups.Sum(group => group.Size), [.. _groups], SingleRidersWaiting: 0, SingleRiders: []);
 
-        public Task<PersonDto> EnqueueSingleRiderAsync(Guid rideId, CancellationToken cancellationToken)
+        public Task<PersonDto?> EnqueueSingleRiderAsync(Guid rideId, CancellationToken cancellationToken)
             => throw new NotSupportedException();
 
         public Task<IReadOnlyList<PersonDto>> TakeSingleRidersAsync(
@@ -264,7 +264,7 @@ public sealed class DigitalTwinBackgroundTelemetryTests : IDisposable
             Guid groupId,
             CancellationToken cancellationToken) => throw new NotSupportedException();
 
-        public Task<PersonDto> EnqueueSingleRiderAsync(Guid rideId, CancellationToken cancellationToken)
+        public Task<PersonDto?> EnqueueSingleRiderAsync(Guid rideId, CancellationToken cancellationToken)
             => throw new NotSupportedException();
 
         public Task<IReadOnlyList<PersonDto>> TakeSingleRidersAsync(

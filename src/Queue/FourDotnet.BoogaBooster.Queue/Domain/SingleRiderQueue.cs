@@ -70,18 +70,33 @@ public sealed class SingleRiderQueue : DomainModel
     /// </exception>
     public void Enqueue(Person person)
     {
+        if (!TryEnqueue(person))
+        {
+            throw new DomainValidationException(
+                $"Ride {RideId} single-riders line is full: the maximum is {MaxPeople}.");
+        }
+    }
+
+    /// <summary>
+    /// Appends <paramref name="person"/> to the back of the line when there is room, in
+    /// one locked step — the capacity check and the append cannot be split by a
+    /// concurrent requeue. Returns <c>false</c>, leaving the line untouched, when the
+    /// line is at <see cref="MaxPeople"/>.
+    /// </summary>
+    public bool TryEnqueue(Person person)
+    {
         ArgumentNullException.ThrowIfNull(person);
 
         lock (_gate)
         {
             if (_people.Count >= MaxPeople)
             {
-                throw new DomainValidationException(
-                    $"Ride {RideId} single-riders line is full: the maximum is {MaxPeople}.");
+                return false;
             }
 
             _people.AddLast(person);
             MarkChanged();
+            return true;
         }
     }
 

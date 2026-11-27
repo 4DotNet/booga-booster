@@ -246,7 +246,13 @@ internal sealed class RideQueueFillerService : BackgroundService
                 break;
             }
 
-            await _queueService.EnqueueSingleRiderAsync(rideId, cancellationToken);
+            // The check above is only a fast path: a concurrent requeue can refill the
+            // line in between, so the atomic admission's answer is the one that counts.
+            if (await _queueService.EnqueueSingleRiderAsync(rideId, cancellationToken) is null)
+            {
+                break;
+            }
+
             added++;
         }
 
