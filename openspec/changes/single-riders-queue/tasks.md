@@ -72,4 +72,5 @@
 ## 11. Wrap-up
 
 - [ ] 11.1 Run the app through Aspire and confirm the queue panel shows a growing single-riders line and that the ride departs with previously stranded seats filled.
-- [ ] 11.2 Re-read the change's specs against the implementation and note any scenario that ended up behaving differently, so the deltas archive accurately.
+- [x] 11.2 Re-read the change's specs against the implementation and note any scenario that ended up behaving differently, so the deltas archive accurately.
+  - All spec scenarios hold as written. Implementation choices beyond the original design, each recorded in design.md: the singles stream has its own seeded generator (decision 7); singles take seats beside an existing rider before opening an empty gondola (decision 3); `EnqueueSingleRiderAsync` returns `null` on a full line instead of throwing (decision 6).
